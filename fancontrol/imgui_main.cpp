@@ -1,0 +1,354 @@
+#include <windows.h>
+#include <vulkan/vulkan.h>
+#include <vulkan/vulkan_win32.h>
+#include <dwmapi.h>
+#include <vector>
+#include <string>
+#include <deque>
+#include <mutex>
+#include <thread>
+#include <chrono>
+
+#include "imgui.h"
+#include "imgui_impl_win32.h"
+#include "imgui_impl_vulkan.h"
+
+// Project includes
+#include "ConfigManager.h"
+#include "SensorManager.h"
+#include "FanController.h"
+#include "ECManager.h"
+#include "TVicPortProvider.h"
+
+// --- Threading & State ---
+struct UIState {
+    std::vector<SensorData> Sensors;
+    int Fan1Speed = 0;
+    int Fan2Speed = 0;
+    std::mutex Mutex;
+} g_UIState;
+
+// --- Vulkan Globals ---
+static VkAllocationCallbacks*   g_Allocator = nullptr;
+static VkInstance               g_Instance = VK_NULL_HANDLE;
+static VkPhysicalDevice         g_PhysicalDevice = VK_NULL_HANDLE;
+static VkDevice                 g_Device = VK_NULL_HANDLE;
+static uint32_t                 g_QueueFamily = (uint32_t)-1;
+static VkQueue                  g_Queue = VK_NULL_HANDLE;
+static VkDescriptorPool         g_DescriptorPool = VK_NULL_HANDLE;
+static ImGui_ImplVulkanH_Window g_MainWindowData;
+static uint32_t                 g_MinImageCount = 2;
+
+// --- Log System ---
+struct AppLog {
+    std::deque<std::string> Items;
+    std::mutex Mutex;
+    void AddLog(const char* fmt, ...) {
+        char buf[1024];
+        va_list args;
+        va_start(args, fmt);
+        vsnprintf(buf, 1024, fmt, args);
+        va_end(args);
+        std::lock_guard<std::mutex> lock(Mutex);
+        Items.push_back(buf);
+        if (Items.size() > 100) Items.pop_front();
+    }
+} g_AppLog;
+
+// --- Vulkan Helpers ---
+void SetupVulkan(const char** extensions, uint32_t extensions_count) {
+    VkResult err;
+    VkInstanceCreateInfo create_info = {};
+    create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    create_info.enabledExtensionCount = extensions_count;
+    create_info.ppEnabledExtensionNames = extensions;
+    vkCreateInstance(&create_info, g_Allocator, &g_Instance);
+
+    uint32_t gpu_count;
+    vkEnumeratePhysicalDevices(g_Instance, &gpu_count, nullptr);
+    std::vector<VkPhysicalDevice> gpus(gpu_count);
+    vkEnumeratePhysicalDevices(g_Instance, &gpu_count, gpus.data());
+    g_PhysicalDevice = gpus[0];
+
+    uint32_t count;
+    vkGetPhysicalDeviceQueueFamilyProperties(g_PhysicalDevice, &count, nullptr);
+    std::vector<VkQueueFamilyProperties> queues(count);
+    vkGetPhysicalDeviceQueueFamilyProperties(g_PhysicalDevice, &count, queues.data());
+    for (uint32_t i = 0; i < count; i++)
+        if (queues[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) { g_QueueFamily = i; break; }
+
+    float queue_priority[] = { 1.0f };
+    VkDeviceQueueCreateInfo queue_info = {};
+    queue_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    queue_info.queueFamilyIndex = g_QueueFamily;
+    queue_info.queueCount = 1;
+    queue_info.pQueuePriorities = queue_priority;
+    
+    const char* device_extensions[] = { "VK_KHR_swapchain" };
+    VkDeviceCreateInfo device_info = {};
+    device_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    device_info.queueCreateInfoCount = 1;
+    device_info.pQueueCreateInfos = &queue_info;
+    device_info.enabledExtensionCount = 1;
+    device_info.ppEnabledExtensionNames = device_extensions;
+    vkCreateDevice(g_PhysicalDevice, &device_info, g_Allocator, &g_Device);
+    vkGetDeviceQueue(g_Device, g_QueueFamily, 0, &g_Queue);
+
+    VkDescriptorPoolSize pool_sizes[] = { { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1 } };
+    VkDescriptorPoolCreateInfo pool_info = {};
+    pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+    pool_info.maxSets = 1;
+    pool_info.poolSizeCount = 1;
+    pool_info.pPoolSizes = pool_sizes;
+    vkCreateDescriptorPool(g_Device, &pool_info, g_Allocator, &g_DescriptorPool);
+}
+
+void SetupVulkanWindow(ImGui_ImplVulkanH_Window* wd, VkSurfaceKHR surface, int width, int height) {
+    wd->Surface = surface;
+    const VkFormat requestSurfaceImageFormat[] = { VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM };
+    const VkColorSpaceKHR requestSurfaceColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
+    wd->SurfaceFormat = ImGui_ImplVulkanH_SelectSurfaceFormat(g_PhysicalDevice, wd->Surface, requestSurfaceImageFormat, 2, requestSurfaceColorSpace);
+    VkPresentModeKHR present_modes[] = { VK_PRESENT_MODE_FIFO_KHR };
+    wd->PresentMode = ImGui_ImplVulkanH_SelectPresentMode(g_PhysicalDevice, wd->Surface, present_modes, 1);
+    ImGui_ImplVulkanH_CreateOrResizeWindow(g_Instance, g_PhysicalDevice, g_Device, wd, g_QueueFamily, g_Allocator, width, height, g_MinImageCount);
+}
+
+// --- Hardware Worker Thread ---
+void HardwareWorker(std::shared_ptr<ConfigManager> config, 
+                    std::shared_ptr<SensorManager> sensors, 
+                    std::shared_ptr<FanController> fans,
+                    bool* running) {
+    while (*running) {
+        // 1. Update Hardware
+        sensors->UpdateSensors(config->ShowBiasedTemps, config->NoExtSensor, config->UseTWR);
+        
+        int maxIdx = 0;
+        int maxTemp = sensors->GetMaxTemp(maxIdx);
+        fans->UpdateSmartControl(maxTemp, config->SmartLevels1);
+
+        // 2. Sync to UI State
+        {
+            std::lock_guard<std::mutex> lock(g_UIState.Mutex);
+            g_UIState.Sensors = sensors->GetSensors();
+            fans->GetFanSpeeds(g_UIState.Fan1Speed, g_UIState.Fan2Speed);
+        }
+
+        // 3. Throttle (Hardware doesn't need 60FPS)
+        std::this_thread::sleep_for(std::chrono::milliseconds(config->Cycle * 1000));
+    }
+}
+
+LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
+int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
+    // Logic Init
+    auto configManager = std::make_shared<ConfigManager>();
+    configManager->LoadConfig("TPFanCtrl2.ini");
+    auto ecManager = std::make_shared<ECManager>(std::make_shared<TVicPortProvider>(), [](const char* msg) { g_AppLog.AddLog("[EC] %s", msg); });
+    auto sensorManager = std::make_shared<SensorManager>(ecManager);
+    auto fanController = std::make_shared<FanController>(ecManager);
+
+    // Start Hardware Thread
+    bool hwRunning = true;
+    std::thread hwThread(HardwareWorker, configManager, sensorManager, fanController, &hwRunning);
+
+    // Window Init
+    WNDCLASSEXW wc = { sizeof(wc), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, L"TPFanCtrl2Vulkan", nullptr };
+    ::RegisterClassExW(&wc);
+    HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"TPFanCtrl2 - Vulkan Modernized", WS_OVERLAPPEDWINDOW, 100, 100, 1024, 768, nullptr, nullptr, wc.hInstance, nullptr);
+
+    BOOL dark = TRUE;
+    DwmSetWindowAttribute(hwnd, 20, &dark, sizeof(dark));
+    int backdrop = 2;
+    DwmSetWindowAttribute(hwnd, 38, &backdrop, sizeof(backdrop));
+
+    const char* extensions[] = { "VK_KHR_surface", "VK_KHR_win32_surface" };
+    SetupVulkan(extensions, 2);
+
+    VkWin32SurfaceCreateInfoKHR surface_info = {};
+    surface_info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+    surface_info.hinstance = hInstance;
+    surface_info.hwnd = hwnd;
+    VkSurfaceKHR surface;
+    vkCreateWin32SurfaceKHR(g_Instance, &surface_info, g_Allocator, &surface);
+
+    RECT rect; GetClientRect(hwnd, &rect);
+    SetupVulkanWindow(&g_MainWindowData, surface, rect.right - rect.left, rect.bottom - rect.top);
+
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+    auto& style = ImGui::GetStyle();
+    style.WindowRounding = 8.0f;
+    style.Colors[ImGuiCol_WindowBg] = ImVec4(0.1f, 0.1f, 0.1f, 0.7f);
+
+    ImGui_ImplWin32_Init(hwnd);
+    ImGui_ImplVulkan_InitInfo init_info = {};
+    init_info.Instance = g_Instance;
+    init_info.PhysicalDevice = g_PhysicalDevice;
+    init_info.Device = g_Device;
+    init_info.QueueFamily = g_QueueFamily;
+    init_info.Queue = g_Queue;
+    init_info.DescriptorPool = g_DescriptorPool;
+    init_info.RenderPass = g_MainWindowData.RenderPass;
+    init_info.MinImageCount = g_MinImageCount;
+    init_info.ImageCount = g_MainWindowData.ImageCount;
+    init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+    ImGui_ImplVulkan_Init(&init_info);
+
+    ::ShowWindow(hwnd, SW_SHOWDEFAULT);
+
+    bool done = false;
+    while (!done) {
+        MSG msg;
+        while (::PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE)) {
+            ::TranslateMessage(&msg);
+            ::DispatchMessage(&msg);
+            if (msg.message == WM_QUIT) done = true;
+        }
+        if (done) break;
+
+        ImGui_ImplVulkan_NewFrame();
+        ImGui_ImplWin32_NewFrame();
+        ImGui::NewFrame();
+
+        ImGui::SetNextWindowPos(ImVec2(0, 0));
+        ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
+        ImGui::Begin("Dashboard", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoBackground);
+
+        ImGui::TextColored(ImVec4(0.0f, 0.8f, 1.0f, 1.0f), "TPFanCtrl2 Modern Dashboard (Vulkan)");
+        ImGui::Separator();
+
+        if (ImGui::BeginTable("Layout", 2, ImGuiTableFlags_Resizable)) {
+            ImGui::TableNextColumn();
+            ImGui::BeginChild("Sensors", ImVec2(0, 400), true);
+            ImGui::Text("Temperature Sensors");
+            ImGui::Separator();
+            
+            {
+                std::lock_guard<std::mutex> lock(g_UIState.Mutex);
+                for (const auto& s : g_UIState.Sensors) {
+                    if (s.rawTemp > 0 && s.rawTemp < 128) {
+                        float t = (float)s.rawTemp / 100.0f;
+                        ImGui::Text("%-10s: %d C", s.name.c_str(), s.rawTemp);
+                        ImGui::ProgressBar(t, ImVec2(-1, 0), "");
+                    }
+                }
+            }
+            ImGui::EndChild();
+
+            ImGui::BeginChild("Fan", ImVec2(0, 0), true);
+            ImGui::Text("Fan Status");
+            ImGui::Separator();
+            
+            int f1, f2;
+            {
+                std::lock_guard<std::mutex> lock(g_UIState.Mutex);
+                f1 = g_UIState.Fan1Speed;
+                f2 = g_UIState.Fan2Speed;
+            }
+            ImGui::Text("Fan 1: %d RPM", f1);
+            ImGui::Text("Fan 2: %d RPM", f2);
+            
+            static int mLevel = 0;
+            ImGui::SliderInt("Manual", &mLevel, 0, 7);
+            if (ImGui::Button("Apply Manual", ImVec2(-1, 0))) {
+                // Manual control still happens on UI thread for immediate feedback, 
+                // but it's a single write, usually acceptable.
+                fanController->SetFanLevel(mLevel);
+            }
+            ImGui::EndChild();
+
+            ImGui::TableNextColumn();
+            ImGui::BeginChild("Logs", ImVec2(0, 0), true);
+            ImGui::Text("System Logs");
+            ImGui::Separator();
+            std::lock_guard<std::mutex> lock(g_AppLog.Mutex);
+            for (const auto& line : g_AppLog.Items) ImGui::TextUnformatted(line.c_str());
+            if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY()) ImGui::SetScrollHereY(1.0f);
+            ImGui::EndChild();
+            ImGui::EndTable();
+        }
+        ImGui::End();
+
+        ImGui::Render();
+        ImDrawData* draw_data = ImGui::GetDrawData();
+        VkSemaphore image_acquired_semaphore  = g_MainWindowData.FrameSemaphores[g_MainWindowData.FrameIndex].ImageAcquiredSemaphore;
+        VkSemaphore render_complete_semaphore = g_MainWindowData.FrameSemaphores[g_MainWindowData.FrameIndex].RenderCompleteSemaphore;
+        vkAcquireNextImageKHR(g_Device, g_MainWindowData.Swapchain, UINT64_MAX, image_acquired_semaphore, VK_NULL_HANDLE, &g_MainWindowData.FrameIndex);
+        
+        ImGui_ImplVulkanH_Frame* fd = &g_MainWindowData.Frames[g_MainWindowData.FrameIndex];
+        vkWaitForFences(g_Device, 1, &fd->Fence, VK_TRUE, UINT64_MAX);
+        vkResetFences(g_Device, 1, &fd->Fence);
+        vkResetCommandPool(g_Device, fd->CommandPool, 0);
+
+        VkCommandBufferBeginInfo b_info = {};
+        b_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        b_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        vkBeginCommandBuffer(fd->CommandBuffer, &b_info);
+
+        VkRenderPassBeginInfo rp_info = {};
+        rp_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        rp_info.renderPass = g_MainWindowData.RenderPass;
+        rp_info.framebuffer = fd->Framebuffer;
+        rp_info.renderArea.extent.width = g_MainWindowData.Width;
+        rp_info.renderArea.extent.height = g_MainWindowData.Height;
+        rp_info.clearValueCount = 1;
+        VkClearValue clear_value = { {{0.0f, 0.0f, 0.0f, 0.0f}} };
+        rp_info.pClearValues = &clear_value;
+        vkCmdBeginRenderPass(fd->CommandBuffer, &rp_info, VK_SUBPASS_CONTENTS_INLINE);
+
+        ImGui_ImplVulkan_RenderDrawData(draw_data, fd->CommandBuffer);
+
+        vkCmdEndRenderPass(fd->CommandBuffer);
+        vkEndCommandBuffer(fd->CommandBuffer);
+
+        VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        VkSubmitInfo s_info = {};
+        s_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        s_info.waitSemaphoreCount = 1;
+        s_info.pWaitSemaphores = &image_acquired_semaphore;
+        s_info.pWaitDstStageMask = &wait_stage;
+        s_info.commandBufferCount = 1;
+        s_info.pCommandBuffers = &fd->CommandBuffer;
+        s_info.signalSemaphoreCount = 1;
+        s_info.pSignalSemaphores = &render_complete_semaphore;
+        vkQueueSubmit(g_Queue, 1, &s_info, fd->Fence);
+
+        VkPresentInfoKHR p_info = {};
+        p_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        p_info.waitSemaphoreCount = 1;
+        p_info.pWaitSemaphores = &render_complete_semaphore;
+        p_info.swapchainCount = 1;
+        p_info.pSwapchains = &g_MainWindowData.Swapchain;
+        p_info.pImageIndices = &g_MainWindowData.FrameIndex;
+        vkQueuePresentKHR(g_Queue, &p_info);
+    }
+
+    // Cleanup
+    hwRunning = false;
+    if (hwThread.joinable()) hwThread.join();
+
+    ImGui_ImplVulkan_Shutdown();
+    ImGui_ImplWin32_Shutdown();
+    ImGui::DestroyContext();
+
+    vkDestroySurfaceKHR(g_Instance, surface, g_Allocator);
+    ImGui_ImplVulkanH_DestroyWindow(g_Instance, g_Device, &g_MainWindowData, g_Allocator);
+    vkDestroyDescriptorPool(g_Device, g_DescriptorPool, g_Allocator);
+    vkDestroyDevice(g_Device, g_Allocator);
+    vkDestroyInstance(g_Instance, g_Allocator);
+
+    ::DestroyWindow(hwnd);
+    ::UnregisterClassW(wc.lpszClassName, wc.hInstance);
+
+    return 0;
+}
+
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam)) return true;
+    if (msg == WM_DESTROY) { ::PostQuitMessage(0); return 0; }
+    return ::DefWindowProcW(hWnd, msg, wParam, lParam);
+}

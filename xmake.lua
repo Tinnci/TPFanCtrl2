@@ -2,8 +2,10 @@
 set_project("TPFanCtrl2")
 set_version("2.2.0")
 
--- Add GoogleTest dependency
+-- Add dependencies
 add_requires("gtest")
+add_requires("imgui v1.91.5", {configs = {win32 = true, vulkan = true}})
+add_requires("vulkan-loader")
 
 -- Set x86 architecture as default (due to TVicPort driver limitations)
 set_arch("x86")
@@ -51,6 +53,36 @@ target("TPFanCtrl2")
         add_ldflags("/LTCG", {tools = "msvc"})
         add_vectorexts("sse2")
     end
+
+-- Target: imgui_demo (ImGui Experiment)
+target("imgui_demo")
+    set_kind("binary")
+    set_plat("windows")
+    add_packages("imgui", "vulkan-loader")
+    
+    -- Set subsystem to Windows (GUI)
+    add_ldflags("/SUBSYSTEM:WINDOWS", {force = true})
+    
+    -- Source files
+    add_files("fancontrol/imgui_main.cpp")
+    add_files("fancontrol/ECManager.cpp")
+    add_files("fancontrol/SensorManager.cpp")
+    add_files("fancontrol/FanController.cpp")
+    add_files("fancontrol/ConfigManager.cpp")
+    add_files("fancontrol/TVicPortProvider.cpp")
+    add_files("fancontrol/portio.cpp")
+    add_files("fancontrol/misc.cpp")
+    
+    -- Include directories
+    add_includedirs("fancontrol")
+    
+    -- Link libraries
+    add_linkdirs("fancontrol")
+    add_links("TVicPort")
+    add_links("comctl32", "user32", "gdi32", "advapi32", "shell32", "ole32", "oleaut32", "uuid", "dwmapi")
+    
+    -- Output directory
+    set_targetdir("bin")
 
 -- Target: logic_test (Unit Tests)
 target("logic_test")
