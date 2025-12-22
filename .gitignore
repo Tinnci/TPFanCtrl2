@@ -37,3 +37,8 @@
 ## Debugging folder
 *Debug/
 *release/
+
+# xmake
+.xmake/
+build/
+bin/

@@ -38,6 +38,28 @@ You can configure the behaviour of the program by editing the values inside the 
 
 The `TPFanControl.ini` file should always be in the same directory as the `fancontrol.exe` executable file.
 
+## Build
+
+This project now supports **xmake** for a modern and fast build experience.
+
+### Prerequisites
+- [xmake](https://xmake.io/)
+- Visual Studio 2022 (with C++ Desktop Development workload)
+
+### Build the project
+```bash
+# Configure and build in release mode
+xmake f -m release
+xmake
+
+# The binaries will be located in the bin/ directory
+```
+
+### Run tests
+```bash
+xmake run logic_test
+```
+
 Example of configurable parameters:
 
 - Temperature refresh cycle time
