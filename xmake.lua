@@ -2,6 +2,9 @@
 set_project("TPFanCtrl2")
 set_version("2.2.0")
 
+-- Add GoogleTest dependency
+add_requires("gtest")
+
 -- Set x86 architecture as default (due to TVicPort driver limitations)
 set_arch("x86")
 
@@ -43,6 +46,7 @@ target("TPFanControl")
 target("logic_test")
     set_kind("binary")
     set_plat("windows")
+    add_packages("gtest")
     
     -- Console application
     add_ldflags("/SUBSYSTEM:CONSOLE", {force = true})
