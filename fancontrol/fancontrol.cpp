@@ -19,6 +19,7 @@
 #include "tools.h"
 #include "taskbartexticon.h"
 #include "sysinfoapi.h"
+#include "TVicPortProvider.h"
 
 
 DEFINE_GUID(GUID_LIDSWITCH_STATE_CHANGE,
@@ -97,7 +98,11 @@ FANCONTROL::FANCONTROL(HINSTANCE hinstapp)
 	m_needClose(false),
 	m_hinstapp(hinstapp),
 	ppTbTextIcon(NULL),
-	pTextIconMutex(new MUTEXSEM(0, "Global\\TPFanControl_ppTbTextIcon")) {
+	pTextIconMutex(new MUTEXSEM(0, "Global\\TPFanControl_ppTbTextIcon")),
+	m_configManager(std::make_shared<ConfigManager>()),
+	m_ecManager(std::make_shared<ECManager>(std::make_shared<TVicPortProvider>(), [this](const char* msg) { this->Trace(msg); })),
+	m_sensorManager(std::make_shared<SensorManager>(m_ecManager)),
+	m_fanController(std::make_shared<FanController>(m_ecManager)) {
 	int i = 0;
 	char buf[256] = "";
 

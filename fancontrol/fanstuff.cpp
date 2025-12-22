@@ -335,69 +335,19 @@ FANCONTROL::SmartControl(void) {
 		this->Trace(obuf);
 	}
 
-//i         Temp Fan Hup Hdown 
-//0 Level = 50   0   0   0 
-//1 Level = 60   1   0   5 <--- means, when going down switch to this level at 55
-//2 Level = 70   2   0   0 
-//3 Level = 80   4   5   0 <--- means, when going up, switch this level at 85
-//4 Level = 90   7   0   0 
-//5 Level = 95   64  0   0 
-//6 Level = 105 128  0   0 
-
-	newfanctrl = -1;
-
-	if ((fanctrl > 7 && (fanctrl != 64 || !Lev64Norm)) || this->PreviousMode == 3 || this->PreviousMode == 1) {
-		newfanctrl = 0;
-		levelIndex = 0;
-		fanctrl = 0;
+	std::vector<SmartLevel> levels;
+	for (int i = 0; this->SmartLevels[i].temp != -1; i++) {
+		levels.push_back({ this->SmartLevels[i].temp, this->SmartLevels[i].fan, this->SmartLevels[i].hystUp, this->SmartLevels[i].hystDown });
 	}
 
-	// Check for fan speed ramp upwards
-	for (i = 0; this->SmartLevels[i].temp != -1; i++) {
-		if (this->MaxTemp >= this->SmartLevels[i].temp && this->SmartLevels[i].fan >= fanctrl) {
-			newfanctrl = this->SmartLevels[i].fan;
-			levelIndex = i;
-		}
-	}
-
-	// Check for fan speed ramp downwards
-	if (newfanctrl == -1) {
-		for (i = 0; this->SmartLevels[i].temp != -1; i++) {
-			if (this->MaxTemp <= this->SmartLevels[i].temp && this->SmartLevels[i].fan < fanctrl) {
-				newfanctrl = this->SmartLevels[i].fan;
-				levelIndex = i;
-				break;
-			}
-		}
-	}
-
-	// fan speed ramp up or down?
-	if (newfanctrl != -1 && newfanctrl != this->State.FanCtrl) {
-		//if (newfanctrl == 0x80) {  
-		    // switch to BIOS-auto mode
-		//	this->ModeToDialog(1);    
-		//}
-
-		// do not change if hyst zone, determine which hyst zone if we are in based on previous temp
-		// DO NOT HAVE HYSTERESIS OVERLAP WITH FAN TEMPS IN CONFIG!
-		SMARTENTRY newLevel = this->SmartLevels[levelIndex];
-		if (this->LastSmartLevel < 0) { // ignore hyst on first time setting fan
-			this->LastSmartLevel = levelIndex;
-			this->SetFan("Smart", newfanctrl);
-			return;
-		}
-
-		if (this->MaxTemp < this->SmartLevels[this->LastSmartLevel].temp) {
-			if (this->MaxTemp > newLevel.temp - newLevel.hystDown)
-				return; // cooling
-		}
-		else {
-			if (this->MaxTemp < newLevel.temp + newLevel.hystUp)
-				return; // rising 
-		}
-
-		this->LastSmartLevel = levelIndex; 
-		this->SetFan("Smart", newfanctrl);
+	// Use modernized FanController
+	m_fanController->UpdateSmartControl(this->MaxTemp, levels);
+	
+	// Sync back the state for legacy UI support
+	this->State.FanCtrl = m_fanController->GetCurrentFanCtrl();
+	// Note: SetFan is called internally by FanController::UpdateSmartControl via SetFanLevel
+	// but we might want to keep the logging from FANCONTROL::SetFan.
+	// For now, let's see if we can redirect FanController to use FANCONTROL::SetFan.
 	}
 
 	return;

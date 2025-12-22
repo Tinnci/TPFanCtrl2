@@ -25,6 +25,13 @@
 
 #include "winstuff.h"
 #include "TaskbarTextIcon.h"
+#include "ECManager.h"
+#include "SensorManager.h"
+#include "FanController.h"
+#include "ConfigManager.h"
+#include <memory>
+#include <vector>
+#include <string>
 
 #define FANCONTROLVERSION "2.3.3 Dual Fan"
 
@@ -209,6 +216,12 @@ protected:
 	//
 	CTaskbarTextIcon** ppTbTextIcon;
 	MUTEXSEM* pTextIconMutex;
+
+	// Modernized Managers
+	std::shared_ptr<ECManager> m_ecManager;
+	std::shared_ptr<SensorManager> m_sensorManager;
+	std::shared_ptr<FanController> m_fanController;
+	std::shared_ptr<ConfigManager> m_configManager;
 
 	static int _stdcall
 		FANCONTROL_Thread(ULONG

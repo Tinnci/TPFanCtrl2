@@ -26,280 +26,102 @@
 int
 FANCONTROL::ReadConfig(const char* configfile)
 {
-	char buf[1024];
+	if (!m_configManager->LoadConfig(configfile)) return false;
 
-	int i, ok = false, lcnt1 = 0, lcnt2 = 0;
+	// Sync values from ConfigManager to FANCONTROL (Legacy support)
+	this->ActiveMode = m_configManager->ActiveMode;
+	this->ManFanSpeed = m_configManager->ManFanSpeed;
+	this->Cycle = m_configManager->Cycle;
+	this->IconCycle = m_configManager->IconCycle;
+	this->ReIcCycle = m_configManager->ReIcCycle;
+	this->iFontIconB = m_configManager->IconFontSize;
+	this->FanSpeedLowByte = m_configManager->FanSpeedLowByte;
+	this->NoExtSensor = m_configManager->NoExtSensor;
+	this->SlimDialog = m_configManager->SlimDialog;
+	this->FanBeepFreq = m_configManager->FanBeepFreq;
+	this->FanBeepDura = m_configManager->FanBeepDura;
+	this->NoWaitMessage = m_configManager->NoWaitMessage;
+	this->StartMinimized = m_configManager->StartMinimized;
+	this->NoBallons = m_configManager->NoBallons;
+	this->IconColorFan = m_configManager->IconColorFan;
+	this->Lev64Norm = m_configManager->Lev64Norm;
+	this->BluetoothEDR = m_configManager->BluetoothEDR;
+	this->ManModeExit = m_configManager->ManModeExit;
+	this->ShowBiasedTemps = m_configManager->ShowBiasedTemps;
+	this->MaxReadErrors = m_configManager->MaxReadErrors;
+	this->SecWinUptime = m_configManager->SecWinUptime;
+	this->SecStartDelay = m_configManager->SecStartDelay;
+	this->Log2File = m_configManager->Log2File;
+	this->StayOnTop = m_configManager->StayOnTop;
+	this->Log2csv = m_configManager->Log2csv;
+	this->ShowAll = m_configManager->ShowAll;
+	this->ShowTempIcon = m_configManager->ShowTempIcon;
+	this->Fahrenheit = m_configManager->Fahrenheit;
+	this->MinimizeToSysTray = m_configManager->MinimizeToSysTray;
+	this->MinimizeOnClose = m_configManager->MinimizeOnClose;
+	this->UseTWR = m_configManager->UseTWR;
 
-	int ProcessPriority = 2;
+	strcpy_s(this->MenuLabelSM1, sizeof(this->MenuLabelSM1), m_configManager->MenuLabelSM1.c_str());
+	strcpy_s(this->MenuLabelSM2, sizeof(this->MenuLabelSM2), m_configManager->MenuLabelSM2.c_str());
+	strcpy_s(this->IgnoreSensors, sizeof(this->IgnoreSensors), m_configManager->IgnoreSensors.c_str());
 
-	strncpy_s(this->MenuLabelSM1, sizeof(this->MenuLabelSM1), "Smart Level 1", 14);
-	strncpy_s(this->MenuLabelSM2, sizeof(this->MenuLabelSM1), "Smart Level 2", 14);
+	for (size_t i = 0; i < m_configManager->SmartLevels1.size() && i < 32; i++) {
+		this->SmartLevels[i].temp = m_configManager->SmartLevels1[i].temp;
+		this->SmartLevels[i].fan = m_configManager->SmartLevels1[i].fan;
+		this->SmartLevels[i].hystUp = m_configManager->SmartLevels1[i].hystUp;
+		this->SmartLevels[i].hystDown = m_configManager->SmartLevels1[i].hystDown;
+		
+		this->SmartLevels1[i].temp1 = m_configManager->SmartLevels1[i].temp;
+		this->SmartLevels1[i].fan1 = m_configManager->SmartLevels1[i].fan;
+		this->SmartLevels1[i].hystUp1 = m_configManager->SmartLevels1[i].hystUp;
+		this->SmartLevels1[i].hystDown1 = m_configManager->SmartLevels1[i].hystDown;
+	}
 
-	setzero(SensorOffset, sizeof(SensorOffset));
-	setzero(FSensorOffset, sizeof(FSensorOffset));
+	for (size_t i = 0; i < m_configManager->SmartLevels2.size() && i < 32; i++) {
+		this->SmartLevels2[i].temp2 = m_configManager->SmartLevels2[i].temp;
+		this->SmartLevels2[i].fan2 = m_configManager->SmartLevels2[i].fan;
+		this->SmartLevels2[i].hystUp2 = m_configManager->SmartLevels2[i].hystUp;
+		this->SmartLevels2[i].hystDown2 = m_configManager->SmartLevels2[i].hystDown;
+	}
 
-	this->State.Fan1SpeedHi = 0x00;
-	this->State.Fan1SpeedLo = 0x00;
-	this->State.Fan2SpeedHi = 0x00;
-	this->State.Fan2SpeedLo = 0x00;
+	for (int i = 0; i < 3; i++) {
+		this->IconLevels[i] = m_configManager->IconLevels[i];
+	}
 
-	this->fan1speed = 0;
-	this->fan2speed = 0;
+	for (int i = 0; i < 16; i++) {
+		this->SensorOffset[i].offs = m_configManager->SensorOffsets[i].offset;
+		this->SensorOffset[i].hystMin = m_configManager->SensorOffsets[i].hystMin;
+		this->SensorOffset[i].hystMax = m_configManager->SensorOffsets[i].hystMax;
+	}
 
-	this->IndSmartLevel = 0;
+	// Hotkeys
+	this->HK_BIOS_Method = m_configManager->HK_BIOS.method;
+	this->HK_BIOS = m_configManager->HK_BIOS.key;
+	this->HK_Manual_Method = m_configManager->HK_Manual.method;
+	this->HK_Manual = m_configManager->HK_Manual.key;
+	this->HK_Smart_Method = m_configManager->HK_Smart.method;
+	this->HK_Smart = m_configManager->HK_Smart.key;
+	this->HK_SM1_Method = m_configManager->HK_SM1.method;
+	this->HK_SM1 = m_configManager->HK_SM1.key;
+	this->HK_SM2_Method = m_configManager->HK_SM2.method;
+	this->HK_SM2 = m_configManager->HK_SM2.key;
+	this->HK_TG_BS_Method = m_configManager->HK_TG_BS.method;
+	this->HK_TG_BS = m_configManager->HK_TG_BS.key;
+	this->HK_TG_BM_Method = m_configManager->HK_TG_BM.method;
+	this->HK_TG_BM = m_configManager->HK_TG_BM.key;
+	this->HK_TG_MS_Method = m_configManager->HK_TG_MS.method;
+	this->HK_TG_MS = m_configManager->HK_TG_MS.key;
+	this->HK_TG_12_Method = m_configManager->HK_TG_12_method;
+	this->HK_TG_12 = m_configManager->HK_TG_12.key;
 
-	//
-	// read from file
-	//
-	FILE* f;
-	errno_t errf = fopen_s(&f, configfile, "r");
-	if (!errf) {
-		while (!feof(f)) {
-			strcpy_s(buf, sizeof(buf), "");
+	// Set process priority
+	::SetPriorityClass(::GetCurrentProcess(), 
+		m_configManager->ProcessPriority == 1 ? HIGH_PRIORITY_CLASS : 
+		m_configManager->ProcessPriority == 2 ? ABOVE_NORMAL_PRIORITY_CLASS : 
+		NORMAL_PRIORITY_CLASS);
 
-			fgets(buf, sizeof(buf), f);
-
-			if (buf[0] == '/' || buf[0] == '#' || buf[0] == ';')
-				continue;
-
-			if (_strnicmp(buf, "UseTWR=", 7) == 0) {
-				this->UseTWR = atoi(buf + 7);
-				continue;
-			}
-
-			if (_strnicmp(buf, "Active=", 7) == 0) {
-				this->ActiveMode = atoi(buf + 7);
-				continue;
-			}
-
-			if (_strnicmp(buf, "ManFanSpeed=", 12) == 0) {
-				this->ManFanSpeed = atoi(buf + 12);
-				continue;
-			}
-
-			if (_strnicmp(buf, "ProcessPriority=", 16) == 0) {
-				ProcessPriority = atoi(buf + 16);
-				continue;
-			}
-
-			if (_strnicmp(buf, "cycle=", 6) == 0) {
-				this->Cycle = atoi(buf + 6);
-				continue;
-			}
-			
-			if (_strnicmp(buf, "IconCycle=", 10) == 0) {
-				this->IconCycle = atoi(buf + 10);
-				continue;
-			}
-
-			if (_strnicmp(buf, "ReIcCycle=", 10) == 0) {
-				this->ReIcCycle = atoi(buf + 10);
-				continue;
-			}
-
-			if (_strnicmp(buf, "IconFontSize=", 13) == 0) {
-				this->iFontIconB = atoi(buf + 13);
-				continue;
-			}
-
-			if (_strnicmp(buf, "MenuLabelSM1=", 13) == 0) {
-				char* p = buf + 13, * p2 = this->MenuLabelSM1;
-				while (*p != '/') {	// copy until '/' excluding tab, carr ret, new line
-					if (*p != '\t' && *p != '\r' && *p != '\n')
-						*p2++ = *p;
-					p++;
-				}
-				*p2 = '\0';
-				continue;
-			}
-
-			if (_strnicmp(buf, "MenuLabelSM2=", 13) == 0) {
-				char* p = buf + 13, * p2 = this->MenuLabelSM2;
-				while (*p != '/') {	// copy until '/' excluding tab, carr ret, new line
-					if (*p != '\t' && *p != '\r' && *p != '\n')
-						*p2++ = *p;
-					p++;
-				}
-				*p2 = '\0';
-				continue;
-			}
-
-			if (_strnicmp(buf, "FanSpeedLowByte=", 16) == 0) {
-				this->FanSpeedLowByte = atoi(buf + 16);
-				continue;
-			}
-
-			if (_strnicmp(buf, "NoExtSensor=", 12) == 0) {
-				this->NoExtSensor = atoi(buf + 12);
-				continue;
-			}
-
-			if (_strnicmp(buf, "SlimDialog=", 11) == 0) {
-				this->SlimDialog = atoi(buf + 11);
-				if (this->SlimDialog != 0) 
-					this->SlimDialog = 1;
-				continue;
-			}
-
-			if (_strnicmp(buf, "level=", 6) == 0) {
-				sscanf_s(buf + 6, "%d %d %d %d", &this->SmartLevels[lcnt1].temp, &this->SmartLevels[lcnt1].fan, &this->SmartLevels[lcnt1].hystUp, &this->SmartLevels[lcnt1].hystDown);
-				sscanf_s(buf + 6, "%d %d %d %d", &this->SmartLevels1[lcnt1].temp1, &this->SmartLevels1[lcnt1].fan1, &this->SmartLevels1[lcnt1].hystUp1, &this->SmartLevels1[lcnt1].hystDown1);
-				lcnt1++;
-				continue;
-			}
-
-			if (_strnicmp(buf, "level2=", 7) == 0) {
-				sscanf_s(buf + 7, "%d %d %d %d", &this->SmartLevels2[lcnt2].temp2, &this->SmartLevels2[lcnt2].fan2, &this->SmartLevels2[lcnt1].hystUp2, &this->SmartLevels2[lcnt1].hystDown2);
-				lcnt2++;
-				continue;
-			}
-
-			if (_strnicmp(buf, "fanbeep=", 8) == 0) {
-				sscanf_s(buf + 8, "%d %d", &this->FanBeepFreq, &this->FanBeepDura);
-				continue;
-			}
-
-			if (_strnicmp(buf, "iconlevels=", 11) == 0) {
-				sscanf_s(buf + 11, "%d %d %d", &this->IconLevels[0], &this->IconLevels[1], &this->IconLevels[2]);
-				continue;
-			}
-
-			if (_strnicmp(buf, "NoWaitMessage=", 14) == 0) {
-				this->NoWaitMessage = atoi(buf + 14);
-				continue;
-			}
-
-			if (_strnicmp(buf, "StartMinimized=", 15) == 0) {
-				this->StartMinimized = atoi(buf + 15);
-				continue;
-			}
-
-			if (_strnicmp(buf, "NoBallons=", 10) == 0) {
-				this->NoBallons = atoi(buf + 10);
-				continue;
-			}
-
-			if (_strnicmp(buf, "HK_BIOS=", 8) == 0) {
-				this->HK_BIOS_Method = buf[8] - 0x30;
-				this->HK_BIOS = buf[10];
-				if ((this->HK_BIOS == 0x46) && (buf[11] > 0x30) && (buf[11] < 0x40)) 
-					this->HK_BIOS = 0x70 + atoi(buf + 11) - 1;
-				continue;
-			}
-
-			if (_strnicmp(buf, "HK_Manual=", 10) == 0) {
-				this->HK_Manual_Method = buf[10] - 0x30;
-				this->HK_Manual = buf[12];
-				if ((this->HK_Manual == 0x46) && (buf[13] > 0x30) && (buf[13] < 0x40)) 
-					this->HK_Manual = 0x70 + atoi(buf + 13) - 1;
-				continue;
-			}
-
-			if (_strnicmp(buf, "HK_Smart=", 9) == 0) {
-				this->HK_Smart_Method = buf[9] - 0x30;
-				this->HK_Smart = buf[11];
-				if ((this->HK_Smart == 0x46) && (buf[12] > 0x30) && (buf[12] < 0x40))
-					this->HK_Smart = 0x70 + atoi(buf + 12) - 1;
-				continue;
-			}
-
-			if (_strnicmp(buf, "HK_SM1=", 7) == 0) {
-				this->HK_SM1_Method = buf[7] - 0x30;
-				this->HK_SM1 = buf[9];
-				if ((this->HK_SM1 == 0x46) && (buf[10] > 0x30) && (buf[10] < 0x40))
-					this->HK_SM1 = 0x70 + atoi(buf + 10) - 1;
-				continue;
-			}
-
-			if (_strnicmp(buf, "HK_SM2=", 7) == 0) {
-				this->HK_SM2_Method = buf[7] - 0x30;
-				this->HK_SM2 = buf[9];
-				if ((this->HK_SM2 == 0x46) && (buf[10] > 0x30) && (buf[10] < 0x40))
-					this->HK_SM2 = 0x70 + atoi(buf + 10) - 1;
-				continue;
-			}
-
-			if (_strnicmp(buf, "HK_TG_BS=", 9) == 0) {
-				this->HK_TG_BS_Method = buf[9] - 0x30;
-				this->HK_TG_BS = buf[11];
-				if ((this->HK_TG_BS == 0x46) && (buf[12] > 0x30) && (buf[12] < 0x40))
-					this->HK_TG_BS = 0x70 + atoi(buf + 12) - 1;
-				continue;
-			}
-
-			if (_strnicmp(buf, "HK_TG_BM=", 9) == 0) {
-				this->HK_TG_BM_Method = buf[9] - 0x30;
-				this->HK_TG_BM = buf[11];
-				if ((this->HK_TG_BM == 0x46) && (buf[12] > 0x30) && (buf[12] < 0x40))
-					this->HK_TG_BM = 0x70 + atoi(buf + 12) - 1;
-				continue;
-			}
-
-			if (_strnicmp(buf, "HK_TG_MS=", 9) == 0) {
-				this->HK_TG_MS_Method = buf[9] - 0x30;
-				this->HK_TG_MS = buf[11];
-				if ((this->HK_TG_MS == 0x46) && (buf[12] > 0x30) && (buf[12] < 0x40))
-					this->HK_TG_MS = 0x70 + atoi(buf + 12) - 1;
-				continue;
-			}
-
-			if (_strnicmp(buf, "HK_TG_12=", 9) == 0) {
-				this->HK_TG_12_Method = buf[9] - 0x30;
-				this->HK_TG_12 = buf[11];
-				if ((this->HK_TG_12 == 0x46) && (buf[12] > 0x30) && (buf[12] < 0x40))
-					this->HK_TG_12 = 0x70 + atoi(buf + 12) - 1;
-				continue;
-			}
-
-			if (_strnicmp(buf, "IconColorFan=", 13) == 0) {
-				this->IconColorFan = atoi(buf + 13);
-				continue;
-			}
-
-			if (_strnicmp(buf, "Lev64Norm=", 10) == 0) {
-				this->Lev64Norm = atoi(buf + 10);
-				continue;
-			}
-
-			if (_strnicmp(buf, "BluetoothEDR=", 13) == 0) {
-				this->BluetoothEDR = atoi(buf + 13);
-				continue;
-			}
-
-			if (_strnicmp(buf, "ManModeExit=", 12) == 0) {
-				this->ManModeExit = atoi(buf + 12);
-				continue;
-			}
-
-			if (_strnicmp(buf, "ShowBiasedTemps=", 16) == 0) {
-				this->ShowBiasedTemps = atoi(buf + 16);
-				continue;
-			}
-
-			if (_strnicmp(buf, "MaxReadErrors=", 14) == 0) {
-				this->MaxReadErrors = atoi(buf + 14);
-				continue;
-			}
-
-			if (_strnicmp(buf, "SecWinUptime=", 13) == 0) {
-				this->SecWinUptime = atoi(buf + 13);
-				continue;
-			}
-
-			if (_strnicmp(buf, "SecStartDelay=", 14) == 0) {
-				this->SecStartDelay = atoi(buf + 14);
-				continue;
-			}
-
-			if (_strnicmp(buf, "Log2File=", 9) == 0) {
-				this->Log2File = atoi(buf + 9);
-				continue;
-			}
-
-			if (_strnicmp(buf, "StayOnTop=", 10) == 0) {
-				this->StayOnTop = atoi(buf + 10);
-				continue;
-			}
+	return true;
+}
 			
 			if (_strnicmp(buf, "Log2csv=", 8) == 0) {
 				this->Log2csv = atoi(buf + 8);
