@@ -1,3 +1,4 @@
+#include "_prec.h"
 #include "ConfigManager.h"
 #include <fstream>
 #include <sstream>

@@ -21,10 +21,19 @@
     <ClCompile Include="approot.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="ConfigManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="dynamicicon.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="ECManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="fancontrol.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="FanController.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="fanstuff.cpp">
@@ -36,7 +45,13 @@
     <ClCompile Include="portio.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="SensorManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="SystemTraySDK.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="TVicPortProvider.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="winstuff.cpp">
@@ -50,13 +65,31 @@
     <ClInclude Include="approot.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="CommonTypes.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ConfigManager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="dynamicicon.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ECManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="fancontrol.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="FanController.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="IIOProvider.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="res\resource.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SensorManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="SystemTraySDK.h">
@@ -69,6 +102,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="TVicPort.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="TVicPortProvider.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="winstuff.h">

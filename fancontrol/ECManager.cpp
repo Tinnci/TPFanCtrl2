@@ -1,3 +1,4 @@
+#include "_prec.h"
 #include "ECManager.h"
 
 ECManager::ECManager(std::shared_ptr<IIOProvider> ioProvider, std::function<void(const char*)> traceCallback)

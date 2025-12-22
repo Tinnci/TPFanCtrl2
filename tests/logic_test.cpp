@@ -27,7 +27,7 @@ void test_fan_control_logic() {
     // Test 1: Temp below first level
     sensorManager->UpdateSensors(false, false, false);
     int maxIndex = 0;
-    int maxTemp = sensorManager->GetMaxTemp("", maxIndex);
+    int maxTemp = sensorManager->GetMaxTemp(maxIndex);
     assert(maxTemp == 45);
     
     fanController->UpdateSmartControl(maxTemp, levels);
@@ -37,27 +37,27 @@ void test_fan_control_logic() {
     // Test 2: Temp reaches 55
     mockIO->SetECByte(0x78, 55);
     sensorManager->UpdateSensors(false, false, false);
-    maxTemp = sensorManager->GetMaxTemp("", maxIndex);
+    maxTemp = sensorManager->GetMaxTemp(maxIndex);
     fanController->UpdateSmartControl(maxTemp, levels);
     assert(fanController->GetCurrentFanCtrl() == 0);
 
     // Test 3: Temp reaches 65
     mockIO->SetECByte(0x78, 65);
     sensorManager->UpdateSensors(false, false, false);
-    maxTemp = sensorManager->GetMaxTemp("", maxIndex);
+    maxTemp = sensorManager->GetMaxTemp(maxIndex);
     fanController->UpdateSmartControl(maxTemp, levels);
     assert(fanController->GetCurrentFanCtrl() == 3);
 
     // Test 4: Hysteresis check (cooling down)
     mockIO->SetECByte(0x78, 59); // Should stay at Fan 3 because 59 > 60 - 2
     sensorManager->UpdateSensors(false, false, false);
-    maxTemp = sensorManager->GetMaxTemp("", maxIndex);
+    maxTemp = sensorManager->GetMaxTemp(maxIndex);
     fanController->UpdateSmartControl(maxTemp, levels);
     assert(fanController->GetCurrentFanCtrl() == 3);
 
     mockIO->SetECByte(0x78, 57); // Should drop to Fan 0 because 57 < 60 - 2
     sensorManager->UpdateSensors(false, false, false);
-    maxTemp = sensorManager->GetMaxTemp("", maxIndex);
+    maxTemp = sensorManager->GetMaxTemp(maxIndex);
     fanController->UpdateSmartControl(maxTemp, levels);
     assert(fanController->GetCurrentFanCtrl() == 0);
 
@@ -76,7 +76,7 @@ void test_sensor_offsets() {
     sensorManager->UpdateSensors(true, false, false);
     
     int maxIndex = 0;
-    int maxTemp = sensorManager->GetMaxTemp("", maxIndex);
+    int maxTemp = sensorManager->GetMaxTemp(maxIndex);
     assert(maxTemp == 45); // 50 - 5
     std::cout << "Sensor offset test passed!" << std::endl;
 }
@@ -92,10 +92,11 @@ void test_ignored_sensors() {
     mockIO->SetECByte(0x78, 60); // CPU
     mockIO->SetECByte(0x79, 80); // GPU
     
+    sensorManager->SetIgnoreSensors("GPU");
     sensorManager->UpdateSensors(false, false, false);
     
     int maxIndex = 0;
-    int maxTemp = sensorManager->GetMaxTemp("GPU", maxIndex);
+    int maxTemp = sensorManager->GetMaxTemp(maxIndex);
     assert(maxTemp == 60); // GPU ignored, CPU is max
     assert(maxIndex == 0);
     

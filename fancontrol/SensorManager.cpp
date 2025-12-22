@@ -1,3 +1,4 @@
+#include "_prec.h"
 #include "SensorManager.h"
 #include "TVicPort.h"
 #include <algorithm>
@@ -67,13 +68,13 @@ bool SensorManager::UpdateSensors(bool showBiasedTemps, bool noExtSensor, bool u
     return true;
 }
 
-int SensorManager::GetMaxTemp(const std::string& ignoreList, int& maxIndex) {
+int SensorManager::GetMaxTemp(int& maxIndex) const {
     int maxTemp = 0;
     maxIndex = 0;
 
     // Normalize ignore list: replace commas with pipes and wrap in pipes
-    std::string normalizedList = "|" + ignoreList + "|";
-    std::replace(normalizedList.begin(), normalizedList.end(), ',', '|');
+    std::string normalizedList = "|" + m_ignoreList + "|";
+    for (auto& c : normalizedList) if (c == ',') c = '|';
 
     for (int i = 0; i < MAX_SENSORS; i++) {
         std::string sensorMatch = "|" + m_sensors[i].name + "|";

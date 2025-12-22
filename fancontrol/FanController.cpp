@@ -1,3 +1,4 @@
+#include "_prec.h"
 #include "FanController.h"
 
 FanController::FanController(std::shared_ptr<ECManager> ecManager)
@@ -5,17 +6,21 @@ FanController::FanController(std::shared_ptr<ECManager> ecManager)
 
 bool FanController::SetFanLevel(int level, bool isDualFan) {
     bool ok = true;
-    if (isDualFan) {
-        // Set Fan 1
-        ok &= m_ecManager->WriteByte(TP_ECOFFSET_FAN_SWITCH, TP_ECVALUE_SELFAN1);
-        ok &= m_ecManager->WriteByte(TP_ECOFFSET_FAN, (char)level);
-        ::Sleep(100);
-        // Set Fan 2
-        ok &= m_ecManager->WriteByte(TP_ECOFFSET_FAN_SWITCH, TP_ECVALUE_SELFAN2);
-        ok &= m_ecManager->WriteByte(TP_ECOFFSET_FAN, (char)level);
-        ::Sleep(100);
+    if (m_writeCallback) {
+        ok = m_writeCallback(level);
     } else {
-        ok &= m_ecManager->WriteByte(TP_ECOFFSET_FAN, (char)level);
+        if (isDualFan) {
+            // Set Fan 1
+            ok &= m_ecManager->WriteByte(TP_ECOFFSET_FAN_SWITCH, TP_ECVALUE_SELFAN1);
+            ok &= m_ecManager->WriteByte(TP_ECOFFSET_FAN, (char)level);
+            ::Sleep(100);
+            // Set Fan 2
+            ok &= m_ecManager->WriteByte(TP_ECOFFSET_FAN_SWITCH, TP_ECVALUE_SELFAN2);
+            ok &= m_ecManager->WriteByte(TP_ECOFFSET_FAN, (char)level);
+            ::Sleep(100);
+        } else {
+            ok &= m_ecManager->WriteByte(TP_ECOFFSET_FAN, (char)level);
+        }
     }
 
     if (ok) {

@@ -103,6 +103,11 @@ FANCONTROL::FANCONTROL(HINSTANCE hinstapp)
 	m_ecManager(std::make_shared<ECManager>(std::make_shared<TVicPortProvider>(), [this](const char* msg) { this->Trace(msg); })),
 	m_sensorManager(std::make_shared<SensorManager>(m_ecManager)),
 	m_fanController(std::make_shared<FanController>(m_ecManager)) {
+	
+	m_fanController->SetWriteCallback([this](int level) {
+		return this->SetFan("Smart", level) != 0;
+	});
+
 	int i = 0;
 	char buf[256] = "";
 

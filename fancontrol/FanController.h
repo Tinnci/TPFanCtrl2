@@ -16,12 +16,14 @@ public:
     int GetCurrentFanCtrl() const { return m_currentFanCtrl; }
     void SetCurrentFanCtrl(int ctrl) { m_currentFanCtrl = ctrl; }
     void SetOnChangeCallback(std::function<void(int)> callback) { m_onChange = callback; }
+    void SetWriteCallback(std::function<bool(int)> callback) { m_writeCallback = callback; }
 
 private:
     std::shared_ptr<ECManager> m_ecManager;
     int m_currentFanCtrl;
     int m_lastSmartLevelIndex;
     std::function<void(int)> m_onChange;
+    std::function<bool(int)> m_writeCallback;
 
     static constexpr auto TP_ECOFFSET_FAN = 0x2F;
     static constexpr auto TP_ECOFFSET_FANSPEED = 0x84;

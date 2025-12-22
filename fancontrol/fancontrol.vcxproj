@@ -144,11 +144,14 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="approot.cpp" />
+    <ClCompile Include="ConfigManager.cpp" />
     <ClCompile Include="dynamicicon.cpp" />
+    <ClCompile Include="ECManager.cpp" />
     <ClCompile Include="fancontrol.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Use</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Use</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="FanController.cpp" />
     <ClCompile Include="fanstuff.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Use</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Use</PrecompiledHeader>
@@ -162,7 +165,9 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Use</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Use</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="SensorManager.cpp" />
     <ClCompile Include="SystemTraySDK.cpp" />
+    <ClCompile Include="TVicPortProvider.cpp" />
     <ClCompile Include="winstuff.cpp" />
     <ClCompile Include="_prec.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
@@ -173,13 +178,20 @@
   <ItemGroup>
     <ClInclude Include="afxres.h" />
     <ClInclude Include="approot.h" />
+    <ClInclude Include="CommonTypes.h" />
+    <ClInclude Include="ConfigManager.h" />
     <ClInclude Include="dynamicicon.h" />
+    <ClInclude Include="ECManager.h" />
     <ClInclude Include="fancontrol.h" />
+    <ClInclude Include="FanController.h" />
+    <ClInclude Include="IIOProvider.h" />
     <ClInclude Include="res\resource.h" />
+    <ClInclude Include="SensorManager.h" />
     <ClInclude Include="SystemTraySDK.h" />
     <ClInclude Include="TaskbarTextIcon.h" />
     <ClInclude Include="tools.h" />
     <ClInclude Include="TVicPort.h" />
+    <ClInclude Include="TVicPortProvider.h" />
     <ClInclude Include="winstuff.h" />
     <ClInclude Include="_prec.h" />
   </ItemGroup>
