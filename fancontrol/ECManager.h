@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include "IIOProvider.h"
 
 class ECManager {
@@ -17,6 +18,8 @@ public:
 
     bool ReadByte(int offset, char* pdata);
     bool WriteByte(int offset, char data);
+    bool ToggleBitsWithVerify(int offset, char bits, char anywayBit, char& resultValue);
+    std::recursive_timed_mutex& GetMutex() { return m_mutex; }
 
 private:
     bool WaitForFlags(USHORT port, char flags, bool onoff = false, int timeout = 1000);
@@ -27,6 +30,7 @@ private:
     int m_dataPort;
     ECType m_currentType;
     std::function<void(const char*)> m_trace;
+    std::recursive_timed_mutex m_mutex;
 
     static constexpr auto ACPI_EC_TYPE1_CTRLPORT = 0x1604;
     static constexpr auto ACPI_EC_TYPE1_DATAPORT = 0x1600;

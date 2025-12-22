@@ -19,14 +19,7 @@
 #include "fancontrol.h"
 #include "tools.h"
 #include "TVicPort.h"
-
-#define TP_ECOFFSET_FAN         (char)0x2F    // 1 byte (binary xyzz zzz)
-#define TP_ECOFFSET_FANSPEED    (char)0x84    // 16 bit word, lo/hi byte
-#define TP_ECOFFSET_TEMP0       (char)0x78    // 8 temp sensor bytes from here
-#define TP_ECOFFSET_TEMP1       (char)0xC0    // 4 temp sensor bytes from here
-#define TP_ECOFFSET_FAN_SWITCH  (char)0x31
-#define TP_ECVALUE_SELFAN1      (char)0x0000
-#define TP_ECVALUE_SELFAN2      (char)0x0001
+#include <chrono>
 
 //-------------------------------------------------------------------------
 //  switch fan according to settings
@@ -316,8 +309,6 @@ FANCONTROL::SmartControl(void) {
 int
 FANCONTROL::SetFan(const char* source, int fanctrl, bool final) {
 	int ok = 0;
-	int fan1_ok = 0;
-	int fan2_ok = 0;
 	char obuf[256] = "", obuf2[256], datebuf[128];
 
 	if (this->FanBeepFreq && this->FanBeepDura)
@@ -335,58 +326,22 @@ FANCONTROL::SetFan(const char* source, int fanctrl, bool final) {
 	if (this->ActiveMode && !this->FinalSeen) {
 		if (!this->LockECAccess()) return false;
 
-		for (int i = 0; i < 5; i++) {
-			// set new fan level
-			ok = this->WriteByteToEC(TP_ECOFFSET_FAN_SWITCH, TP_ECVALUE_SELFAN1);
-			ok = this->WriteByteToEC(TP_ECOFFSET_FAN, fanctrl);
-
-			::Sleep(100);
-
-			ok = this->WriteByteToEC(TP_ECOFFSET_FAN_SWITCH, TP_ECVALUE_SELFAN2);
-			ok = this->WriteByteToEC(TP_ECOFFSET_FAN, fanctrl);
-
-			::Sleep(100);
-
-			// verify completion of fan2
-			fan2_ok = this->ReadByteFromEC(TP_ECOFFSET_FAN, &this->State.FanCtrl);
-
-			::Sleep(100);
-
-			// verify completion of fan1
-			ok = this->WriteByteToEC(TP_ECOFFSET_FAN_SWITCH, TP_ECVALUE_SELFAN1);
-			//ok = this->WriteByteToEC(TP_ECOFFSET_FAN, fanctrl);
-
-			::Sleep(100);
-
-			fan1_ok = this->ReadByteFromEC(TP_ECOFFSET_FAN, &this->State.FanCtrl);
-
-			if (fan1_ok && fan2_ok) {
-				sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "[i=%d] ", i);
-				break;
-			}
-
-			::Sleep(300);
-		}
+		// Use modernized FanController
+		ok = m_fanController->SetFanLevel(fanctrl, true); // Assuming dual fan as per original code
+		
+		// Sync back the state
+		this->State.FanCtrl = m_fanController->GetCurrentFanCtrl();
 
 		this->FreeECAccess();
 
-		if (this->State.FanCtrl == fanctrl) {
+		if (ok) {
 			sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "OK");
-			ok = true;
 			if (final)
 				this->FinalSeen = true;    // prevent further changes when setting final mode
 
 		}
 		else {
 			sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "FAILED!!");
-
-			/*			::Beep(880, 300);
-						::Sleep(200);
-						::Beep(880, 300);
-						::Sleep(200);
-						::Beep(880, 300);
-			*/
-
 			ok = false;
 		}
 	}
@@ -412,43 +367,24 @@ BOOL
 FANCONTROL::SetHdw(const char* source, int hdwctrl, int HdwOffset, int AnyWayBit) {
 	int ok = 0;
 	char obuf[256] = "", obuf2[256], datebuf[128];
-	char newhdwctrl;
+	char resultValue = 0;
 
 	if (!this->LockECAccess()) return false;
 
 	this->CurrentDateTimeLocalized(datebuf, sizeof(datebuf));
 
-	for (int i = 0; i < 5; i++) {
-		ok = this->ReadByteFromEC(HdwOffset, &newhdwctrl);
-		if (newhdwctrl & hdwctrl) {
-			ok = this->WriteByteToEC(HdwOffset, (newhdwctrl - hdwctrl) | AnyWayBit);
-			hdwctrl = newhdwctrl - hdwctrl;
-		}
-		else {
-			ok = this->WriteByteToEC(HdwOffset, (newhdwctrl + hdwctrl) | AnyWayBit);
-			hdwctrl = newhdwctrl + hdwctrl;
-		}
+	// Use modernized ECManager
+	ok = m_ecManager->ToggleBitsWithVerify(HdwOffset, (char)hdwctrl, (char)AnyWayBit, resultValue);
 
-		ok = this->ReadByteFromEC(HdwOffset, &newhdwctrl);
-
-		if (hdwctrl == newhdwctrl)
-			break;
-
-		::Sleep(300);
-	}
-
-	sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "%s: Set EC register 0x%02x to %d, ", source, HdwOffset, hdwctrl);
+	sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "%s: Set EC register 0x%02x to %d, ", source, HdwOffset, (unsigned char)resultValue);
 	sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "Result: ");
 
-	if (hdwctrl == newhdwctrl) {
+	if (ok) {
 		sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "OK");
-		ok = true;
 	}
 	else {
 		sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "COULD NOT SET HARDWARE STATE!!!!");
-		ok = false;
 	}
-
 
 	// display result
 	sprintf_s(obuf2, sizeof(obuf2), "%s   (%s)", obuf, datebuf);
@@ -486,12 +422,8 @@ FANCONTROL::SampleMatch(FCSTATE* smp1, FCSTATE* smp2) {
 //-------------------------------------------------------------------------
 bool
 FANCONTROL::LockECAccess() {
-	int numTries = 10, sleepTicks = 100;
-
-	int ok_ecaccess = false;
-	for (int i = 0; i < numTries; i++) {
-		if (ok_ecaccess = this->EcAccess.Lock(100))	return TRUE;
-		if (i < numTries) ::Sleep(sleepTicks);
+	if (m_ecManager->GetMutex().try_lock_for(std::chrono::milliseconds(1000))) {
+		return true;
 	}
 
 	this->Trace("Could not acquire mutex to read EC status");
@@ -499,11 +431,11 @@ FANCONTROL::LockECAccess() {
 }
 
 //-------------------------------------------------------------------------
-//  relinquisch any lock access to the EC controller
+//  unlock access to the EC controller
 //-------------------------------------------------------------------------
 void
 FANCONTROL::FreeECAccess() {
-	this->EcAccess.Unlock();
+	m_ecManager->GetMutex().unlock();
 }
 
 //-------------------------------------------------------------------------
@@ -557,7 +489,7 @@ FANCONTROL::ReadEcRaw(FCSTATE* pfcstate) {
 
 	// Fan status
 	char fanCtrl;
-	if (ReadByteFromEC(TP_ECOFFSET_FAN, &fanCtrl)) {
+	if (m_ecManager->ReadByte(TP_ECOFFSET_FAN, &fanCtrl)) {
 		pfcstate->FanCtrl = fanCtrl;
 		m_fanController->SetCurrentFanCtrl(fanCtrl);
 	} else {

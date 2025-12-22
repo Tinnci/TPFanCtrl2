@@ -24,6 +24,4 @@ private:
     std::string m_ignoreList;
 
     static constexpr int MAX_SENSORS = 12;
-    static constexpr auto TP_ECOFFSET_TEMP0 = 0x78;
-    static constexpr auto TP_ECOFFSET_TEMP1 = 0xC0;
 };

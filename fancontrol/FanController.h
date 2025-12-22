@@ -24,10 +24,4 @@ private:
     int m_lastSmartLevelIndex;
     std::function<void(int)> m_onChange;
     std::function<bool(int)> m_writeCallback;
-
-    static constexpr auto TP_ECOFFSET_FAN = 0x2F;
-    static constexpr auto TP_ECOFFSET_FANSPEED = 0x84;
-    static constexpr auto TP_ECOFFSET_FAN_SWITCH = 0x31;
-    static constexpr auto TP_ECVALUE_SELFAN1 = 0x00;
-    static constexpr auto TP_ECVALUE_SELFAN2 = 0x01;
 };

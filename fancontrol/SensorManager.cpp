@@ -22,6 +22,7 @@ void SensorManager::SetSensorName(int index, const std::string& name) {
 }
 
 bool SensorManager::UpdateSensors(bool showBiasedTemps, bool noExtSensor, bool useTWR) {
+    std::lock_guard<std::recursive_timed_mutex> lock(m_ecManager->GetMutex());
     if (useTWR) {
         // TWR logic is complex and specific to some models, 
         // for now we focus on the standard EC read.

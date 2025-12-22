@@ -38,6 +38,7 @@ void ECManager::SwitchECType() {
 }
 
 bool ECManager::ReadByte(int offset, char* pdata) {
+    std::lock_guard<std::recursive_timed_mutex> lock(m_mutex);
     if (!WaitForFlags(m_ctrlPort, ACPI_EC_FLAG_IBF | ACPI_EC_FLAG_OBF)) {
         if (m_trace) m_trace("readec: timed out #1, switching EC type");
         SwitchECType();
@@ -63,6 +64,7 @@ bool ECManager::ReadByte(int offset, char* pdata) {
 }
 
 bool ECManager::WriteByte(int offset, char data) {
+    std::lock_guard<std::recursive_timed_mutex> lock(m_mutex);
     if (!WaitForFlags(m_ctrlPort, ACPI_EC_FLAG_IBF | ACPI_EC_FLAG_OBF)) {
         if (m_trace) m_trace("writeec: timed out #1");
         return false;
@@ -90,4 +92,37 @@ bool ECManager::WriteByte(int offset, char data) {
     }
 
     return true;
+}
+
+bool ECManager::ToggleBitsWithVerify(int offset, char bits, char anywayBit, char& resultValue) {
+    std::lock_guard<std::recursive_timed_mutex> lock(m_mutex);
+    char currentVal;
+    char targetVal;
+    bool ok = false;
+
+    for (int i = 0; i < 5; i++) {
+        if (!ReadByte(offset, &currentVal)) {
+            ::Sleep(300);
+            continue;
+        }
+
+        if (currentVal & bits) {
+            targetVal = (currentVal - bits) | anywayBit;
+        } else {
+            targetVal = (currentVal + bits) | anywayBit;
+        }
+
+        if (!WriteByte(offset, targetVal)) {
+            ::Sleep(300);
+            continue;
+        }
+
+        if (ReadByte(offset, &resultValue) && resultValue == targetVal) {
+            ok = true;
+            break;
+        }
+
+        ::Sleep(300);
+    }
+    return ok;
 }
