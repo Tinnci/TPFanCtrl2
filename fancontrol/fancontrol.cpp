@@ -34,62 +34,13 @@ FANCONTROL::FANCONTROL(HINSTANCE hinstapp)
 	hwndDialog(NULL),
 	CurrentMode(-1),
 	PreviousMode(-1),
-	Cycle(5),
-	IconCycle(1),
-	ReIcCycle(0),
-	NoExtSensor(0),
-	FanSpeedLowByte(0x84),
 	CurrentIcon(-1),
 	hThread(NULL),
-	FanBeepFreq(440),
-	FanBeepDura(50),
 	ReadErrorCount(0),
-	MaxReadErrors(10),
-	NoBallons(0),
-	HK_BIOS_Method(0),
-	HK_BIOS(0),
-	HK_Manual_Method(0),
-	HK_Manual(0),
-	HK_Smart_Method(0),
-	HK_Smart(0),
-	HK_SM1_Method(0),
-	HK_SM1(0),
-	HK_SM2_Method(0),
-	HK_SM2(0),
-	HK_TG_BS_Method(0),
-	HK_TG_BS(0),
-	HK_TG_BM_Method(0),
-	HK_TG_BM(0),
-	HK_TG_MS_Method(0),
-	HK_TG_MS(0),
-	HK_TG_12_Method(0),
-	HK_TG_12(0),
-	EC_DATA(0),
-	EC_CTRL(0),
-	BluetoothEDR(0),
-	ManModeExit(80),
-	ManModeExitInternal(80),
-	ShowBiasedTemps(0),
-	SecWinUptime(0),
-	SlimDialog(0),
-	SecStartDelay(0),
-	Log2File(0),
-	StayOnTop(0),
-	Log2csv(0),
-	ShowAll(0),
-	ShowTempIcon(1),
+	iFarbeIconB(0),
+	iFontIconB(0),
 	pTaskbarIcon(NULL),
-	Fahrenheit(FALSE),
-	MinimizeToSysTray(TRUE),
-	IconColorFan(FALSE),
-	Lev64Norm(FALSE),
-	StartMinimized(FALSE),
-	NoWaitMessage(TRUE),
-	MinimizeOnClose(TRUE),
 	Runs_as_service(FALSE),
-	ActiveMode(false),
-	ManFanSpeed(7),
-	UseTWR(0),
 	FinalSeen(false),
 	m_fanTimer(NULL),
 	m_titleTimer(NULL),
@@ -142,74 +93,6 @@ FANCONTROL::FANCONTROL(HINSTANCE hinstapp)
 	setzero(this->LastTitle, sizeof(this->LastTitle));
 	setzero(this->CurrentStatus, sizeof(this->CurrentStatus));
 	setzero(this->CurrentStatuscsv, sizeof(this->CurrentStatuscsv));
-	setzero(this->IgnoreSensors, sizeof(this->IgnoreSensors));
-
-	this->IconLevels[0] = 50;    // yellow icon level
-	this->IconLevels[1] = 55;    // orange icon level
-	this->IconLevels[2] = 60;    // red icon level
-
-	// initial default "smart" table
-	setzero(this->SmartLevels, sizeof(this->SmartLevels));
-	this->SmartLevels[i].temp = 50;
-	this->SmartLevels[i].fan = 0;
-	i++;
-	this->SmartLevels[i].temp = 55;
-	this->SmartLevels[i].fan = 3;
-	i++;
-	this->SmartLevels[i].temp = 60;
-	this->SmartLevels[i].fan = 5;
-	i++;
-	this->SmartLevels[i].temp = 65;
-	this->SmartLevels[i].fan = 7;
-	i++;
-	this->SmartLevels[i].temp = 70;
-	this->SmartLevels[i].fan = 128;
-	i++;
-	this->SmartLevels[i].temp = -1;
-	this->SmartLevels[i].fan = 0;
-	i++;
-
-	setzero(this->SmartLevels1, sizeof(this->SmartLevels1));
-	i = 0;
-	this->SmartLevels1[i].temp1 = 50;
-	this->SmartLevels1[i].fan1 = 0;
-	i++;
-	this->SmartLevels1[i].temp1 = 55;
-	this->SmartLevels1[i].fan1 = 3;
-	i++;
-	this->SmartLevels1[i].temp1 = 60;
-	this->SmartLevels1[i].fan1 = 5;
-	i++;
-	this->SmartLevels1[i].temp1 = 65;
-	this->SmartLevels1[i].fan1 = 7;
-	i++;
-	this->SmartLevels1[i].temp1 = 70;
-	this->SmartLevels1[i].fan1 = 128;
-	i++;
-	this->SmartLevels1[i].temp1 = -1;
-	this->SmartLevels1[i].fan1 = 0;
-	i++;
-
-	setzero(this->SmartLevels2, sizeof(this->SmartLevels2));
-	i = 0;
-	this->SmartLevels2[i].temp2 = 0;
-	this->SmartLevels2[i].fan2 = 0;
-	i++;
-	this->SmartLevels2[i].temp2 = 55;
-	this->SmartLevels2[i].fan2 = 3;
-	i++;
-	this->SmartLevels2[i].temp2 = 60;
-	this->SmartLevels2[i].fan2 = 5;
-	i++;
-	this->SmartLevels2[i].temp2 = 65;
-	this->SmartLevels2[i].fan2 = 7;
-	i++;
-	this->SmartLevels2[i].temp2 = 70;
-	this->SmartLevels2[i].fan2 = 128;
-	i++;
-	this->SmartLevels2[i].temp2 = -1;
-	this->SmartLevels2[i].fan2 = 0;
-	i++;
 
 	// code title3
 	char bias = 100;
@@ -407,14 +290,14 @@ FANCONTROL::FANCONTROL(HINSTANCE hinstapp)
 
 		::SendDlgItemMessage(this->hwndDialog, 9200, EM_LIMITTEXT, 4096, 0);
 
-		_itoa_s(this->ManFanSpeed, buf, 10);
+		_itoa_s(m_configManager->ManFanSpeed, buf, 10);
 
 		::SetDlgItemText(this->hwndDialog, 8310, buf);
 		this->hPowerNotify = RegisterPowerSettingNotification(this->hwndDialog, &GUID_LIDSWITCH_STATE_CHANGE, DEVICE_NOTIFY_WINDOW_HANDLE);
 	}
 
-	if (SlimDialog == 1) {
-		if (this->StayOnTop)
+	if (m_configManager->SlimDialog == 1) {
+		if (m_configManager->StayOnTop)
 			this->hwndDialog = ::CreateDialogParam(hinstapp,
 				MAKEINTRESOURCE(9001),
 				HWND_DESKTOP,
@@ -434,7 +317,7 @@ FANCONTROL::FANCONTROL(HINSTANCE hinstapp)
 
 			strcat_s(this->Title, sizeof(this->Title), ".63 multiHotKey");
 
-			if (SlimDialog == 0) strcat_s(this->Title, sizeof(this->Title), this->Title3);
+			if (m_configManager->SlimDialog == 0) strcat_s(this->Title, sizeof(this->Title), this->Title3);
 
 			::SetWindowText(this->hwndDialog, this->Title);
 
@@ -444,11 +327,11 @@ FANCONTROL::FANCONTROL(HINSTANCE hinstapp)
 
 			::SendDlgItemMessage(this->hwndDialog, 9200, EM_LIMITTEXT, 4096, 0);
 
-			_itoa_s(this->ManFanSpeed, buf, 10);
+			_itoa_s(m_configManager->ManFanSpeed, buf, 10);
 
 			::SetDlgItemText(this->hwndDialog, 8310, buf);
 
-			this->ShowAllToDialog(ShowAll);
+			this->ShowAllToDialog(m_configManager->ShowAll);
 		}
 	}
 
@@ -456,19 +339,19 @@ FANCONTROL::FANCONTROL(HINSTANCE hinstapp)
 	char bufsec[1024] = "";
 	int tickCount = GetTickCount(); // +262144;
 
-	sprintf_s(bufsec, sizeof(bufsec), "Windows uptime since boot %d sec., SecWinUptime= %d sec.", tickCount / 1000,	SecWinUptime);
+	sprintf_s(bufsec, sizeof(bufsec), "Windows uptime since boot %d sec., SecWinUptime= %d sec.", tickCount / 1000,	m_configManager->SecWinUptime);
 	
 	this->Trace(bufsec);
 
-	if ((tickCount / 1000) <= SecWinUptime) {
-		sprintf_s(bufsec, sizeof(bufsec), "Save the icon by a start delay of %d seconds (SecStartDelay)", SecStartDelay);
+	if ((tickCount / 1000) <= m_configManager->SecWinUptime) {
+		sprintf_s(bufsec, sizeof(bufsec), "Save the icon by a start delay of %d seconds (SecStartDelay)", m_configManager->SecStartDelay);
 
 		this->Trace(bufsec);
 
-		if (!NoWaitMessage) {
+		if (!m_configManager->NoWaitMessage) {
 			sprintf_s(bufsec, sizeof(bufsec),
 				"TPFanControl is started %d sec. after\nboot time (SecWinUptime=%d sec.)\n\nTo prevent missing systray icons\nand communication errors between\nTPFanControl and embedded controller\nit will sleep for %d sec. (SecStartDelay)\n\nTo void this message box please set\nNoWaitMessage=1 in TPFanControl.ini",
-				tickCount / 1000, SecWinUptime, SecStartDelay);
+				tickCount / 1000, m_configManager->SecWinUptime, m_configManager->SecStartDelay);
 
 			// Don't show message box when as service in Vista
 			OSVERSIONINFOEX os = { sizeof(os) };
@@ -481,14 +364,14 @@ FANCONTROL::FANCONTROL(HINSTANCE hinstapp)
 	}
 
 	// sleep until start time + delay time
-	if ((GetTickCount() / 1000) <= (DWORD)SecWinUptime) {
-		while ((DWORD)(tickCount + SecStartDelay * 1000) >= GetTickCount())
+	if ((GetTickCount() / 1000) <= (DWORD)m_configManager->SecWinUptime) {
+		while ((DWORD)(tickCount + m_configManager->SecStartDelay * 1000) >= GetTickCount())
 			Sleep(200);
 	}
 
 	// taskbaricon (keep code after reading config)
-	if (this->MinimizeToSysTray) {
-		if (!this->ShowTempIcon) {
+	if (m_configManager->MinimizeToSysTray) {
+		if (!m_configManager->ShowTempIcon) {
 			this->pTaskbarIcon = new TASKBARICON(this->hwndDialog, 10, "TPFanControl");
 		}
 		else {
@@ -497,41 +380,41 @@ FANCONTROL::FANCONTROL(HINSTANCE hinstapp)
 	}
 
 	// read current fan control status and set mode buttons accordingly
-	this->CurrentMode = this->ActiveMode;
+	this->CurrentMode = m_configManager->ActiveMode;
 
 	this->ModeToDialog(this->CurrentMode);
 
 	this->PreviousMode = 1;
 
-	if (HK_BIOS_Method) RegisterHotKey(this->hwndDialog, 1, HK_BIOS_Method, HK_BIOS);
-	if (HK_Smart_Method) RegisterHotKey(this->hwndDialog, 2, HK_Smart_Method, HK_Smart);
-	if (HK_Manual_Method) RegisterHotKey(this->hwndDialog, 3, HK_Manual_Method, HK_Manual);
-	if (HK_SM1_Method) RegisterHotKey(this->hwndDialog, 4, HK_SM1_Method, HK_SM1);
-	if (HK_SM2_Method) RegisterHotKey(this->hwndDialog, 5, HK_SM2_Method, HK_SM2);
-	if (HK_TG_BS_Method) RegisterHotKey(this->hwndDialog, 6, HK_TG_BS_Method, HK_TG_BS);
-	if (HK_TG_BM_Method) RegisterHotKey(this->hwndDialog, 7, HK_TG_BM_Method, HK_TG_BM);
-	if (HK_TG_MS_Method) RegisterHotKey(this->hwndDialog, 8, HK_TG_MS_Method, HK_TG_MS);
-	if (HK_TG_12_Method) RegisterHotKey(this->hwndDialog, 9, HK_TG_12_Method, HK_TG_12);
+	if (m_configManager->HK_BIOS.method) RegisterHotKey(this->hwndDialog, 1, m_configManager->HK_BIOS.method, m_configManager->HK_BIOS.key);
+	if (m_configManager->HK_Smart.method) RegisterHotKey(this->hwndDialog, 2, m_configManager->HK_Smart.method, m_configManager->HK_Smart.key);
+	if (m_configManager->HK_Manual.method) RegisterHotKey(this->hwndDialog, 3, m_configManager->HK_Manual.method, m_configManager->HK_Manual.key);
+	if (m_configManager->HK_SM1.method) RegisterHotKey(this->hwndDialog, 4, m_configManager->HK_SM1.method, m_configManager->HK_SM1.key);
+	if (m_configManager->HK_SM2.method) RegisterHotKey(this->hwndDialog, 5, m_configManager->HK_SM2.method, m_configManager->HK_SM2.key);
+	if (m_configManager->HK_TG_BS.method) RegisterHotKey(this->hwndDialog, 6, m_configManager->HK_TG_BS.method, m_configManager->HK_TG_BS.key);
+	if (m_configManager->HK_TG_BM.method) RegisterHotKey(this->hwndDialog, 7, m_configManager->HK_TG_BM.method, m_configManager->HK_TG_BM.key);
+	if (m_configManager->HK_TG_MS.method) RegisterHotKey(this->hwndDialog, 8, m_configManager->HK_TG_MS.method, m_configManager->HK_TG_MS.key);
+	if (m_configManager->HK_TG_12.method) RegisterHotKey(this->hwndDialog, 9, m_configManager->HK_TG_12.method, m_configManager->HK_TG_12.key);
 
 	// enable/disable mode radiobuttons
-	::EnableWindow(::GetDlgItem(this->hwndDialog, 8300), this->ActiveMode);
-	::EnableWindow(::GetDlgItem(this->hwndDialog, 8301), this->ActiveMode);
-	::EnableWindow(::GetDlgItem(this->hwndDialog, 8302), this->ActiveMode);
-	::EnableWindow(::GetDlgItem(this->hwndDialog, 8310), this->ActiveMode);
+	::EnableWindow(::GetDlgItem(this->hwndDialog, 8300), m_configManager->ActiveMode);
+	::EnableWindow(::GetDlgItem(this->hwndDialog, 8301), m_configManager->ActiveMode);
+	::EnableWindow(::GetDlgItem(this->hwndDialog, 8302), m_configManager->ActiveMode);
+	::EnableWindow(::GetDlgItem(this->hwndDialog, 8310), m_configManager->ActiveMode);
 
 	// make it call HandleControl initially
 	::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0);
 
-	m_fanTimer = ::SetTimer(this->hwndDialog, 1, this->Cycle * 1000, NULL);    // fan update
+	m_fanTimer = ::SetTimer(this->hwndDialog, 1, m_configManager->Cycle * 1000, NULL);    // fan update
 	m_titleTimer = ::SetTimer(this->hwndDialog, 2, 500, NULL);                // title update
-	m_iconTimer = ::SetTimer(this->hwndDialog, 3, this->IconCycle * 1000, NULL); // Vista icon update
-	if (this->ReIcCycle)
-		m_renewTimer = ::SetTimer(this->hwndDialog, 4, this->ReIcCycle * 1000, NULL); // Vista icon update
+	m_iconTimer = ::SetTimer(this->hwndDialog, 3, m_configManager->IconCycle * 1000, NULL); // Vista icon update
+	if (m_configManager->ReIcCycle)
+		m_renewTimer = ::SetTimer(this->hwndDialog, 4, m_configManager->ReIcCycle * 1000, NULL); // Vista icon update
 
-	if (!this->StartMinimized)
+	if (!m_configManager->StartMinimized)
 		::ShowWindow(this->hwndDialog, TRUE);
 
-	if (this->StartMinimized)
+	if (m_configManager->StartMinimized)
 		::ShowWindow(this->hwndDialog, SW_MINIMIZE);
 }
 
@@ -589,13 +472,13 @@ FANCONTROL::ShowAllFromDialog() {
 		modemanual = ::SendDlgItemMessage(this->hwndDialog, 7002, BM_GETCHECK, 0L, 0L);
 
 	if (modefcauto)
-		this->ShowAll = 1;
+		m_configManager->ShowAll = 1;
 	else if (modemanual)
-		this->ShowAll = 0;
+		m_configManager->ShowAll = 0;
 	else
-		this->ShowAll = -1;
+		m_configManager->ShowAll = -1;
 
-	return this->ShowAll;
+	return m_configManager->ShowAll;
 }
 
 void
@@ -744,14 +627,7 @@ FANCONTROL::DlgProc(HWND
 				this->Trace(obuf);
 			}
 			this->IndSmartLevel = 0;
-
-			for (
-				int i = 0;
-				i < 32; i++) {
-				this->SmartLevels[i].temp = this->SmartLevels1[i].temp1;
-				this->SmartLevels[i].fan = this->SmartLevels1[i].fan1;
-			}
-			::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0);
+			::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0L);
 			break;
 
 		case 5:
@@ -761,47 +637,40 @@ FANCONTROL::DlgProc(HWND
 				this->Trace(obuf);
 			}
 			this->IndSmartLevel = 1;
-
-			for (
-				int i = 0;
-				i < 32; i++) {
-				this->SmartLevels[i].temp = this->SmartLevels2[i].temp2;
-				this->SmartLevels[i].fan = this->SmartLevels2[i].fan2;
-			}
-			::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0);
+			::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0L);
 			break;
 
 		case 6:
 			if (this->CurrentMode > 1) {
 				this->ModeToDialog(1);
-				::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0);
+				::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0L);
 			}
 
 			if (this->CurrentMode == 1) {
 				this->ModeToDialog(2);
-				::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0);
+				::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0L);
 			}
 			break;
 
 		case 7:
 			if (this->CurrentMode > 1) {
 				this->ModeToDialog(1);
-				::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0);
+				::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0L);
 			}
 			if (this->CurrentMode == 1) {
 				this->ModeToDialog(3);
-				::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0);
+				::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0L);
 			}
 			break;
 
 		case 8:
 			if (this->CurrentMode < 3) {
 				this->ModeToDialog(3);
-				::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0);
+				::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0L);
 			}
 			if (this->CurrentMode == 3) {
 				this->ModeToDialog(2);
-				::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0);
+				::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0L);
 			}
 			break;
 
@@ -810,30 +679,16 @@ FANCONTROL::DlgProc(HWND
 			switch (IndSmartLevel) {
 			case 0:
 				sprintf_s(obuf,	sizeof(obuf), "Activation of Fan Control Profile 'Smart Mode 2'");
-				this->
-					Trace(obuf);
-				this->
-					IndSmartLevel = 1;
-				for (
-					int i = 0;
-					i < 32; i++) {
-					this->SmartLevels[i].temp = this->SmartLevels2[i].temp2;
-					this->SmartLevels[i].fan = this->SmartLevels2[i].fan2;
-				}
-				::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0);
+				this->Trace(obuf);
+				this->IndSmartLevel = 1;
+				::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0L);
 				break;
 			case 1:
 				sprintf_s(obuf,
 					sizeof(obuf), "Activation of Fan Control Profile 'Smart Mode 1'");
 				this->Trace(obuf);
 				this->IndSmartLevel = 0;
-				for (
-					int i = 0;
-					i < 32; i++) {
-					this->SmartLevels[i].temp = this->SmartLevels1[i].temp1;
-					this->SmartLevels[i].fan = this->SmartLevels1[i].fan1;
-				}
-				::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0);
+				::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0L);
 				break;
 			}
 			break;
@@ -850,14 +705,14 @@ FANCONTROL::DlgProc(HWND
 
 		case 1: // update fan state
 			::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0);
-			if (this->Log2csv == 1)
+			if (m_configManager->Log2csv == 1)
 			{
 				this->Tracecsv(this->CurrentStatuscsv);
 			}
 			break;
 
 		case 2: // update window title
-			if (this->CurrentMode == 3 && this->MaxTemp > this->ManModeExitInternal) {
+			if (this->CurrentMode == 3 && this->MaxTemp > m_configManager->ManModeExit) {
 				this->ModeToDialog(2);
 				::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0);
 			}
@@ -888,12 +743,12 @@ FANCONTROL::DlgProc(HWND
 				{
 					icon = 11;    // blue
 					for (
-						int i = 0;
-						i < ARRAYMAX(this->IconLevels); i++)
+						size_t i = 0;
+						i < m_configManager->IconLevels.size(); i++)
 					{
-						if (this->MaxTemp >= this->IconLevels[i])
+						if (this->MaxTemp >= m_configManager->IconLevels[i])
 						{
-							icon = 12 + i;    // yellow, orange, red
+							icon = 12 + (int)i;    // yellow, orange, red
 						}
 					}
 				}
@@ -902,7 +757,7 @@ FANCONTROL::DlgProc(HWND
 				{
 					this->pTaskbarIcon->SetIcon(icon);
 					this->CurrentIcon = icon;
-					if (dioicon && !this->NoBallons) {
+					if (dioicon && !m_configManager->NoBallons) {
 						this->pTaskbarIcon->SetBalloon(NIIF_INFO, "TPFanControl old symbol icon",
 							"shows temperature level by color and state in tooltip, left click on icon shows or hides control window, right click shows menue",
 							11);
@@ -1069,7 +924,7 @@ FANCONTROL::DlgProc(HWND
 			}
 
 			// fan speed
-			if (Fahrenheit) {
+			if (m_configManager->Fahrenheit) {
 				if (fan1speed > 0x1fff)
 					fan1speed = lastfan1speed;
 				sprintf_s(str_value,
@@ -1152,7 +1007,7 @@ FANCONTROL::DlgProc(HWND
 			break;
 
 		case 4: // renew tempicon
-			if (ShowTempIcon && ReIcCycle) {
+			if (m_configManager->ShowTempIcon && m_configManager->ReIcCycle) {
 				this->RemoveTextIcons();
 				this->ProcessTextIcons();
 			}
@@ -1162,7 +1017,7 @@ FANCONTROL::DlgProc(HWND
 			break;
 		} // End switch mp1
 
-		if (this->ShowTempIcon == 1)
+		if (m_configManager->ShowTempIcon == 1)
 		{
 			this->ProcessTextIcons();  //icon Einstieg
 		}
@@ -1197,14 +1052,14 @@ FANCONTROL::DlgProc(HWND
 
 					if (temp < 128 && temp != 0)
 					{
-						if (Fahrenheit)
+						if (m_configManager->Fahrenheit)
 							sprintf_s(obuf2, sizeof(obuf2), "%d° F", temp * 9 / 5 + 32);
 						else
 							sprintf_s(obuf2, sizeof(obuf2), "%d° C", temp);
 
 						size_t strlen_templist2 = strlen_s(templist2, sizeof(templist2));
 
-						if (SlimDialog && StayOnTop)
+						if (m_configManager->SlimDialog && m_configManager->StayOnTop)
 							sprintf_s(templist2	+ strlen_templist2, sizeof(templist2) - strlen_templist2,
 								"%d %s %s (0x%02x)", i + 1, this->State.SensorName[i], obuf2, this->State.SensorAddr[i]);
 						else
@@ -1215,12 +1070,12 @@ FANCONTROL::DlgProc(HWND
 					}
 					else
 					{
-						if (this->ShowAll == 1)
+						if (m_configManager->ShowAll == 1)
 						{
 							sprintf_s(obuf2, sizeof(obuf2), "n/a");
 								size_t strlen_templist2 = strlen_s(templist2, sizeof(templist2));
 
-							if (SlimDialog && StayOnTop)
+							if (m_configManager->SlimDialog && m_configManager->StayOnTop)
 								sprintf_s(templist2	+ strlen_templist2, sizeof(templist2) - strlen_templist2,
 									"%d %s %s (0x%02x)", i + 1, this->State.SensorName[i], obuf2, this->State.SensorAddr[i]);
 							else
@@ -1263,11 +1118,6 @@ FANCONTROL::DlgProc(HWND
 						this->Trace(obuf);
 					}
 					this->IndSmartLevel = 0;
-					// rüberkopieren
-					for (int i = 0;	i < 32; i++) {
-						this->SmartLevels[i].temp = this->SmartLevels1[i].temp1;
-						this->SmartLevels[i].fan = this->SmartLevels1[i].fan1;
-					}
 					::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0);
 					break;
 
@@ -1278,11 +1128,6 @@ FANCONTROL::DlgProc(HWND
 						this->Trace(obuf);
 					}
 					this->IndSmartLevel = 1;
-
-					for (int i = 0;	i < 32; i++) {
-						this->SmartLevels[i].temp = this->SmartLevels2[i].temp2;
-						this->SmartLevels[i].fan = this->SmartLevels2[i].fan2;
-					}
 					::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0);
 					break;
 
@@ -1297,7 +1142,7 @@ FANCONTROL::DlgProc(HWND
 					break;
 
 				case 5040: // show window
-					if (BluetoothEDR) 
+					if (m_configManager->BluetoothEDR) 
 						this->SetHdw("Bluetooth", 16, 58, 32);
 					else 
 						this->SetHdw("Bluetooth", 32, 59, 16);
@@ -1310,7 +1155,7 @@ FANCONTROL::DlgProc(HWND
 					break;
 
 				case 5070: // show temp icon
-					this->ShowTempIcon = 0;
+					m_configManager->ShowTempIcon = 0;
 					this->pTaskbarIcon = new TASKBARICON(this->hwndDialog, 10, "TPFanControl");
 					this->pTaskbarIcon->SetIcon(this->CurrentIcon);
 					break;
@@ -1318,7 +1163,7 @@ FANCONTROL::DlgProc(HWND
 				case 5080: // show temp icon
 					delete this->pTaskbarIcon;
 					this->pTaskbarIcon = NULL;
-					this->ShowTempIcon = 1;
+					m_configManager->ShowTempIcon = 1;
 					break;
 
 				case 5030: // hide window
@@ -1339,7 +1184,7 @@ FANCONTROL::DlgProc(HWND
 					}
 
 					// don't close if we can't set the fan back to bios controlled
-					if (!this->ActiveMode || this->SetFan("On close", 0x80, true)) {
+					if (!m_configManager->ActiveMode || this->SetFan("On close", 0x80, true)) {
 						::KillTimer(this->hwndDialog, m_fanTimer);
 						::KillTimer(this->hwndDialog, m_titleTimer);
 						::KillTimer(this->hwndDialog, m_iconTimer);
@@ -1414,7 +1259,7 @@ FANCONTROL::DlgProc(HWND
 			}
 
 			// don't close if we can't set the fan back to bios controlled
-			if (!this->ActiveMode || this->SetFan("On close", 0x80, true)) {
+			if (!m_configManager->ActiveMode || this->SetFan("On close", 0x80, true)) {
 				::KillTimer(this->hwndDialog, m_fanTimer);
 				::KillTimer(this->hwndDialog, m_titleTimer);
 				::KillTimer(this->hwndDialog, m_iconTimer);
@@ -1435,7 +1280,7 @@ FANCONTROL::DlgProc(HWND
 
 		//		case WM_MOVE:
 	case WM_SIZE:
-		if (mp1 == SIZE_MINIMIZED && this->MinimizeToSysTray) {
+		if (mp1 == SIZE_MINIMIZED && m_configManager->MinimizeToSysTray) {
 			::ShowWindow(this->hwndDialog, FALSE);
 		}
 		rc = TRUE;
@@ -1492,12 +1337,12 @@ FANCONTROL::DlgProc(HWND
 		else {
 			sprintf_s(buf, sizeof(buf), "Warning: can't read Status, read error count = %d", this->ReadErrorCount);
 			this->Trace(buf);
-			sprintf_s(buf, sizeof(buf), "We will close to BIOS-Mode after %d consecutive read errors", this->MaxReadErrors);
+			sprintf_s(buf, sizeof(buf), "We will close to BIOS-Mode after %d consecutive read errors", m_configManager->MaxReadErrors);
 			this->Trace(buf);
 			this->ReadErrorCount++;
 
 			// after so many consecutive read errors, try to switch back to bios mode
-			if (this->ReadErrorCount > this->MaxReadErrors) {
+			if (this->ReadErrorCount > m_configManager->MaxReadErrors) {
 				this->ModeToDialog(1);
 				ok = this->SetFan("Max. Errors", 0x80);
 				if (ok) {
@@ -1557,7 +1402,7 @@ FANCONTROL::DlgProc(HWND
 			if (testpara & 2) 
 				m.CheckMenuItem(5060);
 
-			if (this->BluetoothEDR) {
+			if (m_configManager->BluetoothEDR) {
 				ok = this->ReadByteFromEC(58, &testpara);
 				if (testpara & 16) m.CheckMenuItem(5040);
 			}
@@ -1570,7 +1415,7 @@ FANCONTROL::DlgProc(HWND
 			if (mode == 1) {
 				m.CheckMenuItem(5001);
 
-				if (this->ActiveMode == 0) {
+				if (m_configManager->ActiveMode == 0) {
 					m.DisableMenuItem(5002);  // v0.25
 					m.DisableMenuItem(5003);  // v0.25
 					m.DisableMenuItem(5004);  // v0.25
@@ -1584,16 +1429,16 @@ FANCONTROL::DlgProc(HWND
 			if (mode == 3)
 				m.CheckMenuItem(5005);
 
-			m.InsertItem(this->MenuLabelSM1, 5003, 10);
-			m.InsertItem(this->MenuLabelSM2, 5004, 11);
+			m.InsertItem(m_configManager->MenuLabelSM1.c_str(), 5003, 10);
+			m.InsertItem(m_configManager->MenuLabelSM2.c_str(), 5004, 11);
 
-			if (this->SmartLevels2[0].temp2 == 0)
+			if (m_configManager->SmartLevels2.empty() || m_configManager->SmartLevels2[0].temp == 0)
 			{
 				m.DeleteMenuItem(5003);
 				m.DeleteMenuItem(5004);
 			}
 
-			if (this->SmartLevels2[0].temp2 != 0)
+			if (!m_configManager->SmartLevels2.empty() && m_configManager->SmartLevels2[0].temp != 0)
 			{
 				m.DeleteMenuItem(5002);
 
@@ -1613,10 +1458,10 @@ FANCONTROL::DlgProc(HWND
 			if (IsWindowVisible(this->hwndDialog))
 				m.DeleteMenuItem(5010);
 
-			if (this->ShowTempIcon == 0)
+			if (m_configManager->ShowTempIcon == 0)
 				m.DeleteMenuItem(5070);
 
-			if (this->ShowTempIcon == 1)
+			if (m_configManager->ShowTempIcon == 1)
 				m.DeleteMenuItem(5080);
 
 			this->FreeECAccess();
@@ -1662,14 +1507,14 @@ void FANCONTROL::ProcessTextIcons(void) {
 	}
 	else {
 		icon = 11;    // blue
-		for (int i = 0; i < ARRAYMAX(this->IconLevels); i++) {
-			if (this->MaxTemp >= this->IconLevels[i]) {
-				icon = 12 + i;    // yellow, orange, red
+		for (size_t i = 0; i < m_configManager->IconLevels.size(); i++) {
+			if (this->MaxTemp >= m_configManager->IconLevels[i]) {
+				icon = 12 + (int)i;    // yellow, orange, red
 			}
 		}
 	}
 
-	if (this->IconColorFan) {
+	if (m_configManager->IconColorFan) {
 		switch (fan1speed / 1000) {
 		case 0:
 			break;
@@ -1723,8 +1568,8 @@ void FANCONTROL::ProcessTextIcons(void) {
 				this->hwndDialog, WM__TASKBAR, 0, "", "",  //WM_APP+5000 -> WM__TASKBAR
 				this->iFarbeIconB, this->iFontIconB, myszTip);
 
-			if (dishow && !this->NoBallons) {
-				if (Fahrenheit) {
+			if (dishow && !m_configManager->NoBallons) {
+				if (m_configManager->Fahrenheit) {
 					ppTbTextIcon[0]->DiShowballon(
 						_T("shows max. temperature in ° F and sensor name, left click on icon shows or hides control window, right click shows menue"),
 						_T("TPFanControl new text icon"), NIIF_INFO, 11);
@@ -1735,19 +1580,6 @@ void FANCONTROL::ProcessTextIcons(void) {
 						_T("TPFanControl new text icon"), NIIF_INFO, 11);
 				}
 
-				// Input:
-				//  szText: [in] Text for the balloon tooltip.
-				//  szTitle: [in] Title for the balloon.  This text is shown in bold above
-				//           the tooltip text (szText).  Pass "" if you don't want a title.
-				//  dwIcon: [in] Specifies an icon to appear in the balloon.  Legal values are:
-				//                 NIIF_NONE: No icon
-				//                 NIIF_INFO: Information
-				//                 NIIF_WARNING: Exclamation
-				//                 NIIF_ERROR: Critical error (red circle with X)
-				//  uTimeout: [in] Number of seconds for the balloon to remain visible.  Can
-				//            be between 10 and 30 inclusive.
-				//
-
 				dishow = FALSE;
 			}
 		}
@@ -1757,7 +1589,7 @@ void FANCONTROL::ProcessTextIcons(void) {
 		//  aktualisieren
 		for (int i = 0; i < MAX_TEXT_ICONS; ++i) {
 			if (ppTbTextIcon[i]) {
-				if (Fahrenheit)
+				if (m_configManager->Fahrenheit)
 					_itoa_s((this->icontemp * 9 / 5) + 32, str_value, sizeof(str_value), 10);
 				else
 					_itoa_s(this->icontemp, str_value, sizeof(str_value), 10);

@@ -36,7 +36,7 @@ FANCONTROL::HandleData(void) {
 	//
 
 	// Sync ignored sensors to SensorManager
-	m_sensorManager->SetIgnoreSensors(this->IgnoreSensors);
+	m_sensorManager->SetIgnoreSensors(m_configManager->IgnoreSensors);
 	
 	// Get max temp from SensorManager
 	this->MaxTemp = m_sensorManager->GetMaxTemp(this->iMaxTemp);
@@ -48,7 +48,7 @@ FANCONTROL::HandleData(void) {
 	//
 
 	// title string (for minimized window)
-	if (Fahrenheit)
+	if (m_configManager->Fahrenheit)
 		sprintf_s(title2, sizeof(title2), "%d° F", this->MaxTemp * 9 / 5 + 32);
 	else
 		sprintf_s(title2, sizeof(title2), "%d° C", this->MaxTemp);
@@ -57,15 +57,15 @@ FANCONTROL::HandleData(void) {
 	int fanctrl = this->State.FanCtrl;
 	fanctrl2 = fanctrl;
 
-	if (this->SlimDialog == 1) {
+	if (m_configManager->SlimDialog == 1) {
 		sprintf_s(obuf2, sizeof(obuf2), "Fan %d ", fanctrl);
 		if (fanctrl & 0x80) {
-			if (!(SlimDialog && StayOnTop))
+			if (!(m_configManager->SlimDialog && m_configManager->StayOnTop))
 				strcat_s(obuf2, sizeof(obuf2), "(= BIOS)");
 			strcat_s(title2, sizeof(title2), " Default Fan");
 		}
 		else {
-			if (!(SlimDialog && StayOnTop))
+			if (!(m_configManager->SlimDialog && m_configManager->StayOnTop))
 				sprintf_s(obuf2 + strlen(obuf2), sizeof(obuf2) - strlen(obuf2), " Non Bios");
 			sprintf_s(title2 + strlen(title2), sizeof(title2) - strlen(title2), " Fan %d (%s)",	fanctrl & 0x3F,	this->CurrentModeFromDialog() == 2 ? "Smart" : "Fixed");
 		}
@@ -102,7 +102,7 @@ FANCONTROL::HandleData(void) {
 	::SetDlgItemText(this->hwndDialog, 8102, obuf2);
 
 	// display temperature list
-	if (Fahrenheit)
+	if (m_configManager->Fahrenheit)
 		sprintf_s(obuf2, sizeof(obuf2), "%d° F", this->MaxTemp * 9 / 5 + 32);
 	else
 		sprintf_s(obuf2, sizeof(obuf2), "%d° C", this->MaxTemp);
@@ -115,12 +115,12 @@ FANCONTROL::HandleData(void) {
 		int temp = this->State.Sensors[i];
 
 		if (temp != 0 && temp < 128) {
-			if (Fahrenheit)
+			if (m_configManager->Fahrenheit)
 				sprintf_s(obuf2, sizeof(obuf2), "%d° F", temp * 9 / 5 + 32);
 			else
 				sprintf_s(obuf2, sizeof(obuf2), "%d° C", temp);
 
-			if (SlimDialog && StayOnTop)
+			if (m_configManager->SlimDialog && m_configManager->StayOnTop)
 				sprintf_s(templist2 + strlen(templist2), sizeof(templist2) - strlen(templist2), "%d %s %s", i + 1, this->State.SensorName[i], obuf2);
 			else
 				sprintf_s(templist2 + strlen(templist2), sizeof(templist2) - strlen(templist2), "%d %s %s (0x%02x)", i + 1, this->State.SensorName[i], obuf2, this->State.SensorAddr[i]);
@@ -128,12 +128,12 @@ FANCONTROL::HandleData(void) {
 			strcat_s(templist2, sizeof(templist2), "\r\n");
 		}
 		else {
-			if (this->ShowAll == 1) {
+			if (m_configManager->ShowAll == 1) {
 				sprintf_s(obuf2, sizeof(obuf2), "n/a");
 
 				size_t strlen_templist = strlen_s(templist2, sizeof(templist2));
 
-				if (SlimDialog && StayOnTop)
+				if (m_configManager->SlimDialog && m_configManager->StayOnTop)
 					sprintf_s(templist2 + strlen_templist, sizeof(templist2) - strlen_templist, "%d %s %s", i + 1, this->State.SensorName[i], obuf2);
 				else
 					sprintf_s(templist2 + strlen_templist, sizeof(templist2) - strlen_templist, "%d %s %s (0x%02x)", i + 1, this->State.SensorName[i], obuf2, this->State.SensorAddr[i]);
@@ -150,7 +150,7 @@ FANCONTROL::HandleData(void) {
 	// compact single line status (combined)
 	strcpy_s(templist, sizeof(templist), "");
 
-	if (Fahrenheit) {
+	if (m_configManager->Fahrenheit) {
 		for (i = 0; i < 12; i++) {
 			if (this->State.Sensors[i] < 128) {
 				if (this->State.Sensors[i] != 0)
@@ -176,7 +176,7 @@ FANCONTROL::HandleData(void) {
 
 	templist[strlen(templist) - 1] = '\0';
 
-	if (Fahrenheit)
+	if (m_configManager->Fahrenheit)
 		sprintf_s(CurrentStatus, sizeof(CurrentStatus), "Fan: 0x%02x / Switch: %d° F (%s)", State.FanCtrl, MaxTemp * 9 / 5 + 32, templist);
 	else
 		sprintf_s(CurrentStatus, sizeof(CurrentStatus), "Fan: 0x%02x / Switch: %d° C (%s)", State.FanCtrl, MaxTemp,	templist);
@@ -266,7 +266,7 @@ FANCONTROL::HandleData(void) {
 
 	this->PreviousMode = this->CurrentMode;
 
-	if (this->CurrentMode == 3 && this->MaxTemp > this->ManModeExitInternal)
+	if (this->CurrentMode == 3 && this->MaxTemp > m_configManager->ManModeExit)
 		this->CurrentMode = 2;
 
 	return ok;
@@ -291,10 +291,9 @@ FANCONTROL::SmartControl(void) {
 		this->Trace(obuf);
 	}
 
-	std::vector<SmartLevel> levels;
-	for (int i = 0; this->SmartLevels[i].temp != -1; i++) {
-		levels.push_back({ this->SmartLevels[i].temp, this->SmartLevels[i].fan, this->SmartLevels[i].hystUp, this->SmartLevels[i].hystDown });
-	}
+	const std::vector<SmartLevel>& levels = (this->IndSmartLevel == 0) 
+		? m_configManager->SmartLevels1 
+		: m_configManager->SmartLevels2;
 
 	// Use modernized FanController
 	m_fanController->UpdateSmartControl(this->MaxTemp, levels);
@@ -311,19 +310,19 @@ FANCONTROL::SetFan(const char* source, int fanctrl, bool final) {
 	int ok = 0;
 	char obuf[256] = "", obuf2[256], datebuf[128];
 
-	if (this->FanBeepFreq && this->FanBeepDura)
-		::Beep(this->FanBeepFreq, this->FanBeepDura);
+	if (m_configManager->FanBeepFreq && m_configManager->FanBeepDura)
+		::Beep(m_configManager->FanBeepFreq, m_configManager->FanBeepDura);
 
 	this->CurrentDateTimeLocalized(datebuf, sizeof(datebuf));
 
 	sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "%s: Set fan control to 0x%02x, ", source, fanctrl);
-	if (this->IndSmartLevel == 1 && this->SmartLevels2[0].temp2 != 0 && source == "Smart")
+	if (this->IndSmartLevel == 1 && !m_configManager->SmartLevels2.empty() && source == "Smart")
 		sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "Mode 2, ");
-	if (this->IndSmartLevel == 0 && this->SmartLevels2[0].temp2 != 0 && source == "Smart")
+	if (this->IndSmartLevel == 0 && !m_configManager->SmartLevels2.empty() && source == "Smart")
 		sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "Mode 1, ");
 	sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "Result: ");
 
-	if (this->ActiveMode && !this->FinalSeen) {
+	if (m_configManager->ActiveMode && !this->FinalSeen) {
 		if (!this->LockECAccess()) return false;
 
 		// Use modernized FanController
@@ -475,7 +474,7 @@ FANCONTROL::ReadEcStatus(FCSTATE* pfcstate) {
 //-------------------------------------------------------------------------
 bool
 FANCONTROL::ReadEcRaw(FCSTATE* pfcstate) {
-	if (!m_sensorManager->UpdateSensors(this->ShowBiasedTemps, this->NoExtSensor, this->UseTWR)) {
+	if (!m_sensorManager->UpdateSensors(m_configManager->ShowBiasedTemps, m_configManager->NoExtSensor, m_configManager->UseTWR)) {
 		this->Trace("failed to read sensors from EC");
 		return false;
 	}

@@ -77,96 +77,22 @@ protected:
 
 	} State;
 
-	struct SMARTENTRY {
-		int temp, fan, hystUp, hystDown;
-	} SmartLevels[32];
-
-	struct SMARTENTRY1 {
-		int temp1, fan1, hystUp1, hystDown1;
-	} SmartLevels1[32];
-
-	struct SMARTENTRY2 {
-		int temp2, fan2, hystUp2, hystDown2;
-	} SmartLevels2[32];
-
-	struct FSMARTENTRY {        //fahrenheit values
-		int ftemp, ffan;
-	} FSmartLevels[32];
-
-	struct SENSOROFFSET {
-		int offs, hystMin, hystMax; // min and max temp values that offs takes effect. -1 to disable
-	} SensorOffset[16];
 	int LastSmartLevel = -1;
-	int IconLevels[3];    // temp levels for coloring the icon
-	int FIconLevels[3];    // fahrenheit temp levels for coloring the icon
 	int CurrentIcon;
 	int IndSmartLevel;
-	int FSensorOffset[16];
-	int iFarbeIconB;
-	int iFontIconB;
 	int icontemp;
-	int Cycle;
-	int IconCycle;
-	int ReIcCycle;
-	int NoExtSensor;
-	int FanSpeedLowByte;
-	int ActiveMode,
-		UseTWR,
-		ManFanSpeed,
-		FinalSeen;
+	int FinalSeen;
 	int CurrentMode, fanctrl2,
 		PreviousMode;
 	int TaskbarNew;
 	int MaxTemp;
 	int iMaxTemp;
 	int fan1speed, lastfan1speed, fan2speed, lastfan2speed;
-	int FanBeepFreq, FanBeepDura;
-	int MinimizeToSysTray,
-		Lev64Norm,
-		IconColorFan,
-		Fahrenheit,
-		MinimizeOnClose,
-		StartMinimized,
-		NoWaitMessage,
-		Runs_as_service;
+	int Runs_as_service;
 	int ReadErrorCount;
-	int MaxReadErrors;
-	int SecWinUptime;
-	int SlimDialog;
-	int NoBallons,
-		HK_BIOS_Method,
-		HK_Manual_Method,
-		HK_Smart_Method,
-		HK_SM1_Method,
-		HK_SM2_Method,
-		HK_TG_BS_Method,
-		HK_TG_BM_Method,
-		HK_TG_MS_Method,
-		HK_TG_12_Method,
-		HK_BIOS,
-		HK_Manual,
-		HK_Smart,
-		HK_SM1,
-		HK_SM2,
-		HK_TG_BS,
-		HK_TG_BM,
-		HK_TG_MS,
-		HK_TG_12;
-	int EC_CTRL, EC_DATA;
-	int BluetoothEDR;
-	int ManModeExit;
-	int ManModeExitInternal;
-	int ShowBiasedTemps;
-	int SecStartDelay;
+	int iFarbeIconB;
+	int iFontIconB;
 	char gSensorNames[17][4];
-	int Log2File;
-	int Log2csv;
-	int StayOnTop;
-	int ShowAll;
-	int ShowTempIcon;
-	char IgnoreSensors[256];
-	char MenuLabelSM1[32];
-	char MenuLabelSM2[32];
 	HANDLE hThread;
 	HANDLE hPipe0;
 	HANDLE hPipe1;

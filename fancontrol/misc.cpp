@@ -28,103 +28,22 @@ FANCONTROL::ReadConfig(const char* configfile)
 {
 	if (!m_configManager->LoadConfig(configfile)) return false;
 
-	// Sync values from ConfigManager to FANCONTROL (Legacy support)
-	this->ActiveMode = m_configManager->ActiveMode;
-	this->ManFanSpeed = m_configManager->ManFanSpeed;
-	this->Cycle = m_configManager->Cycle;
-	this->IconCycle = m_configManager->IconCycle;
-	this->ReIcCycle = m_configManager->ReIcCycle;
-	this->iFontIconB = m_configManager->IconFontSize;
-	this->FanSpeedLowByte = m_configManager->FanSpeedLowByte;
-	this->NoExtSensor = m_configManager->NoExtSensor;
-	this->SlimDialog = m_configManager->SlimDialog;
-	this->FanBeepFreq = m_configManager->FanBeepFreq;
-	this->FanBeepDura = m_configManager->FanBeepDura;
-	this->NoWaitMessage = m_configManager->NoWaitMessage;
-	this->StartMinimized = m_configManager->StartMinimized;
-	this->NoBallons = m_configManager->NoBallons;
-	this->IconColorFan = m_configManager->IconColorFan;
-	this->Lev64Norm = m_configManager->Lev64Norm;
-	this->BluetoothEDR = m_configManager->BluetoothEDR;
-	this->ManModeExit = m_configManager->ManModeExit;
-	this->ShowBiasedTemps = m_configManager->ShowBiasedTemps;
-	this->MaxReadErrors = m_configManager->MaxReadErrors;
-	this->SecWinUptime = m_configManager->SecWinUptime;
-	this->SecStartDelay = m_configManager->SecStartDelay;
-	this->Log2File = m_configManager->Log2File;
-	this->StayOnTop = m_configManager->StayOnTop;
-	this->Log2csv = m_configManager->Log2csv;
-	this->ShowAll = m_configManager->ShowAll;
-	this->ShowTempIcon = m_configManager->ShowTempIcon;
-	this->Fahrenheit = m_configManager->Fahrenheit;
-	this->MinimizeToSysTray = m_configManager->MinimizeToSysTray;
-	this->MinimizeOnClose = m_configManager->MinimizeOnClose;
-	this->UseTWR = m_configManager->UseTWR;
-
-	strcpy_s(this->MenuLabelSM1, sizeof(this->MenuLabelSM1), m_configManager->MenuLabelSM1.c_str());
-	strcpy_s(this->MenuLabelSM2, sizeof(this->MenuLabelSM2), m_configManager->MenuLabelSM2.c_str());
-	strcpy_s(this->IgnoreSensors, sizeof(this->IgnoreSensors), m_configManager->IgnoreSensors.c_str());
-
-	for (size_t i = 0; i < m_configManager->SmartLevels1.size() && i < 32; i++) {
-		this->SmartLevels[i].temp = m_configManager->SmartLevels1[i].temp;
-		this->SmartLevels[i].fan = m_configManager->SmartLevels1[i].fan;
-		this->SmartLevels[i].hystUp = m_configManager->SmartLevels1[i].hystUp;
-		this->SmartLevels[i].hystDown = m_configManager->SmartLevels1[i].hystDown;
-		
-		this->SmartLevels1[i].temp1 = m_configManager->SmartLevels1[i].temp;
-		this->SmartLevels1[i].fan1 = m_configManager->SmartLevels1[i].fan;
-		this->SmartLevels1[i].hystUp1 = m_configManager->SmartLevels1[i].hystUp;
-		this->SmartLevels1[i].hystDown1 = m_configManager->SmartLevels1[i].hystDown;
-	}
-
-	for (size_t i = 0; i < m_configManager->SmartLevels2.size() && i < 32; i++) {
-		this->SmartLevels2[i].temp2 = m_configManager->SmartLevels2[i].temp;
-		this->SmartLevels2[i].fan2 = m_configManager->SmartLevels2[i].fan;
-		this->SmartLevels2[i].hystUp2 = m_configManager->SmartLevels2[i].hystUp;
-		this->SmartLevels2[i].hystDown2 = m_configManager->SmartLevels2[i].hystDown;
-	}
-
-	for (int i = 0; i < 3; i++) {
-		this->IconLevels[i] = m_configManager->IconLevels[i];
-	}
-
+	// Sync to SensorManager
 	for (int i = 0; i < 16; i++) {
-		this->SensorOffset[i].offs = m_configManager->SensorOffsets[i].offset;
-		this->SensorOffset[i].hystMin = m_configManager->SensorOffsets[i].hystMin;
-		this->SensorOffset[i].hystMax = m_configManager->SensorOffsets[i].hystMax;
-		
-		// Sync to SensorManager
-		m_sensorManager->SetOffset(i, this->SensorOffset[i].offs, this->SensorOffset[i].hystMin, this->SensorOffset[i].hystMax);
+		m_sensorManager->SetOffset(i, m_configManager->SensorOffsets[i].offset, m_configManager->SensorOffsets[i].hystMin, m_configManager->SensorOffsets[i].hystMax);
 		if (i < 12) {
 			m_sensorManager->SetSensorName(i, this->gSensorNames[i]);
 		}
 	}
-
-	// Hotkeys
-	this->HK_BIOS_Method = m_configManager->HK_BIOS.method;
-	this->HK_BIOS = m_configManager->HK_BIOS.key;
-	this->HK_Manual_Method = m_configManager->HK_Manual.method;
-	this->HK_Manual = m_configManager->HK_Manual.key;
-	this->HK_Smart_Method = m_configManager->HK_Smart.method;
-	this->HK_Smart = m_configManager->HK_Smart.key;
-	this->HK_SM1_Method = m_configManager->HK_SM1.method;
-	this->HK_SM1 = m_configManager->HK_SM1.key;
-	this->HK_SM2_Method = m_configManager->HK_SM2.method;
-	this->HK_SM2 = m_configManager->HK_SM2.key;
-	this->HK_TG_BS_Method = m_configManager->HK_TG_BS.method;
-	this->HK_TG_BS = m_configManager->HK_TG_BS.key;
-	this->HK_TG_BM_Method = m_configManager->HK_TG_BM.method;
-	this->HK_TG_BM = m_configManager->HK_TG_BM.key;
-	this->HK_TG_MS_Method = m_configManager->HK_TG_MS.method;
-	this->HK_TG_MS = m_configManager->HK_TG_MS.key;
-	this->HK_TG_12_Method = m_configManager->HK_TG_12.method;
-	this->HK_TG_12 = m_configManager->HK_TG_12.key;
 
 	// Set process priority
 	::SetPriorityClass(::GetCurrentProcess(), 
 		m_configManager->ProcessPriority == 1 ? HIGH_PRIORITY_CLASS : 
 		m_configManager->ProcessPriority == 2 ? ABOVE_NORMAL_PRIORITY_CLASS : 
 		NORMAL_PRIORITY_CLASS);
+
+	// Initial state setup from config
+	this->CurrentMode = m_configManager->ActiveMode;
 
 	return true;
 }
@@ -225,7 +144,7 @@ FANCONTROL::Trace(const char* text) {
 	}
 
 	// write logfile
-	if (this->Log2File == 1) {
+	if (m_configManager->Log2File == 1) {
 		FILE* flog;
 		errno_t errflog = fopen_s(&flog, "TPFanControl.log", "ab");
 		if (!errflog) {
@@ -253,7 +172,7 @@ FANCONTROL::Tracecsv(const char* text) {
 		strcpy_s(line, sizeof(line), "\r\n");
 
 	// write logfile
-	if (this->Log2csv == 1) {
+	if (m_configManager->Log2csv == 1) {
 		FILE* flogcsv;
 		errno_t errflogcsv = fopen_s(&flogcsv, "TPFanControl_csv.txt", "ab");
 		if (!errflogcsv) { 
@@ -275,7 +194,7 @@ FANCONTROL::Tracecsvod(const char* text) {
 		strcpy_s(line, sizeof(line), "\r\n");
 
 	// write logfile
-	if (this->Log2csv == 1) {
+	if (m_configManager->Log2csv == 1) {
 		FILE* flogcsv;
 		errno_t errflogcsv = fopen_s(&flogcsv, "TPFanControl_csv.txt", "ab");
 		if (!errflogcsv) { 
