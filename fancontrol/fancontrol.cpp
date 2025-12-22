@@ -49,7 +49,7 @@ FANCONTROL::FANCONTROL(HINSTANCE hinstapp)
 	m_needClose(false),
 	m_hinstapp(hinstapp),
 	ppTbTextIcon(NULL),
-	pTextIconMutex(new MUTEXSEM(0, "Global\\TPFanControl_ppTbTextIcon")),
+	pTextIconMutex(new MUTEXSEM(0, "Global\\TPFanCtrl2_ppTbTextIcon")),
 	m_configManager(std::make_shared<ConfigManager>()),
 	m_ecManager(std::make_shared<ECManager>(std::make_shared<TVicPortProvider>(), [this](const char* msg) { this->Trace(msg); })),
 	m_sensorManager(std::make_shared<SensorManager>(m_ecManager)),
@@ -274,7 +274,7 @@ FANCONTROL::FANCONTROL(HINSTANCE hinstapp)
 	}
 
 	// read config file
-	this->ReadConfig("TPFanControl.ini");
+	this->ReadConfig("TPFanCtrl2.ini");
 
 	if (this->hwndDialog) {
 		::GetWindowText(this->hwndDialog, this->Title, sizeof(this->Title));
@@ -350,7 +350,7 @@ FANCONTROL::FANCONTROL(HINSTANCE hinstapp)
 
 		if (!m_configManager->NoWaitMessage) {
 			sprintf_s(bufsec, sizeof(bufsec),
-				"TPFanControl is started %d sec. after\nboot time (SecWinUptime=%d sec.)\n\nTo prevent missing systray icons\nand communication errors between\nTPFanControl and embedded controller\nit will sleep for %d sec. (SecStartDelay)\n\nTo void this message box please set\nNoWaitMessage=1 in TPFanControl.ini",
+				"TPFanCtrl2 is started %d sec. after\nboot time (SecWinUptime=%d sec.)\n\nTo prevent missing systray icons\nand communication errors between\nTPFanCtrl2 and embedded controller\nit will sleep for %d sec. (SecStartDelay)\n\nTo void this message box please set\nNoWaitMessage=1 in TPFanCtrl2.ini",
 				tickCount / 1000, m_configManager->SecWinUptime, m_configManager->SecStartDelay);
 
 			// Don't show message box when as service in Vista
@@ -359,7 +359,7 @@ FANCONTROL::FANCONTROL(HINSTANCE hinstapp)
 			if (os.dwMajorVersion >= 6 && Runs_as_service == TRUE)
 				;
 			else
-				MessageBox(NULL, bufsec, "TPFanControl is sleeping", MB_ICONEXCLAMATION);
+				MessageBox(NULL, bufsec, "TPFanCtrl2 is sleeping", MB_ICONEXCLAMATION);
 		}
 	}
 
@@ -372,7 +372,7 @@ FANCONTROL::FANCONTROL(HINSTANCE hinstapp)
 	// taskbaricon (keep code after reading config)
 	if (m_configManager->MinimizeToSysTray) {
 		if (!m_configManager->ShowTempIcon) {
-			this->pTaskbarIcon = new TASKBARICON(this->hwndDialog, 10, "TPFanControl");
+			this->pTaskbarIcon = new TASKBARICON(this->hwndDialog, 10, "TPFanCtrl2");
 		}
 		else {
 			this->pTaskbarIcon = NULL;
@@ -599,7 +599,7 @@ FANCONTROL::DlgProc(HWND
 	ULONG rc = 0, ok, res;
 	char buf[1024];
 
-	//	HANDLE hLockS = CreateMutex(NULL,FALSE,"TPFanControlMutex01");
+	//	HANDLE hLockS = CreateMutex(NULL,FALSE,"TPFanCtrl2Mutex01");
 
 	switch (msg) {
 	case WM_HOTKEY:
@@ -758,7 +758,7 @@ FANCONTROL::DlgProc(HWND
 					this->pTaskbarIcon->SetIcon(icon);
 					this->CurrentIcon = icon;
 					if (dioicon && !m_configManager->NoBallons) {
-						this->pTaskbarIcon->SetBalloon(NIIF_INFO, "TPFanControl old symbol icon",
+						this->pTaskbarIcon->SetBalloon(NIIF_INFO, "TPFanCtrl2 old symbol icon",
 							"shows temperature level by color and state in tooltip, left click on icon shows or hides control window, right click shows menue",
 							11);
 						dioicon = FALSE;
@@ -1572,12 +1572,12 @@ void FANCONTROL::ProcessTextIcons(void) {
 				if (m_configManager->Fahrenheit) {
 					ppTbTextIcon[0]->DiShowballon(
 						_T("shows max. temperature in ° F and sensor name, left click on icon shows or hides control window, right click shows menue"),
-						_T("TPFanControl new text icon"), NIIF_INFO, 11);
+						_T("TPFanCtrl2 new text icon"), NIIF_INFO, 11);
 				}
 				else {
 					ppTbTextIcon[0]->DiShowballon(
 						_T("shows max. temperature in ° C and sensor name, left click on icon shows or hides control window, right click shows menue"),
-						_T("TPFanControl new text icon"), NIIF_INFO, 11);
+						_T("TPFanCtrl2 new text icon"), NIIF_INFO, 11);
 				}
 
 				dishow = FALSE;

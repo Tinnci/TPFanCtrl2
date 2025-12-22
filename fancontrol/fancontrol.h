@@ -44,8 +44,8 @@
 #define ARRAYMAX(tab) (sizeof(tab)/sizeof((tab)[0]))
 #define NULLSTRUCT    { 0, }
 
-//begin named pipe TPFanControl01
-#define g_szPipeName "\\\\.\\Pipe\\TPFanControl01"  //Name given to the pipe
+//begin named pipe TPFanCtrl2_01
+#define g_szPipeName "\\\\.\\Pipe\\TPFanCtrl2_01"  //Name given to the pipe
 //Pipe name format - \\.\pipe\pipename
 
 #define BUFFER_SIZE 1024 //1k

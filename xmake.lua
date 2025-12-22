@@ -16,8 +16,8 @@ set_languages("c++17")
 add_defines("WIN32", "_MBCS")
 add_cxflags("/J", "/source-charset:utf-8", {tools = "msvc"})
 
--- Target: TPFanControl (Main GUI App)
-target("TPFanControl")
+-- Target: TPFanCtrl2 (Main GUI App)
+target("TPFanCtrl2")
     set_kind("binary")
     set_plat("windows")
     
@@ -41,6 +41,16 @@ target("TPFanControl")
     
     -- Output directory
     set_targetdir("bin")
+
+    -- Optimizations for Release mode
+    if is_mode("release") then
+        set_optimize("fastest")
+        set_symbols("hidden")
+        set_strip("all")
+        add_cxflags("/GL", {tools = "msvc"})
+        add_ldflags("/LTCG", {tools = "msvc"})
+        add_vectorexts("sse2")
+    end
 
 -- Target: logic_test (Unit Tests)
 target("logic_test")

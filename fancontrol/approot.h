@@ -1,7 +1,6 @@
 #include "_prec.h"
 
-//begin named pipe TPFanControl01
-#define g_szPipeName "\\\\.\\Pipe\\TPFanControl01"  //Name given to the pipe
+// Pipe handles
 HANDLE hPipe1;
 HANDLE hPipe2;
 HANDLE hPipe3;
@@ -10,7 +9,7 @@ HANDLE hPipe4;
 
 HINSTANCE hInstApp, hInstRes;
 
-LPSTR g_ServiceName = "TPFanControl";
+LPSTR g_ServiceName = "TPFanCtrl2";
 SERVICE_STATUS g_SvcStatus = { 0 };
 SERVICE_STATUS_HANDLE g_SvcHandle = NULL;
 HWND g_dialogWnd = NULL;

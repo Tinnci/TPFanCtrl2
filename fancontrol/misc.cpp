@@ -146,7 +146,7 @@ FANCONTROL::Trace(const char* text) {
 	// write logfile
 	if (m_configManager->Log2File == 1) {
 		FILE* flog;
-		errno_t errflog = fopen_s(&flog, "TPFanControl.log", "ab");
+		errno_t errflog = fopen_s(&flog, "TPFanCtrl2.log", "ab");
 		if (!errflog) {
 			//TODO: fwrite_s
 			fwrite(line, strlen(line), 1, flog);
@@ -174,7 +174,7 @@ FANCONTROL::Tracecsv(const char* text) {
 	// write logfile
 	if (m_configManager->Log2csv == 1) {
 		FILE* flogcsv;
-		errno_t errflogcsv = fopen_s(&flogcsv, "TPFanControl_csv.txt", "ab");
+		errno_t errflogcsv = fopen_s(&flogcsv, "TPFanCtrl2_csv.txt", "ab");
 		if (!errflogcsv) { 
 			fwrite(line, strlen_s(line, sizeof(line)), 1, flogcsv); 
 			fclose(flogcsv); 
@@ -196,7 +196,7 @@ FANCONTROL::Tracecsvod(const char* text) {
 	// write logfile
 	if (m_configManager->Log2csv == 1) {
 		FILE* flogcsv;
-		errno_t errflogcsv = fopen_s(&flogcsv, "TPFanControl_csv.txt", "ab");
+		errno_t errflogcsv = fopen_s(&flogcsv, "TPFanCtrl2_csv.txt", "ab");
 		if (!errflogcsv) { 
 			fwrite(line, strlen(line), 1, flogcsv); 
 			fclose(flogcsv); 

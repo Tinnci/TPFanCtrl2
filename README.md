@@ -7,7 +7,7 @@ ThinkPad Fan Control 2, a fan control utility for ThinkPad users running Windows
 This is a fork of the [original TPFC](https://github.com/ThinkPad-Forum/TPFanControl/tree/master/fancontrol), and is based on 
 [byrnes' dual fan mod](https://github.com/byrnes/TPFanControl).
 It's updated it to work with two fan devices. The default fan profile prioritizes fan noise, with fans only turning on at 60C. This can be changed by editing 
-`tpfancontrol.ini`.
+`TPFanCtrl2.ini`.
 
 Visual Studio 2022 Community was used to build and debug.
 
@@ -34,9 +34,9 @@ Windows 10 or 11 is required to run the program. Windows XP, Vista, 7, and 8 may
 
 ## Configuring
 
-You can configure the behaviour of the program by editing the values inside the `TPFanControl.ini` file that comes with the program,
+You can configure the behaviour of the program by editing the values inside the `TPFanCtrl2.ini` file that comes with the program,
 
-The `TPFanControl.ini` file should always be in the same directory as the `fancontrol.exe` executable file.
+The `TPFanCtrl2.ini` file should always be in the same directory as the `TPFanCtrl2.exe` executable file.
 
 ## Build
 
@@ -97,8 +97,8 @@ You can find additional information here on the ThinkPad Wiki: [https://thinkwik
 
 Building this program requires Microsoft Visual Studio 2022 Community
 
-The project should have the correct configuration upon opening the project file `fancontrol.sln`, though you might have to manually copy and paste the `.ini` file into 
-the Debug folder to test the built program
+The project should have the correct configuration upon opening the project file `fancontrol.sln`, though you might have to manually copy and paste the `TPFanCtrl2.ini` file into 
+the output directory.the Debug folder to test the built program
 
 The project currently builds with the configuration: `Debug` `Win32` (You will need admin permission to run the built program)
 
@@ -119,7 +119,7 @@ If you get Linker Tools Error LNK2026: module unsafe for SAFESEH image when buil
 
 You can choose to run TPFC at startup:
 
-- Right-click on fancontrol.exe and select copy
+- Right-click on TPFanCtrl2.exe and select copy
 - Press Windows-r or search for run in the start menu
 - Type `shell:startup` in the run box
 - Right click in the window that opens and select paste shortcut
@@ -156,7 +156,7 @@ Some thinkbook models have different EC address, so the program might not work
 
 ### Bleeding Edge Releases
 
-FanDjango is currently refactoring, streamlining and cleaning up TPFanControl2, clarifying messages and log texts and
+FanDjango is currently refactoring, streamlining and cleaning up TPFanCtrl2, clarifying messages and log texts and
 also adding some enhancements as requested by users in the issues here in this repo. These are **early beta** released under
 FanDjango's [V2.3.6 release](https://github.com/FanDjango/TPFanCtrl2/releases/tag/V2.3.6). When sufficient feedback is
 received these may be incorporated into the main trunk here.

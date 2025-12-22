@@ -7,7 +7,7 @@ int APIENTRY WinMain(HINSTANCE instance, HINSTANCE, LPSTR aArgs, int) {
     hInstRes = instance;
     hInstApp = instance;
 
-	HANDLE hLock = CreateMutex(NULL,FALSE,"TPFanControlMutex01");
+	HANDLE hLock = CreateMutex(NULL,FALSE,"TPFanCtrl2Mutex01");
 
   if (hLock == NULL) {
       DWORD ec = GetLastError();
