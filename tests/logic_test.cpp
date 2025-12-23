@@ -91,6 +91,8 @@ TEST_F(FanControlTest, IgnoredSensors) {
     mockIO->SetECByte(0x78, 60); // CPU
     mockIO->SetECByte(0x79, 80); // GPU
     
+    sensorManager->UpdateSensors(false, false, false);
+    
     int maxIndex = 0;
     EXPECT_EQ(sensorManager->GetMaxTemp(maxIndex, "GPU"), 60); // GPU ignored, CPU is max
 }
