@@ -33,8 +33,10 @@ jobs:
       with:
         xmake-version: latest
 
-    - name: Configure xmake
-      run: xmake f -m release -a x86 -y
+    - name: Setup MSVC
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: x86
 
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v4
@@ -43,7 +45,9 @@ jobs:
         queries: security-extended,security-and-quality
 
     - name: Build with xmake
-      run: xmake -y
+      run: |
+        xmake f -m release -a x86 -y
+        xmake -y
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4

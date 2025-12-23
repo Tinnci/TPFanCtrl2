@@ -34,8 +34,10 @@ target("TPFanCtrl2")
     -- Set subsystem to Console for debugging (change to WINDOWS for final release)
     add_ldflags("/SUBSYSTEM:CONSOLE", {force = true})
     
-    -- Precompiled Header
-    set_pcxxheader("fancontrol/_prec.h")
+    -- Precompiled Header (Disable in CodeQL environment to avoid PCH issues)
+    if not os.getenv("CODEQL_ACTION_INIT_HAS_RUN") then
+        set_pcxxheader("fancontrol/_prec.h")
+    end
     
     -- Source files
     add_files("fancontrol/*.cpp")
