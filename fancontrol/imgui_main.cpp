@@ -59,14 +59,14 @@ struct SmoothValue {
     }
 };
 
-// Icons (Segoe MDL2 Assets - Built-in on Windows 10/11)
+// Icons (Segoe MDL2 Assets / Segoe Fluent Icons - Built-in on Windows 10/11)
 // Using u8 prefix to ensure UTF-8 encoding
-#define ICON_CPU (const char*)u8"\uE9D2" // Processor
-#define ICON_GPU (const char*)u8"\uE9AB" // Video / GPU
-#define ICON_FAN (const char*)u8"\uE9F6" // Fan / Ventilation
-#define ICON_CHIP (const char*)u8"\uEA67" // Chipset / RAM
-#define ICON_CHART (const char*)u8"\uE999" // Chart
-#define ICON_LOG (const char*)u8"\uE81C" // Log / List
+#define ICON_CPU   (const char*)u8"\uE9D2" // Speed High (Dashboard style)
+#define ICON_GPU   (const char*)u8"\uE967" // Video (GPU fallback)
+#define ICON_FAN   (const char*)u8"\uE706" // Settings/Gear (Fan fallback)
+#define ICON_CHIP  (const char*)u8"\uE950" // RAM / Memory
+#define ICON_CHART (const char*)u8"\uE9D9" // Activity Feed (Line chart)
+#define ICON_LOG   (const char*)u8"\uE81C" // List (Document list)
 
 struct UIState {
     std::vector<SensorData> Sensors;
@@ -613,7 +613,7 @@ int main(int argc, char** argv) {
         Log(LOG_WARN, "Failed to load system fonts, using default font.");
     }
     
-    // 2. Load Icons (Segoe MDL2 Assets is built-in on Windows 10+)
+    // 2. Load Icons (Segoe Fluent Icons on Win11, Segoe MDL2 Assets on Win10)
     static const ImWchar icon_ranges[] = { 0xE700, 0xF800, 0 };
     ImFontConfig icon_cfg;
     icon_cfg.MergeMode = true;
@@ -622,8 +622,9 @@ int main(int argc, char** argv) {
     
     // Try multiple possible paths for the icon font
     const char* iconFontPaths[] = {
-        "C:\\Windows\\Fonts\\segmdl2.ttf",
-        "C:\\Windows\\Fonts\\seguisym.ttf" // Fallback for older Windows
+        "C:\\Windows\\Fonts\\SegoeIcons.ttf", // Windows 11 Fluent Icons
+        "C:\\Windows\\Fonts\\segmdl2.ttf",    // Windows 10 MDL2 Assets
+        "C:\\Windows\\Fonts\\seguisym.ttf"    // Fallback for older Windows
     };
     
     bool iconLoaded = false;
