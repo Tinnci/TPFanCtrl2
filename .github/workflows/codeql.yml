@@ -35,8 +35,8 @@ jobs:
 
     - name: Get xmake cachedir
       id: xmake-cachedir
-      run: echo "dir=$(xmake l -c 'print(global.get("cachedir"))')" >> $env:GITHUB_OUTPUT
-      shell: pwsh
+      run: echo "dir=$(xmake l -c 'print(global.get("cachedir"))')" >> $GITHUB_OUTPUT
+      shell: bash
 
     - name: Cache xmake
       uses: actions/cache@v4
