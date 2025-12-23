@@ -4,8 +4,11 @@ set_version("2.2.0")
 
 -- Add dependencies
 add_requires("gtest")
-add_requires("imgui v1.91.5", {configs = {win32 = true, vulkan = true}})
+add_requires("imgui master", {configs = {win32 = true, vulkan = true, freetype = true}})
+add_requires("implot master")
 add_requires("vulkan-loader")
+add_requires("freetype")
+add_requires("vulkan-memory-allocator")
 
 -- Set x86 architecture as default (due to TVicPort driver limitations)
 set_arch("x86")
@@ -58,10 +61,10 @@ target("TPFanCtrl2")
 target("imgui_demo")
     set_kind("binary")
     set_plat("windows")
-    add_packages("imgui", "vulkan-loader")
+    add_packages("imgui", "implot", "vulkan-loader", "freetype", "vulkan-memory-allocator")
     
-    -- Set subsystem to Windows (GUI)
-    add_ldflags("/SUBSYSTEM:WINDOWS", {force = true})
+    -- Console application for debugging
+    add_ldflags("/SUBSYSTEM:CONSOLE", {force = true})
     
     -- Source files
     add_files("fancontrol/imgui_main.cpp")
