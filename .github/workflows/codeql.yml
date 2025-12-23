@@ -3,8 +3,20 @@ name: "CodeQL"
 on:
   push:
     branches: [ "main" ]
+    paths-ignore:
+      - '**.md'
+      - 'doc/**'
+      - 'assets/**'
+      - '.gitignore'
+      - 'LICENSE'
   pull_request:
     branches: [ "main" ]
+    paths-ignore:
+      - '**.md'
+      - 'doc/**'
+      - 'assets/**'
+      - '.gitignore'
+      - 'LICENSE'
   schedule:
     - cron: '30 1 * * 6'
 
@@ -59,6 +71,9 @@ jobs:
       with:
         languages: ${{ matrix.language }}
         queries: security-extended,security-and-quality
+        config: |
+          paths-ignore:
+            - 'fancontrol/lib/**'
 
     - name: Build with xmake
       run: xmake -y -v
