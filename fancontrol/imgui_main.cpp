@@ -524,7 +524,7 @@ void AddTrayIcon(HWND hWnd) {
     nid.uID = ID_TRAY_ICON;
     nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     nid.uCallbackMessage = WM_TRAYICON;
-    nid.hIcon = LoadIcon(NULL, IDI_APPLICATION);
+    nid.hIcon = LoadIcon(GetModuleHandle(NULL), MAKEINTRESOURCE(1));
     wcscpy(nid.szTip, L"TPFanCtrl2 - Modernized");
     Shell_NotifyIconW(NIM_ADD, &nid);
 }

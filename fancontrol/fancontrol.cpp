@@ -212,7 +212,7 @@ FANCONTROL::FANCONTROL(HINSTANCE hinstapp)
 	// taskbaricon (keep code after reading config)
 	if (m_configManager->MinimizeToSysTray) {
 		if (!m_configManager->ShowTempIcon) {
-			this->pTaskbarIcon = new TASKBARICON(this->hwndDialog, 10, "TPFanCtrl2");
+			this->pTaskbarIcon = new TASKBARICON(this->hwndDialog, 1, "TPFanCtrl2");
 		}
 		else {
 			this->pTaskbarIcon = NULL;
