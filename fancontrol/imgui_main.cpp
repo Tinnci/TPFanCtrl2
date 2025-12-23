@@ -274,8 +274,12 @@ void RemoveTrayIcon(HWND hWnd) {
     Shell_NotifyIconW(NIM_DELETE, &nid);
 }
 
-// --- Helper Functions ---
-bool IsUserAdmin() {
+int main(int argc, char** argv) {
+    // Clear old log file for a fresh session
+    remove("TPFanCtrl2_debug.log");
+    Log(LOG_INFO, "--- TPFanCtrl2 Session Started ---");
+
+    // Check Privileges
     BOOL isAdmin = FALSE;
     PSID adminGroup = NULL;
     SID_IDENTIFIER_AUTHORITY ntAuthority = SECURITY_NT_AUTHORITY;
@@ -284,53 +288,7 @@ bool IsUserAdmin() {
         CheckTokenMembership(NULL, adminGroup, &isAdmin);
         FreeSid(adminGroup);
     }
-    return isAdmin;
-}
-
-int main(int argc, char** argv) {
-    // Clear old log file for a fresh session
-    remove("TPFanCtrl2_debug.log");
-    Log(LOG_INFO, "--- TPFanCtrl2 Session Started ---");
-
-    // 0. Check Privileges
-    bool isAdmin = IsUserAdmin();
     Log(LOG_INFO, "Running as Administrator: %s", isAdmin ? "YES" : "NO");
-
-    if (!isAdmin) {
-        int result = MessageBoxW(NULL, 
-            L"TPFanCtrl2 requires Administrator privileges to access hardware (TVicPort).\n\n"
-            L"Would you like to restart as Administrator?", 
-            L"Privilege Elevation Required", 
-            MB_YESNO | MB_ICONWARNING);
-
-        if (result == IDYES) {
-            wchar_t szPath[MAX_PATH];
-            GetModuleFileNameW(NULL, szPath, MAX_PATH);
-            
-            wchar_t szDir[MAX_PATH];
-            wcscpy(szDir, szPath);
-            wchar_t* lastSlash = wcsrchr(szDir, L'\\');
-            if (lastSlash) *lastSlash = L'\0';
-
-            SHELLEXECUTEINFOW sei = { sizeof(sei) };
-            sei.lpVerb = L"runas";
-            sei.lpFile = szPath;
-            sei.lpDirectory = szDir; // Set working directory to exe location
-            sei.hwnd = NULL;
-            sei.nShow = SW_NORMAL;
-            
-            if (ShellExecuteExW(&sei)) {
-                return 0;
-            } else {
-                DWORD err = GetLastError();
-                wchar_t msg[256];
-                swprintf(msg, 256, L"Failed to elevate privileges. Error code: %lu", err);
-                MessageBoxW(NULL, msg, L"Elevation Error", MB_OK | MB_ICONERROR);
-            }
-        }
-        // If user chose NO or elevation failed, we continue but log a warning
-        Log(LOG_WARN, "Running without Administrator privileges. Hardware access will likely fail.");
-    }
 
     HINSTANCE hInstance = GetModuleHandle(NULL);
     // Logic Init
