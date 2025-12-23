@@ -1,190 +1,84 @@
-# TPFanCtrl2 <img src="https://raw.githubusercontent.com/Shuzhengz/TPFanCtrl2/main/fancontrol/res/app.ico" alt = "App Icon" width = "30"/>
+# TPFanCtrl2 <img src="fancontrol/res/app.ico" alt="App Icon" width="32"/>
 
-ThinkPad Fan Control 2, a fan control utility for ThinkPad users running Windows 10/11
+[![Build and Release](https://github.com/Tinnci/TPFanCtrl2/actions/workflows/release.yml/badge.svg)](https://github.com/Tinnci/TPFanCtrl2/actions/workflows/release.yml)
+[![Release](https://img.shields.io/github/v/release/Tinnci/TPFanCtrl2)](https://github.com/Tinnci/TPFanCtrl2/releases)
+[![License](https://img.shields.io/badge/license-Unlicense-blue.svg)](http://unlicense.org/)
 
-## About
+**TPFanCtrl2** is a modernized, high-performance fan control utility for ThinkPad laptops on Windows 10/11. This version is a complete overhaul of the original TPFC, featuring a modern GUI, advanced control algorithms, and full DPI awareness.
 
-This is a fork of the [original TPFC](https://github.com/ThinkPad-Forum/TPFanControl/tree/master/fancontrol), and is based on 
-[byrnes' dual fan mod](https://github.com/byrnes/TPFanControl).
-It's updated it to work with two fan devices. The default fan profile prioritizes fan noise, with fans only turning on at 60C. This can be changed by editing 
-`TPFanCtrl2.ini`.
+---
 
-Visual Studio 2022 Community was used to build and debug.
+## ✨ Key Features
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/Shuzhengz/TPFanCtrl2/master/fancontrol/res/TPFC2.png" alt="Example Photo" width="750"/>
-</p>
+- **Modern UI**: Built with **ImGui** and **Vulkan 1.2** for a smooth, hardware-accelerated experience.
+- **Advanced Control**: 
+  - **PID Control**: 10Hz closed-loop PID algorithm for precise temperature management.
+  - **Smart Mode**: Classic step-based fan curve with hysteresis support.
+  - **Dual Fan Support**: Independent or synchronized control for high-end ThinkPad models (P-series, etc.).
+- **DPI Aware**: Fully responsive UI and dynamic tray icons that scale perfectly on 4K+ displays.
+- **Internationalization (I18n)**: Built-in support for multiple languages (English, Chinese, etc.).
+- **Dynamic Tray Icon**: Real-time temperature and fan speed rendering directly in the system tray using Segoe UI.
+- **Lightweight**: No external dependencies required at runtime; minimal CPU and memory footprint.
 
-**Important: This software is released as a public domain software, there is no warranty or promise of bug fixes. The binaries and its source code are provided "as is", 
-and should be used at your own risk. For more information, please refer to <http://unlicense.org/>.**
+---
 
-Please note that I'm very busy with other work for the time being so it'll take a while for me to get to new issues, however please feel free to create pull requests,
-I will review those as soon as possible.
+## 🚀 Quick Start
 
-## Download
+### Download
+Get the latest pre-compiled binaries from the [Releases](https://github.com/Tinnci/TPFanCtrl2/releases) page.
 
-You can download the latest pre-compiled binaries from the [Releases](https://github.com/Tinnci/TPFanCtrl2/releases) page.
+### Installation
+1. Extract the contents to a folder of your choice.
+2. **Requirement**: Ensure you have the `TVicPort` driver installed (usually comes with original TPFanControl or can be installed manually).
+3. Run `TPFanCtrl2.exe` as **Administrator**.
 
-## Requirements
+### Configuration
+Edit `TPFanCtrl2.ini` in the application directory to customize:
+- Temperature thresholds and fan levels.
+- PID parameters (`Kp`, `Ki`, `Kd`).
+- Sensor offsets and ignore lists.
+- UI language and theme settings.
 
-To avoid errors, either install [tvicport](https://www.entechtaiwan.com/dev/port/index.shtm) manually or install the original version of TPFanControl found 
-[here](https://sourceforge.net/projects/tp4xfancontrol/) (source code [here](https://github.com/ThinkPad-Forum/TPFanControl)), 
-and run the dual-fan version instead of the original version.
+---
 
-Administration permission is required for the program to be able to control system fan speed.
+## 🛠 Build Instructions
 
-Windows 10 or 11 is required to run the program. Windows XP, Vista, 7, and 8 may work, but are untested and should not be expected to.
-
-
-## Configuring
-
-You can configure the behaviour of the program by editing the values inside the `TPFanCtrl2.ini` file that comes with the program,
-
-The `TPFanCtrl2.ini` file should always be in the same directory as the `TPFanCtrl2.exe` executable file.
-
-## Build
-
-This project now supports **xmake** for a modern and fast build experience.
+This project uses [xmake](https://xmake.io/) for a modern build experience.
 
 ### Prerequisites
 - [xmake](https://xmake.io/)
-- Visual Studio 2022 (with C++ Desktop Development workload)
+- Visual Studio 2022 (C++ Desktop Development workload)
 
-### Build the project
+### Build
 ```bash
-# Configure and build in release mode
-xmake f -m release
+# Clone the repository
+git clone https://github.com/Tinnci/TPFanCtrl2.git
+cd TPFanCtrl2
+
+# Configure and build (Release x86)
+xmake f -m release -a x86
 xmake
 
-# The binaries will be located in the bin/ directory
+# Binaries will be in the bin/ directory
 ```
 
-### Run tests
+### Run Tests
 ```bash
 xmake run logic_test
 ```
 
-Example of configurable parameters:
+---
 
-- Temperature refresh cycle time
-- Start minimized in the taskbar tray
-- Max read errors before the program auto shuts down
-- Log program log to file & log data to CSV file
-- Configure the fan curve in smart mode
-- Configure a second smart mode that is accessable in the tray
-- Temperature threshold to exit the manual mode
+## 🤝 Contributing
 
-### Manual Fan Levels
+Contributions are welcome! Please feel free to submit Pull Requests.
+By contributing, you agree to dedicate your changes to the **Public Domain** under the [Unlicense](http://unlicense.org/).
 
-| Normal: | Advanced:|
-| --- | ----------- |
-| 0 - Off | 0 - Off |
-| 1 - 30% | 50 - 40% |
-| 2 - 40% | 60 - 60% |
-| 3 - 45% | 70 - 100% |
-| 4 - 50% | 80 - 100% |
-| 5 - 60% |
-| 6 - 65% |
-| 7 - 65% |
+---
 
-<h5>Advanced level value is converted into hex before being read by the EC, the value above is a rough estimate of what to expect</h5>
+## 📜 License
 
-<h5>The 0-7 range is intended to be used as the fan levels intended by the manufacture (7 being the highest that the laptop BIOS can go), and to take full advantage of 
-the fan you'll need to enter 0-128 in hex (for example, 128 in hex is 0x80, which is entered as 80).</h5>
+This project is released into the **Public Domain** under the [Unlicense](LICENSE). You are free to use, modify, and distribute it without any restrictions.
 
-### Additional Information
-
-You can find additional information here on the ThinkPad Wiki: [https://thinkwiki.de/TPFanControl](https://thinkwiki.de/TPFanControl).
-
-
-## Building Instructions
-
-Building this program requires Microsoft Visual Studio 2022 Community
-
-The project should have the correct configuration upon opening the project file `fancontrol.sln`, though you might have to manually copy and paste the `TPFanCtrl2.ini` file into 
-the output directory.the Debug folder to test the built program
-
-The project currently builds with the configuration: `Debug` `Win32` (You will need admin permission to run the built program)
-
-Do not build the project without TPFCIcon and TPFCIcon_noballons, they are necessary parts of the application and the main fan control software will not function without 
-them
-
-The source code of spinoff releases of the program (i.e. 2.1.5 B) for different machines are stored within the archive direcotry, you can build them by subsituting the 
-main fancontrol directory with the fancontrol directory of the desiered version. Note that TPFCIcon and TPFCIcon_noballons should stay the same for every release.
-
-### Note
-
-If you get Linker Tools Error LNK2026: module unsafe for SAFESEH image when building:
-
-- Go to Project properties -> Configuration Properties -> Linker -> Advanced
-- Disable option `Image has Safe Exception Handlers` (No (/SAFESEH:NO)
-
-## Running at startup (Not Recommended)
-
-You can choose to run TPFC at startup:
-
-- Right-click on TPFanCtrl2.exe and select copy
-- Press Windows-r or search for run in the start menu
-- Type `shell:startup` in the run box
-- Right click in the window that opens and select paste shortcut
-
-Note: This won't start TPFC until you reboot.
-
-
-## Uninstall
-
-Delete the folder containing the program and the ini file.
-
-That's it, there's no residual files.
-
-If you added the program to run at startup, you will have to also delete the shortcut from the start up folder.
-
-## Known Issues
-
-On single-fan devices, the fan speed will sometimes fail to show up. The problem is in the process of being fixed
-
-Sometimes the fans will fail to sync, with one ramping up and the other not.
-This will usually fix itself, but to fix it manually, switch to BIOS mode, then switch back to the desired mode
-
-It will also sometimes take a longer time for the speed to update and the fans to spin up.
-This is caused by EC management for the newer ThinkPad BIOS. There is currently no way around it.
-
-### ThinkPad P50
-
-P50 Laptop users should use the 2.1.5B release as the fan control parameters are different, but the temperature is currently broken in the build, so it is recommended to 
-use it in manual mode only
-
-### Thinkbooks
-
-Some thinkbook models have different EC address, so the program might not work
-
-### Bleeding Edge Releases
-
-FanDjango is currently refactoring, streamlining and cleaning up TPFanCtrl2, clarifying messages and log texts and
-also adding some enhancements as requested by users in the issues here in this repo. These are **early beta** released under
-FanDjango's [V2.3.6 release](https://github.com/FanDjango/TPFanCtrl2/releases/tag/V2.3.6). When sufficient feedback is
-received these may be incorporated into the main trunk here.
-
-Confirmed support for: P53, Z13, Z16 Gen 1, P16 Gen1 AMD, T16 Gen1 AMD, X1 carbon gen12, X230T, P1 Gen7
-
-### Contributing
-
-Please open a pull request and have at lease one review to merge it into main
-
-By doing so, you agree to didicate your contribution to the public domain. In compliance with the Unlicense license, you must agree to the following:
-
-> I dedicate any and all copyright interest in this software to the
-public domain. I make this dedication for the benefit of the public at
-large and to the detriment of my heirs and successors. I intend this
-dedication to be an overt act of relinquishment in perpetuity of all
-present and future rights to this software under copyright law.
-
-For more information, please refer to <http://unlicense.org/>
-
-## Licensing
-This program is under the Unlicense "license"
-
-This means that the software is released into the public domain, and therefore does not technically have a license
-
-The author claims no copyright, copyleft, license or whatsoever for the program itself. You may use, reuse or distribute its binaries or source code in any desired way 
-or form, Useage of binaries or source shall be entirely and without exception at your own risk.
+---
+*Disclaimer: Use this software at your own risk. Incorrect fan settings can lead to hardware damage.*
