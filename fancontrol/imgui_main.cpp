@@ -20,6 +20,7 @@
 
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
+#include <shellapi.h>
 
 // Project includes
 #include "ConfigManager.h"
@@ -28,6 +29,12 @@
 #include "ECManager.h"
 #include "TVicPortProvider.h"
 #include "TVicPort.h"
+
+// --- Tray Constants ---
+#define WM_TRAYICON (WM_USER + 100)
+#define ID_TRAY_ICON 1001
+#define ID_TRAY_RESTORE 1002
+#define ID_TRAY_EXIT 1003
 
 // --- Animation Helper ---
 struct SmoothValue {
@@ -248,6 +255,25 @@ void HardwareWorker(std::shared_ptr<ConfigManager> config,
 
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
+// --- Tray Management ---
+void AddTrayIcon(HWND hWnd) {
+    NOTIFYICONDATAW nid = { sizeof(nid) };
+    nid.hWnd = hWnd;
+    nid.uID = ID_TRAY_ICON;
+    nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
+    nid.uCallbackMessage = WM_TRAYICON;
+    nid.hIcon = LoadIcon(NULL, IDI_APPLICATION);
+    wcscpy(nid.szTip, L"TPFanCtrl2 - Modernized");
+    Shell_NotifyIconW(NIM_ADD, &nid);
+}
+
+void RemoveTrayIcon(HWND hWnd) {
+    NOTIFYICONDATAW nid = { sizeof(nid) };
+    nid.hWnd = hWnd;
+    nid.uID = ID_TRAY_ICON;
+    Shell_NotifyIconW(NIM_DELETE, &nid);
+}
+
 // --- Helper Functions ---
 bool IsUserAdmin() {
     BOOL isAdmin = FALSE;
@@ -419,6 +445,8 @@ int main(int argc, char** argv) {
     Log(LOG_INFO, "Initializing Win32 backend...");
     ImGui_ImplWin32_Init(hwnd);
     
+    AddTrayIcon(hwnd);
+
     Log(LOG_INFO, "Initializing Vulkan backend...");
     ImGui_ImplVulkan_InitInfo init_info = {};
     init_info.ApiVersion = VK_API_VERSION_1_2;
@@ -437,8 +465,13 @@ int main(int argc, char** argv) {
         exit(1);
     }
 
-    Log(LOG_INFO, "Showing window...");
-    ::ShowWindow(hwnd, SW_SHOWDEFAULT);
+    if (configManager->StartMinimized) {
+        Log(LOG_INFO, "Starting minimized to tray.");
+        ::ShowWindow(hwnd, SW_HIDE);
+    } else {
+        Log(LOG_INFO, "Showing window...");
+        ::ShowWindow(hwnd, SW_SHOWDEFAULT);
+    }
 
     bool done = false;
     Log(LOG_INFO, "Entering main loop...");
@@ -523,6 +556,9 @@ int main(int argc, char** argv) {
             ImGui::SliderInt("Manual", &mLevel, 0, 7);
             if (ImGui::Button("Apply Manual", ImVec2(-1, 0))) {
                 fanController->SetFanLevel(mLevel);
+            }
+            if (ImGui::Button("Hide to Tray", ImVec2(-1, 0))) {
+                ::ShowWindow(hwnd, SW_HIDE);
             }
             ImGui::EndChild();
 
@@ -672,6 +708,44 @@ int main(int argc, char** argv) {
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam)) return true;
-    if (msg == WM_DESTROY) { ::PostQuitMessage(0); return 0; }
+    
+    switch (msg) {
+    case WM_TRAYICON:
+        if (LOWORD(lParam) == WM_LBUTTONDBLCLK) {
+            ShowWindow(hWnd, SW_RESTORE);
+            SetForegroundWindow(hWnd);
+        } else if (LOWORD(lParam) == WM_RBUTTONUP) {
+            POINT curPoint;
+            GetCursorPos(&curPoint);
+            HMENU hMenu = CreatePopupMenu();
+            InsertMenuW(hMenu, 0, MF_BYPOSITION | MF_STRING, ID_TRAY_RESTORE, L"Restore");
+            InsertMenuW(hMenu, 1, MF_BYPOSITION | MF_STRING, ID_TRAY_EXIT, L"Exit");
+            SetForegroundWindow(hWnd);
+            TrackPopupMenu(hMenu, TPM_BOTTOMALIGN | TPM_LEFTALIGN, curPoint.x, curPoint.y, 0, hWnd, NULL);
+            DestroyMenu(hMenu);
+        }
+        break;
+    case WM_COMMAND:
+        if (LOWORD(wParam) == ID_TRAY_RESTORE) {
+            ShowWindow(hWnd, SW_RESTORE);
+            SetForegroundWindow(hWnd);
+        } else if (LOWORD(wParam) == ID_TRAY_EXIT) {
+            PostQuitMessage(0);
+        }
+        break;
+    case WM_SYSCOMMAND:
+        if ((wParam & 0xFFF0) == SC_MINIMIZE) {
+            ShowWindow(hWnd, SW_HIDE);
+            return 0;
+        }
+        break;
+    case WM_CLOSE:
+        ShowWindow(hWnd, SW_HIDE);
+        return 0;
+    case WM_DESTROY:
+        RemoveTrayIcon(hWnd);
+        ::PostQuitMessage(0);
+        return 0;
+    }
     return ::DefWindowProcW(hWnd, msg, wParam, lParam);
 }
