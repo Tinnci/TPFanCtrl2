@@ -36,6 +36,7 @@ target("TPFanCtrl2")
     -- Source files
     add_files("fancontrol/*.cpp")
     add_files("fancontrol/res/fancontrol.rc")
+    add_files("fancontrol/res/app.manifest")
     
     -- Include directories
     add_includedirs("fancontrol")
