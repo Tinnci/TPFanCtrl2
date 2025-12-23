@@ -94,6 +94,44 @@ bool FanController::UpdateSmartControl(int maxTemp, const std::vector<SmartLevel
     return true;
 }
 
+bool FanController::UpdatePIDControl(float currentTemp, const PIDSettings& settings, float dt) {
+    float error = currentTemp - settings.targetTemp;
+    
+    // Proportional
+    float P = settings.Kp * error;
+    
+    // Integral (with anti-windup)
+    m_integral += error * dt;
+    if (m_integral > 10.0f) m_integral = 10.0f;
+    if (m_integral < -10.0f) m_integral = -10.0f;
+    float I = settings.Ki * m_integral;
+    
+    // Derivative
+    float D = settings.Kd * (error - m_lastError) / (dt > 0 ? dt : 1.0f);
+    m_lastError = error;
+    
+    float output = P + I + D;
+    
+    // Map output to fan levels (0-7)
+    // If output is positive, we need more cooling.
+    // Base level could be 1 or 2 if we are near target.
+    int targetLevel = 0;
+    if (output > 0) {
+        targetLevel = (int)(output + 1.0f); // Simple mapping
+    } else if (currentTemp > settings.targetTemp - 5.0f) {
+        targetLevel = 1; // Keep a low spin if we are close to target
+    }
+    
+    if (targetLevel < (int)settings.minFan) targetLevel = (int)settings.minFan;
+    if (targetLevel > (int)settings.maxFan) targetLevel = (int)settings.maxFan;
+    
+    if (targetLevel != m_currentFanCtrl) {
+        return SetFanLevel(targetLevel);
+    }
+    
+    return true;
+}
+
 bool FanController::GetFanSpeeds(int& fan1, int& fan2) {
     std::lock_guard<std::recursive_timed_mutex> lock(m_ecManager->GetMutex());
     char lo, hi;
