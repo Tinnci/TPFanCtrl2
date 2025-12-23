@@ -26,7 +26,7 @@ add_rules("mode.debug", "mode.release")
 -- Global settings
 set_languages("c++17")
 add_defines("WIN32", "_MBCS")
-add_cxflags("/J", "/source-charset:utf-8", {tools = "msvc"})
+add_cxflags("/J", "/utf-8", {tools = "msvc"})
 
 if is_plat("windows") then
     add_cxflags("/W4", {tools = "msvc"}) -- Enable strict warning level 4
