@@ -28,6 +28,10 @@ set_languages("c++17")
 add_defines("WIN32", "_MBCS")
 add_cxflags("/J", "/source-charset:utf-8", {tools = "msvc"})
 
+if is_plat("windows") then
+    add_cxflags("/W4", {tools = "msvc"}) -- Enable strict warning level 4
+end
+
 -- Target: TPFanCtrl2 (Main GUI App)
 target("TPFanCtrl2")
     set_kind("binary")
