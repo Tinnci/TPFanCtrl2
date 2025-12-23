@@ -5,8 +5,22 @@ on:
     branches: [ main, modernize/baseline ]
     tags:
       - 'v*'
+    paths-ignore:
+      - '**.md'
+      - 'doc/**'
+      - 'assets/**'
+      - '.gitignore'
+      - 'LICENSE'
+      - '.github/workflows/codeql.yml'
   pull_request:
     branches: [ main, modernize/baseline ]
+    paths-ignore:
+      - '**.md'
+      - 'doc/**'
+      - 'assets/**'
+      - '.gitignore'
+      - 'LICENSE'
+      - '.github/workflows/codeql.yml'
 
 jobs:
   build:
