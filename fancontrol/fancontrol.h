@@ -33,8 +33,6 @@
 #include <vector>
 #include <string>
 
-#define FANCONTROLVERSION "2.3.3 Dual Fan"
-
 #define WM__DISMISSDLG WM_USER+5
 #define WM__GETDATA WM_USER+6
 #define WM__NEWDATA WM_USER+7
