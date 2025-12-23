@@ -114,7 +114,7 @@ CDynamicIcon::CDynamicIcon(const char *line1, const char *line2, const int iFarb
     DeleteDC(memDC1_);
     SelectObject(memDC2_, (HBITMAP) oldBmp_2);
     DeleteDC(memDC2_);
-    DeleteDC(hDC);
+    ReleaseDC(0, hDC);
 
     ICONINFO ii = {TRUE, 0, 0, iconMaskBmp_, iconBmp_};
     icon_ = CreateIconIndirect(&ii);

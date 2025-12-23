@@ -41,6 +41,7 @@
 #include "ECManager.h"
 #include "TVicPortProvider.h"
 #include "TVicPort.h"
+#include "DynamicIcon.h"
 
 // --- Tray Constants ---
 #define WM_TRAYICON (WM_USER + 100)
@@ -58,10 +59,11 @@ struct SmoothValue {
 };
 
 // Icons (Segoe MDL2 Assets - Built-in on Windows 10/11)
-#define ICON_CPU "\xEE\xA7\x92" // Processor
-#define ICON_GPU "\xEE\xA6\xAB" // Video / GPU
-#define ICON_FAN "\xEE\xA7\xB6" // Fan / Ventilation
-#define ICON_CHIP "\xEE\xA9\xA7" // Chipset / RAM
+// Using u8 prefix to ensure UTF-8 encoding
+#define ICON_CPU (const char*)u8"\uE9D2" // Processor
+#define ICON_GPU (const char*)u8"\uE9AB" // Video / GPU
+#define ICON_FAN (const char*)u8"\uE9F6" // Fan / Ventilation
+#define ICON_CHIP (const char*)u8"\uEA67" // Chipset / RAM
 
 struct UIState {
     std::vector<SensorData> Sensors;
@@ -96,6 +98,38 @@ static int                      g_SwapChainResizeWidth = 0;
 static int                      g_SwapChainResizeHeight = 0;
 
 static std::shared_ptr<ConfigManager> g_Config;
+
+void UpdateTrayIcon(HWND hWnd, int temp, int fan) {
+    if (!hWnd) return;
+    char line1[16], line2[16];
+    sprintf_s(line1, "%d", temp);
+    
+    // Show fan speed in hundreds (e.g. 35 for 3500 RPM)
+    sprintf_s(line2, "%d", fan / 100);
+
+    int color = 0; // white
+    if (temp >= 80) color = 14;      // red
+    else if (temp >= 70) color = 13; // orange
+    else if (temp >= 60) color = 12; // yellow
+    else if (temp >= 50) color = 23; // green
+    else color = 11;                 // blue
+
+    CDynamicIcon dynIcon(line1, line2, color, 0);
+    HICON hIcon = dynIcon.GetHIcon();
+    if (!hIcon) return;
+
+    NOTIFYICONDATAW nid = { sizeof(nid) };
+    nid.hWnd = hWnd;
+    nid.uID = ID_TRAY_ICON;
+    nid.uFlags = NIF_ICON | NIF_TIP;
+    nid.hIcon = hIcon;
+    
+    wchar_t tip[128];
+    swprintf_s(tip, L"TPFanCtrl2\nTemp: %d°C\nFan: %d RPM", temp, fan);
+    wcscpy_s(nid.szTip, tip);
+
+    Shell_NotifyIconW(NIM_MODIFY, &nid);
+}
 
 // --- Custom Lightweight Plot ---
 void DrawSimplePlot(const char* label, const std::map<std::string, std::deque<float>>& history, float height, float dpiScale) {
@@ -291,9 +325,11 @@ void SetupVulkanWindow(ImGui_ImplVulkanH_Window* wd, VkSurfaceKHR surface, int w
 void HardwareWorker(std::shared_ptr<ConfigManager> config, 
                     std::shared_ptr<SensorManager> sensors, 
                     std::shared_ptr<FanController> fans,
-                    bool* running) {
+                    bool* running,
+                    HWND hWnd) {
     int fanCounter = 0;
     int sensorCounter = 0;
+    int trayCounter = 0;
     int maxTemp = 0;
 
     while (*running) {
@@ -354,6 +390,13 @@ void HardwareWorker(std::shared_ptr<ConfigManager> config,
                 }
             }
         }
+
+        // 4. Tray Update (Every 1s)
+        if (trayCounter <= 0) {
+            UpdateTrayIcon(hWnd, maxTemp, g_UIState.Fan1Speed);
+            trayCounter = 10;
+        }
+        trayCounter--;
 
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         fanCounter--;
@@ -474,14 +517,14 @@ int main(int argc, char** argv) {
         g_AppLog.AddLog("[Fan] Level changed to %d", level);
     });
 
-    // Start Hardware Thread
-    bool hwRunning = true;
-    std::thread hwThread(HardwareWorker, g_Config, sensorManager, fanController, &hwRunning);
-
     // Window Init
     WNDCLASSEXW wc = { sizeof(wc), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, L"TPFanCtrl2Vulkan", nullptr };
     ::RegisterClassExW(&wc);
-    HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"TPFanCtrl2 - Vulkan Modernized", WS_OVERLAPPEDWINDOW, 100, 100, 1024, 768, nullptr, nullptr, wc.hInstance, nullptr);
+    HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"TPFanCtrl2 - Vulkan Modernized", WS_OVERLAPPEDWINDOW, 100, 100, 1100, 850, nullptr, nullptr, wc.hInstance, nullptr);
+
+    // Start Hardware Thread
+    bool hwRunning = true;
+    std::thread hwThread(HardwareWorker, g_Config, sensorManager, fanController, &hwRunning, hwnd);
 
     // Get DPI Scale
     float dpiScale = 1.0f;
@@ -520,17 +563,35 @@ int main(int argc, char** argv) {
     // 1. Optimize Font Rendering with FreeType
     ImFontConfig font_cfg;
     font_cfg.FontLoaderFlags |= ImGuiFreeTypeBuilderFlags_LightHinting;
-    if (!io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segoeui.ttf", 18.0f * dpiScale, &font_cfg)) {
-        Log(LOG_WARN, "Failed to load segoeui.ttf");
+    ImFont* mainFont = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segoeui.ttf", 18.0f * dpiScale, &font_cfg);
+    if (!mainFont) {
+        Log(LOG_WARN, "Failed to load segoeui.ttf, using default font.");
     }
     
-    // 2. Load Icons (Segoe MDL2 Assets is built-in on Windows)
+    // 2. Load Icons (Segoe MDL2 Assets is built-in on Windows 10+)
     static const ImWchar icon_ranges[] = { 0xE700, 0xF800, 0 };
     ImFontConfig icon_cfg;
     icon_cfg.MergeMode = true;
     icon_cfg.PixelSnapH = true;
-    if (!io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segmdl2.ttf", 16.0f * dpiScale, &icon_cfg, icon_ranges)) {
-        Log(LOG_WARN, "Failed to load segmdl2.ttf");
+    icon_cfg.GlyphMinAdvanceX = 16.0f * dpiScale; // Ensure icons have some width
+    
+    // Try multiple possible paths for the icon font
+    const char* iconFontPaths[] = {
+        "C:\\Windows\\Fonts\\segmdl2.ttf",
+        "C:\\Windows\\Fonts\\seguisym.ttf" // Fallback for older Windows
+    };
+    
+    bool iconLoaded = false;
+    for (const char* path : iconFontPaths) {
+        if (io.Fonts->AddFontFromFileTTF(path, 16.0f * dpiScale, &icon_cfg, icon_ranges)) {
+            Log(LOG_INFO, "Icon font loaded successfully from: %s", path);
+            iconLoaded = true;
+            break;
+        }
+    }
+    
+    if (!iconLoaded) {
+        Log(LOG_ERROR, "CRITICAL: Could not load any icon font. Icons will appear as '?'");
     }
     
     ImGui::StyleColorsDark();
@@ -689,9 +750,7 @@ int main(int argc, char** argv) {
             if (maxTemp > 85) tempColor = ImVec4(1, 0.2f, 0.2f, 1);
             
             ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1), "MAX TEMPERATURE");
-            ImGui::PushFont(io.Fonts->Fonts[0]); // Use larger font if available, or just bold
             ImGui::TextColored(tempColor, "%d°C", maxTemp);
-            ImGui::PopFont();
             ImGui::SameLine();
             ImGui::TextColored(ImVec4(0.4f, 0.4f, 0.4f, 1), "(%s)", maxName.c_str());
             
@@ -947,6 +1006,10 @@ int main(int argc, char** argv) {
 
                 ImGui::Spacing();
                 ImGui::Separator();
+                ImGui::TextDisabled("Debug Info:");
+                ImGui::SameLine();
+                ImGui::TextDisabled("DPI: %.2f | Fonts: %d", dpiScale, io.Fonts->Fonts.Size);
+                
                 ImGui::Spacing();
                 
                 if (ImGui::Button(ICON_CHIP " Save All Settings to INI", ImVec2(-1, 50 * dpiScale))) {
@@ -1084,8 +1147,9 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     case WM_GETMINMAXINFO:
         {
             MINMAXINFO* mmi = (MINMAXINFO*)lParam;
-            mmi->ptMinTrackSize.x = 400;
-            mmi->ptMinTrackSize.y = 300;
+            // Increased minimum size to prevent layout breaking
+            mmi->ptMinTrackSize.x = 800;
+            mmi->ptMinTrackSize.y = 600;
         }
         return 0;
     case WM_TRAYICON:
