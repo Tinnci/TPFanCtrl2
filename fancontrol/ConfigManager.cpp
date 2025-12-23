@@ -61,6 +61,11 @@ void ConfigManager::ParseLine(const std::string& line) {
     else if (key == "MinimizeToSysTray") MinimizeToSysTray = std::stoi(value);
     else if (key == "MinimizeOnClose") MinimizeOnClose = std::stoi(value);
     else if (key == "UseTWR") UseTWR = std::stoi(value);
+    else if (key == "PID_Target") PID_Target = std::stof(value);
+    else if (key == "PID_Kp") PID_Kp = std::stof(value);
+    else if (key == "PID_Ki") PID_Ki = std::stof(value);
+    else if (key == "PID_Kd") PID_Kd = std::stof(value);
+    else if (key == "ControlAlgorithm") ControlAlgorithm = std::stoi(value);
     else if (key == "IgnoreSensors") IgnoreSensors = value;
     else if (key == "MenuLabelSM1") MenuLabelSM1 = value.substr(0, value.find('/'));
     else if (key == "MenuLabelSM2") MenuLabelSM2 = value.substr(0, value.find('/'));
@@ -115,4 +120,35 @@ void ConfigManager::ParseHotkey(const std::string& value, const std::string& pre
             hk.key = 0x70 + fnum - 1;
         }
     }
+}
+
+bool ConfigManager::SaveConfig(const std::string& filename) {
+    std::ofstream file(filename);
+    if (!file.is_open()) return false;
+
+    file << "; TPFanCtrl2 Configuration\n\n";
+    file << "Active=" << ActiveMode << "\n";
+    file << "ManFanSpeed=" << ManFanSpeed << "\n";
+    file << "cycle=" << Cycle << "\n";
+    file << "StartMinimized=" << StartMinimized << "\n";
+    file << "MinimizeToSysTray=" << MinimizeToSysTray << "\n";
+    file << "MinimizeOnClose=" << MinimizeOnClose << "\n";
+    file << "ShowBiasedTemps=" << ShowBiasedTemps << "\n";
+    file << "NoExtSensor=" << NoExtSensor << "\n";
+    file << "UseTWR=" << UseTWR << "\n";
+    
+    file << "\n; PID Settings\n";
+    file << "ControlAlgorithm=" << ControlAlgorithm << "\n";
+    file << "PID_Target=" << PID_Target << "\n";
+    file << "PID_Kp=" << PID_Kp << "\n";
+    file << "PID_Ki=" << PID_Ki << "\n";
+    file << "PID_Kd=" << PID_Kd << "\n";
+
+    file << "\n; Smart Levels\n";
+    for (const auto& sl : SmartLevels1) {
+        file << "level=" << sl.temp << " " << sl.fan << " " << sl.hystUp << " " << sl.hystDown << "\n";
+    }
+
+    file << "\n; End of Config\n";
+    return true;
 }

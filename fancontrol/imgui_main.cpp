@@ -91,6 +91,9 @@ static VkDescriptorPool         g_DescriptorPool = VK_NULL_HANDLE;
 static ImGui_ImplVulkanH_Window g_MainWindowData;
 static uint32_t                 g_MinImageCount = 2;
 static VmaAllocator             g_VmaAllocator = VK_NULL_HANDLE;
+static bool                     g_SwapChainRebuild = false;
+static int                      g_SwapChainResizeWidth = 0;
+static int                      g_SwapChainResizeHeight = 0;
 
 // --- Custom Lightweight Plot ---
 void DrawSimplePlot(const char* label, const std::map<std::string, std::deque<float>>& history, float height, float dpiScale) {
@@ -287,20 +290,25 @@ void HardwareWorker(std::shared_ptr<ConfigManager> config,
                     std::shared_ptr<SensorManager> sensors, 
                     std::shared_ptr<FanController> fans,
                     bool* running) {
-    int tempCycleCounter = 0;
+    int fanCounter = 0;
+    int sensorCounter = 0;
     int maxTemp = 0;
+
     while (*running) {
-        // 1. High-frequency Polling (Fan Speeds - every 1s)
-        int f1 = 0, f2 = 0;
-        fans->GetFanSpeeds(f1, f2);
-        {
-            std::lock_guard<std::mutex> lock(g_UIState.Mutex);
-            g_UIState.Fan1Speed = f1;
-            g_UIState.Fan2Speed = f2;
+        // 1. Fan Speed Polling (Every 1s = 10 * 100ms)
+        if (fanCounter <= 0) {
+            int f1 = 0, f2 = 0;
+            fans->GetFanSpeeds(f1, f2);
+            {
+                std::lock_guard<std::mutex> lock(g_UIState.Mutex);
+                g_UIState.Fan1Speed = f1;
+                g_UIState.Fan2Speed = f2;
+            }
+            fanCounter = 10;
         }
 
-        // 2. Low-frequency Polling (Sensors & Control Logic - every 'Cycle' seconds)
-        if (tempCycleCounter <= 0) {
+        // 2. Sensor Polling (Every 'Cycle' seconds)
+        if (sensorCounter <= 0) {
             if (!sensors->UpdateSensors(config->ShowBiasedTemps, config->NoExtSensor, config->UseTWR)) {
                 Log(LOG_WARN, "Failed to update sensors from EC.");
             }
@@ -308,61 +316,43 @@ void HardwareWorker(std::shared_ptr<ConfigManager> config,
             int maxIdx = 0;
             maxTemp = sensors->GetMaxTemp(maxIdx);
             
-            static int logCounter = 0;
-            if (logCounter++ % 6 == 0) { // Log every ~30s
-                auto allSensors = sensors->GetSensors();
-                std::string sensorLog = "";
-                for (const auto& s : allSensors) {
+            // Sync to UI State
+            {
+                std::lock_guard<std::mutex> lock(g_UIState.Mutex);
+                g_UIState.Sensors = sensors->GetSensors();
+                g_UIState.LastUpdate = time(nullptr);
+                for (const auto& s : g_UIState.Sensors) {
                     if (s.rawTemp > 0 && s.rawTemp < 128) {
-                        sensorLog += s.name + ":" + std::to_string(s.rawTemp) + " ";
+                        g_UIState.SmoothTemps[s.name].Target = (float)s.rawTemp;
+                        auto& history = g_UIState.TempHistory[s.name];
+                        history.push_back((float)s.rawTemp);
+                        if (history.size() > 300) history.pop_front();
                     }
                 }
-                Log(LOG_INFO, "Hardware Status: MaxTemp=%d (%s), Fan1=%d, Fan2=%d. All: %s", 
-                    maxTemp, (maxIdx >= 0 && maxIdx < (int)allSensors.size()) ? allSensors[maxIdx].name.c_str() : "N/A", 
-                    f1, f2, sensorLog.c_str());
             }
+
+            sensorCounter = (config->Cycle > 0 ? config->Cycle : 1) * 10;
         }
 
-        // 3. Control Logic
+        // 3. Control Logic (Every 100ms for maximum responsiveness)
         {
             std::lock_guard<std::mutex> lock(g_UIState.Mutex);
             if (g_UIState.Mode == 1) { // Manual
                 fans->SetFanLevel(g_UIState.ManualLevel);
             } else if (g_UIState.Mode == 2) { // Smart
                 if (g_UIState.Algorithm == ControlAlgorithm::Step) {
+                    // Step control still uses the 1s-based logic internally or we just call it
                     fans->UpdateSmartControl(maxTemp, config->SmartLevels1);
                 } else {
-                    // PID Control (using 1s dt since this loop runs every 1s)
-                    fans->UpdatePIDControl((float)maxTemp, g_UIState.PID, 1.0f);
+                    // PID Control (using 0.1s dt for high-frequency updates)
+                    fans->UpdatePIDControl((float)maxTemp, g_UIState.PID, 0.1f);
                 }
             }
         }
 
-        // 4. Sync to UI State
-        {
-            std::lock_guard<std::mutex> lock(g_UIState.Mutex);
-            g_UIState.Sensors = sensors->GetSensors();
-            g_UIState.LastUpdate = time(nullptr);
-            for (const auto& s : g_UIState.Sensors) {
-                // Only record history for valid sensors (0 < temp < 128)
-                if (s.rawTemp > 0 && s.rawTemp < 128) {
-                    g_UIState.SmoothTemps[s.name].Target = (float)s.rawTemp;
-                    auto& history = g_UIState.TempHistory[s.name];
-                    history.push_back((float)s.rawTemp);
-                    if (history.size() > 300) history.pop_front();
-                }
-            }
-        }
-        
-        if (tempCycleCounter <= 0) {
-            tempCycleCounter = config->Cycle > 0 ? config->Cycle : 1;
-        }
-
-        // 5. Sleep 1s (granularly)
-        for (int i = 0; i < 10 && *running; i++) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
-        tempCycleCounter--;
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        fanCounter--;
+        sensorCounter--;
     }
 }
 
@@ -418,6 +408,18 @@ int main(int argc, char** argv) {
     // Logic Init
     auto configManager = std::make_shared<ConfigManager>();
     configManager->LoadConfig("TPFanCtrl2.ini");
+
+    // Sync UI State with Config
+    {
+        std::lock_guard<std::mutex> lock(g_UIState.Mutex);
+        g_UIState.Mode = configManager->ActiveMode;
+        g_UIState.ManualLevel = configManager->ManFanSpeed;
+        g_UIState.Algorithm = (ControlAlgorithm)configManager->ControlAlgorithm;
+        g_UIState.PID.targetTemp = configManager->PID_Target;
+        g_UIState.PID.Kp = configManager->PID_Kp;
+        g_UIState.PID.Ki = configManager->PID_Ki;
+        g_UIState.PID.Kd = configManager->PID_Kd;
+    }
 
     // Initialize Hardware Driver (TVicPort)
     Log(LOG_INFO, "Initializing TVicPort driver...");
@@ -529,11 +531,38 @@ int main(int argc, char** argv) {
     ImGui::StyleColorsDark();
     auto& style = ImGui::GetStyle();
     style.ScaleAllSizes(dpiScale); // Scale UI elements (padding, spacing, etc.)
-    style.WindowRounding = 8.0f * dpiScale;
-    style.FrameRounding = 4.0f * dpiScale;
-    style.ItemSpacing = ImVec2(10 * dpiScale, 8 * dpiScale);
-    style.Colors[ImGuiCol_WindowBg] = ImVec4(0.1f, 0.1f, 0.1f, 0.7f);
-    style.Colors[ImGuiCol_PlotHistogram] = ImVec4(0.0f, 0.6f, 0.9f, 1.0f);
+    style.WindowRounding = 10.0f * dpiScale;
+    style.FrameRounding = 6.0f * dpiScale;
+    style.PopupRounding = 6.0f * dpiScale;
+    style.ScrollbarRounding = 12.0f * dpiScale;
+    style.GrabRounding = 6.0f * dpiScale;
+    style.ItemSpacing = ImVec2(12 * dpiScale, 10 * dpiScale);
+    style.WindowPadding = ImVec2(15 * dpiScale, 15 * dpiScale);
+    
+    // ThinkPad Modern Theme Colors
+    ImVec4 tpRed = ImVec4(0.89f, 0.12f, 0.16f, 1.0f);
+    ImVec4 tpRedHover = ImVec4(1.0f, 0.2f, 0.25f, 1.0f);
+    
+    style.Colors[ImGuiCol_WindowBg] = ImVec4(0.07f, 0.07f, 0.07f, 0.94f);
+    style.Colors[ImGuiCol_ChildBg] = ImVec4(0.12f, 0.12f, 0.12f, 0.5f);
+    style.Colors[ImGuiCol_Border] = ImVec4(0.2f, 0.2f, 0.2f, 0.5f);
+    style.Colors[ImGuiCol_FrameBg] = ImVec4(0.15f, 0.15f, 0.15f, 1.0f);
+    style.Colors[ImGuiCol_CheckMark] = tpRed;
+    style.Colors[ImGuiCol_SliderGrab] = tpRed;
+    style.Colors[ImGuiCol_SliderGrabActive] = tpRedHover;
+    style.Colors[ImGuiCol_Button] = ImVec4(0.2f, 0.2f, 0.2f, 1.0f);
+    style.Colors[ImGuiCol_ButtonHovered] = tpRed;
+    style.Colors[ImGuiCol_ButtonActive] = tpRedHover;
+    style.Colors[ImGuiCol_Header] = ImVec4(tpRed.x, tpRed.y, tpRed.z, 0.3f);
+    style.Colors[ImGuiCol_HeaderHovered] = ImVec4(tpRed.x, tpRed.y, tpRed.z, 0.5f);
+    style.Colors[ImGuiCol_HeaderActive] = tpRed;
+    style.Colors[ImGuiCol_Tab] = ImVec4(0.15f, 0.15f, 0.15f, 1.0f);
+    style.Colors[ImGuiCol_TabHovered] = tpRed;
+    style.Colors[ImGuiCol_TabActive] = tpRed;
+    style.Colors[ImGuiCol_TabUnfocused] = ImVec4(0.1f, 0.1f, 0.1f, 1.0f);
+    style.Colors[ImGuiCol_TabUnfocusedActive] = ImVec4(0.2f, 0.2f, 0.2f, 1.0f);
+    style.Colors[ImGuiCol_PlotHistogram] = tpRed;
+    style.Colors[ImGuiCol_Separator] = ImVec4(0.25f, 0.25f, 0.25f, 1.0f);
 
     Log(LOG_INFO, "Initializing Win32 backend...");
     ImGui_ImplWin32_Init(hwnd);
@@ -583,6 +612,36 @@ int main(int argc, char** argv) {
 
         frameCount++;
 
+        if (g_SwapChainRebuild) {
+            int width, height;
+            RECT rect;
+            GetClientRect(hwnd, &rect);
+            width = rect.right - rect.left;
+            height = rect.bottom - rect.top;
+            if (width > 0 && height > 0) {
+                vkDeviceWaitIdle(g_Device);
+                ImGui_ImplVulkan_SetMinImageCount(g_MinImageCount);
+                ImGui_ImplVulkanH_CreateOrResizeWindow(g_Instance, g_PhysicalDevice, g_Device, &g_MainWindowData, g_QueueFamily, g_Allocator, width, height, g_MinImageCount, 0);
+                g_MainWindowData.FrameIndex = 0;
+                g_SwapChainRebuild = false;
+            }
+        }
+
+        // Skip rendering if minimized
+        if (g_MainWindowData.Width == 0 || g_MainWindowData.Height == 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            continue;
+        }
+
+        ImGui_ImplVulkanH_Window* wd = &g_MainWindowData;
+        VkSemaphore image_acquired_semaphore  = wd->FrameSemaphores[wd->SemaphoreIndex].ImageAcquiredSemaphore;
+        VkSemaphore render_complete_semaphore = wd->FrameSemaphores[wd->SemaphoreIndex].RenderCompleteSemaphore;
+        VkResult err = vkAcquireNextImageKHR(g_Device, wd->Swapchain, UINT64_MAX, image_acquired_semaphore, VK_NULL_HANDLE, &wd->FrameIndex);
+        if (err == VK_ERROR_OUT_OF_DATE_KHR || err == VK_SUBOPTIMAL_KHR) {
+            g_SwapChainRebuild = true;
+            continue;
+        }
+
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
@@ -599,57 +658,127 @@ int main(int argc, char** argv) {
         ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
         ImGui::Begin("Main", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus);
 
-        if (ImGui::BeginTabBar("MainTabs")) {
+        // --- 1. Hero Section (Top Status Bar) ---
+        {
+            ImGui::BeginChild("Hero", ImVec2(0, 80 * dpiScale), false);
+            
+            int f1, f2, maxTemp = 0;
+            std::string maxName = "N/A";
+            {
+                std::lock_guard<std::mutex> lock(g_UIState.Mutex);
+                f1 = g_UIState.Fan1Speed;
+                f2 = g_UIState.Fan2Speed;
+                for (const auto& s : g_UIState.Sensors) {
+                    if (s.rawTemp > maxTemp && s.rawTemp < 128) {
+                        maxTemp = s.rawTemp;
+                        maxName = s.name;
+                    }
+                }
+            }
+
+            ImGui::Columns(3, "HeroColumns", false);
+            
+            // Temp Metric
+            ImVec4 tempColor = ImVec4(0, 0.8f, 1, 1);
+            if (maxTemp > 65) tempColor = ImVec4(1, 0.6f, 0, 1);
+            if (maxTemp > 85) tempColor = ImVec4(1, 0.2f, 0.2f, 1);
+            
+            ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1), "MAX TEMPERATURE");
+            ImGui::PushFont(io.Fonts->Fonts[0]); // Use larger font if available, or just bold
+            ImGui::TextColored(tempColor, "%d°C", maxTemp);
+            ImGui::PopFont();
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(0.4f, 0.4f, 0.4f, 1), "(%s)", maxName.c_str());
+            
+            ImGui::NextColumn();
+            
+            // Fan Metric
+            ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1), "FAN SPEEDS");
+            ImGui::Text("%s %d RPM", ICON_FAN, f1);
+            if (f2 > 0) ImGui::Text("%s %d RPM", ICON_FAN, f2);
+            
+            ImGui::NextColumn();
+            
+            // Mode Metric
+            const char* modeStr = "BIOS";
+            if (g_UIState.Mode == 1) modeStr = "MANUAL";
+            else if (g_UIState.Mode == 2) modeStr = (g_UIState.Algorithm == ControlAlgorithm::Step ? "SMART (STEP)" : "SMART (PID)");
+            
+            ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1), "CONTROL MODE");
+            ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), "%s", modeStr);
+            
+            ImGui::Columns(1);
+            ImGui::EndChild();
+        }
+
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // --- 2. Main Content (Tabs) ---
+        if (ImGui::BeginTabBar("MainTabs", ImGuiTabBarFlags_None)) {
             if (ImGui::BeginTabItem("Dashboard")) {
                 if (ImGui::BeginTable("Layout", 2, ImGuiTableFlags_Resizable)) {
                     ImGui::TableNextColumn();
                     
                     // --- Left Column: Sensors & Fan ---
-                    ImGui::BeginChild("Sensors", ImVec2(0, 350 * dpiScale), true);
-                    ImGui::TextColored(ImVec4(0, 1, 1, 1), "Temperature Sensors");
+                    ImGui::BeginChild("Sensors", ImVec2(0, 380 * dpiScale), true, ImGuiWindowFlags_None);
+                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), "Sensors");
                     ImGui::Separator();
+                    ImGui::Spacing();
                     {
                         std::lock_guard<std::mutex> lock(g_UIState.Mutex);
                         for (const auto& s : g_UIState.Sensors) {
                             if (s.rawTemp > 0 && s.rawTemp < 128) {
                                 float currentTemp = g_UIState.SmoothTemps[s.name].Current;
                                 float progress = currentTemp / 100.0f;
-                                ImVec4 color = ImVec4(0.0f, 0.6f, 0.9f, 1.0f);
-                                if (currentTemp > 60.0f) color = ImVec4(0.9f, 0.6f, 0.0f, 1.0f);
-                                if (currentTemp > 80.0f) color = ImVec4(0.9f, 0.1f, 0.1f, 1.0f);
+                                
+                                // Smooth color interpolation
+                                ImVec4 color;
+                                if (currentTemp < 50) color = ImVec4(0, 0.7f, 0.9f, 1); // Cool Blue
+                                else if (currentTemp < 75) color = ImVec4(0.9f, 0.6f, 0, 1); // Warm Orange
+                                else color = ImVec4(0.9f, 0.1f, 0.1f, 1); // Hot Red
                                 
                                 ImGui::PushStyleColor(ImGuiCol_PlotHistogram, color);
-                                ImGui::Text("%s %-10s: %.1f C", (s.name.find("GPU") != std::string::npos ? ICON_GPU : ICON_CPU), s.name.c_str(), currentTemp);
-                                ImGui::ProgressBar(progress, ImVec2(-1, 0), "");
+                                ImGui::Text("%s %-8s", (s.name.find("GPU") != std::string::npos ? ICON_GPU : ICON_CPU), s.name.c_str());
+                                ImGui::SameLine(ImGui::GetContentRegionAvail().x - 50 * dpiScale);
+                                ImGui::Text("%.1f°C", currentTemp);
+                                ImGui::ProgressBar(progress, ImVec2(-1, 6 * dpiScale), "");
                                 ImGui::PopStyleColor();
+                                ImGui::Spacing();
                             }
                         }
                     }
                     ImGui::EndChild();
 
                     ImGui::BeginChild("Control", ImVec2(0, 0), true);
-                    ImGui::TextColored(ImVec4(1, 0.8f, 0, 1), "Fan Control");
+                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), "Quick Control");
                     ImGui::Separator();
+                    ImGui::Spacing();
                     {
                         std::lock_guard<std::mutex> lock(g_UIState.Mutex);
-                        ImGui::Text("Fan 1: %d RPM | Fan 2: %d RPM", g_UIState.Fan1Speed, g_UIState.Fan2Speed);
-                        
-                        ImGui::Spacing();
-                        ImGui::RadioButton("BIOS", &g_UIState.Mode, 0); ImGui::SameLine();
-                        ImGui::RadioButton("Manual", &g_UIState.Mode, 1); ImGui::SameLine();
-                        ImGui::RadioButton("Smart", &g_UIState.Mode, 2);
+                        ImGui::PushItemWidth(-1);
+                        if (ImGui::RadioButton("BIOS", &g_UIState.Mode, 0)) {} ImGui::SameLine();
+                        if (ImGui::RadioButton("Manual", &g_UIState.Mode, 1)) {} ImGui::SameLine();
+                        if (ImGui::RadioButton("Smart", &g_UIState.Mode, 2)) {}
+                        ImGui::PopItemWidth();
 
+                        ImGui::Spacing();
                         if (g_UIState.Mode == 1) {
-                            ImGui::SliderInt("Level", &g_UIState.ManualLevel, 0, 7);
+                            ImGui::Text("Manual Level:");
+                            ImGui::SliderInt("##Level", &g_UIState.ManualLevel, 0, 7);
                         } else if (g_UIState.Mode == 2) {
-                            const char* algoNames[] = { "Step (阶梯)", "PID (闭环)" };
+                            ImGui::Text("Algorithm:");
+                            const char* algoNames[] = { "Step (Classic)", "PID (Modern)" };
                             int algoIdx = (int)g_UIState.Algorithm;
-                            if (ImGui::Combo("Algorithm", &algoIdx, algoNames, 2)) {
+                            ImGui::PushItemWidth(-1);
+                            if (ImGui::Combo("##Algo", &algoIdx, algoNames, 2)) {
                                 g_UIState.Algorithm = (ControlAlgorithm)algoIdx;
                             }
+                            ImGui::PopItemWidth();
                         }
                     }
-                    if (ImGui::Button("Hide to Tray", ImVec2(-1, 40 * dpiScale))) {
+                    ImGui::Spacing();
+                    if (ImGui::Button("Minimize to Tray", ImVec2(-1, 35 * dpiScale))) {
                         ::ShowWindow(hwnd, SW_HIDE);
                     }
                     ImGui::EndChild();
@@ -657,8 +786,10 @@ int main(int argc, char** argv) {
                     ImGui::TableNextColumn();
                     
                     // --- Right Column: History & Logs ---
-                    ImGui::BeginChild("History", ImVec2(0, 350 * dpiScale), true);
-                    ImGui::TextColored(ImVec4(1, 0.5f, 1, 1), "Temperature History");
+                    ImGui::BeginChild("History", ImVec2(0, 380 * dpiScale), true);
+                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), "History");
+                    ImGui::Separator();
+                    ImGui::Spacing();
                     {
                         std::lock_guard<std::mutex> lock(g_UIState.Mutex);
                         DrawSimplePlot("TempPlot", g_UIState.TempHistory, 0, dpiScale);
@@ -666,11 +797,17 @@ int main(int argc, char** argv) {
                     ImGui::EndChild();
 
                     ImGui::BeginChild("Logs", ImVec2(0, 0), true);
-                    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1), "System Logs");
+                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), "System Logs");
                     ImGui::Separator();
                     {
                         std::lock_guard<std::mutex> lock(g_AppLog.Mutex);
-                        for (const auto& line : g_AppLog.Items) ImGui::TextUnformatted(line.c_str());
+                        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 2 * dpiScale));
+                        for (const auto& line : g_AppLog.Items) {
+                            if (line.find("[ERROR]") != std::string::npos) ImGui::TextColored(ImVec4(1, 0.2f, 0.2f, 1), line.c_str());
+                            else if (line.find("[WARN]") != std::string::npos) ImGui::TextColored(ImVec4(1, 0.8f, 0, 1), line.c_str());
+                            else ImGui::TextUnformatted(line.c_str());
+                        }
+                        ImGui::PopStyleVar();
                         if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY()) ImGui::SetScrollHereY(1.0f);
                     }
                     ImGui::EndChild();
@@ -687,25 +824,45 @@ int main(int argc, char** argv) {
                 ImGui::Separator();
                 {
                     std::lock_guard<std::mutex> lock(g_UIState.Mutex);
-                    ImGui::SliderFloat("Target Temp (C)", &g_UIState.PID.targetTemp, 40.0f, 90.0f);
-                    ImGui::DragFloat("Kp (Proportional)", &g_UIState.PID.Kp, 0.01f, 0.0f, 10.0f);
-                    ImGui::DragFloat("Ki (Integral)", &g_UIState.PID.Ki, 0.001f, 0.0f, 1.0f);
-                    ImGui::DragFloat("Kd (Derivative)", &g_UIState.PID.Kd, 0.01f, 0.0f, 5.0f);
+                    ImGui::PushItemWidth(200 * dpiScale);
+                    ImGui::InputFloat("Target Temp (C)", &g_UIState.PID.targetTemp, 1.0f, 5.0f, "%.1f");
+                    ImGui::InputFloat("Kp (Proportional)", &g_UIState.PID.Kp, 0.01f, 0.1f, "%.3f");
+                    ImGui::InputFloat("Ki (Integral)", &g_UIState.PID.Ki, 0.001f, 0.01f, "%.4f");
+                    ImGui::InputFloat("Kd (Derivative)", &g_UIState.PID.Kd, 0.01f, 0.1f, "%.3f");
+                    ImGui::PopItemWidth();
                 }
 
                 ImGui::Spacing();
                 ImGui::TextColored(ImVec4(0, 1, 0, 1), "Hardware Polling");
                 ImGui::Separator();
                 int cycle = configManager->Cycle;
-                if (ImGui::SliderInt("Sensor Cycle (s)", &cycle, 1, 60)) {
+                ImGui::PushItemWidth(200 * dpiScale);
+                if (ImGui::InputInt("Sensor Cycle (s)", &cycle)) {
+                    if (cycle < 1) cycle = 1;
+                    if (cycle > 60) cycle = 60;
                     configManager->Cycle = cycle;
                 }
+                ImGui::PopItemWidth();
                 ImGui::Text("Fan speed is always polled every 1s.");
 
                 ImGui::Spacing();
                 if (ImGui::Button("Save Settings to INI", ImVec2(200 * dpiScale, 40 * dpiScale))) {
-                    // TODO: Implement SaveConfig
-                    Log(LOG_INFO, "Settings saved (simulated).");
+                    // Sync UI state back to configManager before saving
+                    {
+                        std::lock_guard<std::mutex> lock(g_UIState.Mutex);
+                        configManager->ActiveMode = g_UIState.Mode;
+                        configManager->ManFanSpeed = g_UIState.ManualLevel;
+                        configManager->ControlAlgorithm = (int)g_UIState.Algorithm;
+                        configManager->PID_Target = g_UIState.PID.targetTemp;
+                        configManager->PID_Kp = g_UIState.PID.Kp;
+                        configManager->PID_Ki = g_UIState.PID.Ki;
+                        configManager->PID_Kd = g_UIState.PID.Kd;
+                    }
+                    if (configManager->SaveConfig("TPFanCtrl2.ini")) {
+                        g_AppLog.AddLog("[Config] Settings saved to TPFanCtrl2.ini");
+                    } else {
+                        g_AppLog.AddLog("[Config] ERROR: Failed to save settings!");
+                    }
                 }
                 
                 ImGui::EndChild();
@@ -718,15 +875,6 @@ int main(int argc, char** argv) {
         ImGui::Render();
         ImDrawData* draw_data = ImGui::GetDrawData();
         
-        ImGui_ImplVulkanH_Window* wd = &g_MainWindowData;
-        VkSemaphore image_acquired_semaphore  = wd->FrameSemaphores[wd->SemaphoreIndex].ImageAcquiredSemaphore;
-        VkSemaphore render_complete_semaphore = wd->FrameSemaphores[wd->SemaphoreIndex].RenderCompleteSemaphore;
-        VkResult err = vkAcquireNextImageKHR(g_Device, wd->Swapchain, UINT64_MAX, image_acquired_semaphore, VK_NULL_HANDLE, &wd->FrameIndex);
-        if (err == VK_ERROR_OUT_OF_DATE_KHR || err == VK_SUBOPTIMAL_KHR) {
-            // Handle resize
-            continue;
-        }
-
         ImGui_ImplVulkanH_Frame* fd = &wd->Frames[wd->FrameIndex];
         vkWaitForFences(g_Device, 1, &fd->Fence, VK_TRUE, UINT64_MAX);
         vkResetFences(g_Device, 1, &fd->Fence);
@@ -772,7 +920,10 @@ int main(int argc, char** argv) {
         p_info.swapchainCount = 1;
         p_info.pSwapchains = &wd->Swapchain;
         p_info.pImageIndices = &wd->FrameIndex;
-        vkQueuePresentKHR(g_Queue, &p_info);
+        err = vkQueuePresentKHR(g_Queue, &p_info);
+        if (err == VK_ERROR_OUT_OF_DATE_KHR || err == VK_SUBOPTIMAL_KHR) {
+            g_SwapChainRebuild = true;
+        }
 
         wd->SemaphoreIndex = (wd->SemaphoreIndex + 1) % wd->SemaphoreCount;
     }
@@ -813,6 +964,28 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam)) return true;
     
     switch (msg) {
+    case WM_SIZE:
+        if (wParam != SIZE_MINIMIZED) {
+            g_SwapChainRebuild = true;
+            g_SwapChainResizeWidth = (int)LOWORD(lParam);
+            g_SwapChainResizeHeight = (int)HIWORD(lParam);
+        }
+        return 0;
+    case WM_PAINT:
+        if (g_SwapChainRebuild) {
+            PAINTSTRUCT ps;
+            BeginPaint(hWnd, &ps);
+            EndPaint(hWnd, &ps);
+            return 0;
+        }
+        break;
+    case WM_GETMINMAXINFO:
+        {
+            MINMAXINFO* mmi = (MINMAXINFO*)lParam;
+            mmi->ptMinTrackSize.x = 400;
+            mmi->ptMinTrackSize.y = 300;
+        }
+        return 0;
     case WM_TRAYICON:
         if (LOWORD(lParam) == WM_LBUTTONDBLCLK) {
             ShowWindow(hWnd, SW_RESTORE);

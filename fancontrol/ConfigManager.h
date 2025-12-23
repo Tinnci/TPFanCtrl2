@@ -46,6 +46,13 @@ public:
     int MinimizeOnClose = 1;
     int UseTWR = 0;
 
+    // PID Settings
+    float PID_Target = 60.0f;
+    float PID_Kp = 0.5f;
+    float PID_Ki = 0.01f;
+    float PID_Kd = 0.1f;
+    int ControlAlgorithm = 0; // 0: Step, 1: PID
+
     std::vector<SmartLevel> SmartLevels1;
     std::vector<SmartLevel> SmartLevels2;
     std::vector<int> IconLevels = {50, 55, 60};
@@ -66,6 +73,8 @@ public:
     Hotkey HK_TG_BM = {0, 0};
     Hotkey HK_TG_MS = {0, 0};
     Hotkey HK_TG_12 = {0, 0};
+
+    bool SaveConfig(const std::string& filename);
 
 private:
     void ParseLine(const std::string& line);
