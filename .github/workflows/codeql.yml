@@ -33,15 +33,23 @@ jobs:
       with:
         xmake-version: latest
 
+    - name: Get xmake cachedir
+      id: xmake-cachedir
+      run: echo "dir=$(xmake l -c 'print(global.get("cachedir"))')" >> $env:GITHUB_OUTPUT
+      shell: pwsh
+
+    - name: Cache xmake
+      uses: actions/cache@v4
+      with:
+        path: ${{ steps.xmake-cachedir.outputs.dir }}
+        key: ${{ runner.os }}-xmake-${{ hashFiles('xmake.lua') }}
+        restore-keys: |
+          ${{ runner.os }}-xmake-
+
     - name: Setup MSVC
       uses: ilammy/msvc-dev-cmd@v1
       with:
         arch: x86
-
-    - name: Configure xmake
-      run: xmake f -m release -a x86 -y
-      env:
-        XMAKE_PCH: false
 
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v4
@@ -49,10 +57,17 @@ jobs:
         languages: ${{ matrix.language }}
         queries: security-extended,security-and-quality
 
+    - name: Configure xmake
+      run: xmake f -m release -a x86 -y
+      env:
+        XMAKE_PCH: false
+      shell: pwsh
+
     - name: Build with xmake
       run: xmake -y -v
       env:
         XMAKE_PCH: false
+      shell: pwsh
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4
