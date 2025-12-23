@@ -1,6 +1,6 @@
 -- Project Information
 set_project("TPFanCtrl2")
-set_version("2.5.0", {build = function () 
+set_version("2.6.0", {build = function () 
     return try { function() return os.ioread("git rev-parse --short HEAD"):trim() end } or "unknown"
 end})
 
