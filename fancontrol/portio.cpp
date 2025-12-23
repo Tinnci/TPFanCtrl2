@@ -19,48 +19,9 @@
 #include "fancontrol.h"
 #include "TVicPort.h"
 
-// Registers of the embedded controller
-// V0.6.3+ V.2.2.0+
-constexpr auto ACPI_EC_TYPE1_CTRLPORT = 0x1604;
-constexpr auto ACPI_EC_TYPE1_DATAPORT = 0x1600  ;
-// V0.6.2 final
-constexpr auto ACPI_EC_TYPE2_CTRLPORT = 0x66  ;
-constexpr auto ACPI_EC_TYPE2_DATAPORT = 0x62   ;
+// Note: EC constants and low-level EC access functions have been moved to ECManager.
+// This file now only contains thin wrappers for backward compatibility.
 
-// Embedded controller status register bits
-constexpr auto ACPI_EC_FLAG_OBF = 0x01	/* Output buffer full */;
-constexpr auto ACPI_EC_FLAG_IBF = 0x02	/* Input buffer full */;
-constexpr auto ACPI_EC_FLAG_CMD = 0x08	/* Input buffer contains a command */;
-
-// Embedded controller commands
-constexpr auto ACPI_EC_COMMAND_READ = (char)0x80;
-constexpr auto ACPI_EC_COMMAND_WRITE = (char)0x81;
-constexpr auto ACPI_EC_BURST_ENABLE = (char)0x82;
-constexpr auto ACPI_EC_BURST_DISABLE = (char)0x83;
-constexpr auto ACPI_EC_COMMAND_QUERY = (char)0x84;
-
-//--------------------------------------------------------------------------
-// wait for the desired status from the embedded controller (EC) via port io 
-//--------------------------------------------------------------------------
-static bool
-WaitForFlags(USHORT port, char flags, int onoff = false, int timeout = 1000) {
-	char data;
-
-	int time = 0, sleepTicks = 10;
-
-	// wait for flags to clear and reach desired state
-	for (time = 0; time < timeout; time += sleepTicks) {
-		data = ReadPort(port);
-
-		int flagstate = (data & flags) != 0;
-		int	wantedstate = onoff != 0;
-
-		if (flagstate == wantedstate) return TRUE;
-
-		::Sleep(sleepTicks);
-	}
-	return false;
-}
 
 //-------------------------------------------------------------------------
 // read a byte from the embedded controller (EC) via port io 
