@@ -583,7 +583,7 @@ int main(int argc, char** argv) {
         MessageBoxW(NULL, L"Could not initialize TVicPort driver.\nEnsure TVicPort.dll is present and you are running as Administrator.", L"Driver Error", MB_OK | MB_ICONERROR);
     }
 
-    auto ecManager = std::make_shared<ECManager>(std::make_shared<TVicPortProvider>(), [](const char* msg) { g_AppLog.AddLog("[EC] %s", msg); });
+    auto ecManager = std::make_shared<ECManager>(std::make_shared<TVicPortProvider>(), [](const char* msg) { g_AppLog.AddLog("[EC] {}", msg); });
     auto sensorManager = std::make_shared<SensorManager>(ecManager);
     
     // Initialize Sensor Names (matching original TPFanControl)
@@ -603,7 +603,7 @@ int main(int argc, char** argv) {
     auto fanController = std::make_shared<FanController>(ecManager);
 
     fanController->SetOnChangeCallback([](int level) {
-        g_AppLog.AddLog("[Fan] Level changed to %d", level);
+        g_AppLog.AddLog("[Fan] Level changed to {}", level);
     });
 
     // Window Init
