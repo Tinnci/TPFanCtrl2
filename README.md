@@ -6,6 +6,14 @@
 
 **TPFanCtrl2** is a modernized, high-performance fan control utility for ThinkPad laptops on Windows 10/11. This version is a complete overhaul of the original TPFC, featuring a modern GUI, advanced control algorithms, and full DPI awareness.
 
+## 📸 Screenshots
+
+<p align="center">
+  <img src="assets/eng.png" alt="English Dashboard" width="30%">
+  <img src="assets/chn.png" alt="Chinese Dashboard" width="30%">
+  <img src="assets/eng2.png" alt="English Settings" width="30%">
+</p>
+
 ---
 
 ## ✨ Key Features
