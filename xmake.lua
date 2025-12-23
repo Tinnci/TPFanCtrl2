@@ -1,6 +1,14 @@
 -- Project Information
 set_project("TPFanCtrl2")
-set_version("2.2.0")
+
+-- Dynamic versioning from Git tags
+local git_version = os.iorun("git describe --tags --always"):trim()
+if git_version then
+    git_version = git_version:gsub("^v", "")
+    set_version(git_version)
+else
+    set_version("2.2.0") -- Fallback
+end
 
 -- Add dependencies
 add_requires("gtest")
