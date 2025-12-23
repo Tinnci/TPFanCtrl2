@@ -1,14 +1,14 @@
 -- Project Information
 set_project("TPFanCtrl2")
 
--- Dynamic versioning from Git tags
-local git_version = os.iorun("git describe --tags --always"):trim()
-if git_version then
-    git_version = git_version:gsub("^v", "")
-    set_version(git_version)
-else
-    set_version("2.2.0") -- Fallback
-end
+-- Dynamic versioning from Git tags (Xmake 3.0 compatible)
+set_version("2.2.0", {build = function ()
+    import("core.base.os")
+    return try { function() 
+        local v = os.iorun("git describe --tags --always"):trim() 
+        return v:gsub("^v", "")
+    end }
+end})
 
 -- Add dependencies
 add_requires("gtest")
@@ -36,6 +36,7 @@ end
 target("TPFanCtrl2")
     set_kind("binary")
     set_plat("windows")
+
     add_packages("imgui", "vulkan-loader", "freetype", "vulkan-memory-allocator")
     
     -- Set subsystem to Console for debugging (change to WINDOWS for final release)
