@@ -1,0 +1,60 @@
+name: CI
+ 
+on:
+  push:
+    branches: [ main, modernize/baseline ]
+    paths-ignore:
+      - '**.md'
+      - 'doc/**'
+      - 'assets/**'
+      - '.gitignore'
+      - 'LICENSE'
+  pull_request:
+    branches: [ main, modernize/baseline ]
+    paths-ignore:
+      - '**.md'
+      - 'doc/**'
+      - 'assets/**'
+      - '.gitignore'
+      - 'LICENSE'
+ 
+jobs:
+  build:
+    runs-on: windows-latest
+ 
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+ 
+      - name: Setup xmake
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: latest
+ 
+      - name: Get xmake cachedir
+        id: xmake-cachedir
+        run: echo "dir=$(xmake l -c 'print(global.get("cachedir"))')" >> $GITHUB_OUTPUT
+        shell: bash
+ 
+      - name: Cache xmake
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.xmake-cachedir.outputs.dir }}
+          key: ${{ runner.os }}-xmake-v1-${{ hashFiles('xmake.lua') }}
+          restore-keys: |
+            ${{ runner.os }}-xmake-v1-
+ 
+      - name: Setup MSVC (x86)
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x86
+ 
+      - name: Configure and Build
+        run: |
+          xmake f -m release -a x86 -y
+          xmake -y
+ 
+      - name: Run Tests
+        run: |
+          xmake run logic_test

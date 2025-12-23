@@ -1,46 +1,29 @@
-name: Build and Release
-
+name: Release
+ 
 on:
   push:
-    branches: [ main, modernize/baseline ]
     tags:
       - 'v*'
-    paths-ignore:
-      - '**.md'
-      - 'doc/**'
-      - 'assets/**'
-      - '.gitignore'
-      - 'LICENSE'
-      - '.github/workflows/codeql.yml'
-  pull_request:
-    branches: [ main, modernize/baseline ]
-    paths-ignore:
-      - '**.md'
-      - 'doc/**'
-      - 'assets/**'
-      - '.gitignore'
-      - 'LICENSE'
-      - '.github/workflows/codeql.yml'
-
+ 
 jobs:
   build:
     runs-on: windows-latest
-
+ 
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-
+ 
       - name: Setup xmake
         uses: xmake-io/github-action-setup-xmake@v1
         with:
           xmake-version: latest
-
+ 
       - name: Get xmake cachedir
         id: xmake-cachedir
         run: echo "dir=$(xmake l -c 'print(global.get("cachedir"))')" >> $GITHUB_OUTPUT
         shell: bash
-
+ 
       - name: Cache xmake
         uses: actions/cache@v4
         with:
@@ -48,12 +31,12 @@ jobs:
           key: ${{ runner.os }}-xmake-v1-${{ hashFiles('xmake.lua') }}
           restore-keys: |
             ${{ runner.os }}-xmake-v1-
-
+ 
       - name: Setup MSVC (x86)
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x86
-
+ 
       - name: Get Version
         id: get_version
         run: |
@@ -61,16 +44,16 @@ jobs:
           if [ -z "$VERSION" ]; then echo "Error: Version extraction failed"; exit 1; fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
         shell: bash
-
+ 
       - name: Configure and Build
         run: |
           xmake f -m release -a x86 -y
           xmake -y
-
+ 
       - name: Run Tests
         run: |
           xmake run logic_test
-
+ 
       - name: Prepare Artifacts
         run: |
           $ver = "${{ steps.get_version.outputs.version }}"
@@ -79,7 +62,7 @@ jobs:
           Copy-Item "fancontrol/TPFanCtrl2.ini" -Destination "release_assets/"
           Compress-Archive -Path "release_assets/*" -DestinationPath "TPFanCtrl2-v$ver.zip"
         shell: pwsh
-
+ 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -87,10 +70,9 @@ jobs:
           path: |
             release_assets/*
             *.zip
-
+ 
   release:
     needs: build
-    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -100,7 +82,7 @@ jobs:
         with:
           name: TPFanCtrl2-Windows-x86
           path: ./release_assets
-
+ 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
