@@ -21,6 +21,7 @@
 #include <cstdarg>
 #include <ctime>
 #include <format>
+#include <cmath>
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/msvc_sink.h>
@@ -230,6 +231,51 @@ void DrawSimplePlot(const char* label, const std::map<std::string, std::deque<fl
     }
 
     ImGui::Dummy(canvas_sz); // Advance cursor
+}
+
+void DrawPIDRadarChart(const PIDSettings& pid, float dpiScale) {
+    ImVec2 size = ImVec2(200 * dpiScale, 200 * dpiScale);
+    
+    ImVec2 pos = ImGui::GetCursorScreenPos();
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+    ImVec2 center = ImVec2(pos.x + size.x / 2, pos.y + size.y / 2);
+    float radius = (size.x / 2) * 0.7f;
+
+    // Background circles
+    for (int i = 1; i <= 4; i++) {
+        draw_list->AddCircle(center, radius * i / 4.0f, IM_COL32(100, 100, 100, 80), 32);
+    }
+
+    // Axes
+    const char* labels[] = { "Kp", "Ki", "Kd" };
+    // Reasonable max values for visualization
+    float maxValues[] = { 2.0f, 0.1f, 1.0f };
+    float values[] = { pid.Kp, pid.Ki, pid.Kd };
+    ImVec2 points[3];
+
+    for (int i = 0; i < 3; i++) {
+        float angle = i * 2.0f * 3.1415926535f / 3.0f - 3.1415926535f / 2.0f;
+        ImVec2 axisEnd = ImVec2(center.x + cosf(angle) * radius, center.y + sinf(angle) * radius);
+        draw_list->AddLine(center, axisEnd, IM_COL32(150, 150, 150, 150));
+        
+        // Label
+        ImVec2 labelPos = ImVec2(center.x + cosf(angle) * (radius + 25 * dpiScale), center.y + sinf(angle) * (radius + 15 * dpiScale));
+        ImVec2 labelSize = ImGui::CalcTextSize(labels[i]);
+        draw_list->AddText(ImVec2(labelPos.x - labelSize.x / 2, labelPos.y - labelSize.y / 2), IM_COL32(200, 200, 200, 255), labels[i]);
+
+        // Value point
+        float valNorm = values[i] / maxValues[i];
+        if (valNorm > 1.2f) valNorm = 1.2f; // Allow some overflow but cap it
+        if (valNorm < 0.0f) valNorm = 0.0f;
+        points[i] = ImVec2(center.x + cosf(angle) * radius * valNorm, center.y + sinf(angle) * radius * valNorm);
+    }
+
+    // Draw polygon
+    draw_list->AddConvexPolyFilled(points, 3, IM_COL32(255, 100, 100, 100));
+    draw_list->AddPolyline(points, 3, IM_COL32(255, 100, 100, 255), ImDrawFlags_Closed, 2.0f * dpiScale);
+
+    ImGui::Dummy(size);
 }
 
 // --- Logging System ---
@@ -1122,6 +1168,7 @@ int main(int argc, char** argv) {
                         std::lock_guard<std::mutex> lock(g_UIState.Mutex);
                         float itemWidth = 200 * dpiScale;
                         
+                        ImGui::BeginGroup();
                         ImGui::Text("%s:", _TR("LBL_TARGET_TEMP")); ImGui::SameLine(150 * dpiScale);
                         ImGui::PushItemWidth(itemWidth);
                         ImGui::InputFloat("##Target", &g_UIState.PID.targetTemp, 1.0f, 5.0f, "%.1f\xC2\xB0\x43");
@@ -1141,6 +1188,16 @@ int main(int argc, char** argv) {
                         ImGui::PushItemWidth(itemWidth);
                         ImGui::InputFloat("##Kd", &g_UIState.PID.Kd, 0.01f, 0.1f, "%.3f");
                         ImGui::PopItemWidth();
+                        ImGui::EndGroup();
+
+                        // Radar Chart Visualization
+                        ImGui::SameLine(ImGui::GetWindowWidth() - 250 * dpiScale);
+                        ImGui::BeginGroup();
+                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.6f, 0.6f, 0.6f, 1.0f));
+                        ImGui::Text("%s", _TR("LBL_PID_VISUAL"));
+                        ImGui::PopStyleColor();
+                        DrawPIDRadarChart(g_UIState.PID, dpiScale);
+                        ImGui::EndGroup();
                         
                         ImGui::Spacing();
                         ImGui::Separator();

@@ -77,6 +77,7 @@ void I18nManager::LoadTranslations() {
     en["LBL_KP"] = "Kp (Prop)";
     en["LBL_KI"] = "Ki (Int)";
     en["LBL_KD"] = "Kd (Deriv)";
+    en["LBL_PID_VISUAL"] = "PID Parameter Visualization";
     en["BTN_RESET_PID"] = "Reset PID to Defaults";
     en["BTN_AUTOTUNE"] = "Start Auto Tune";
     en["BTN_STOP_AUTOTUNE"] = "Stop Auto Tune";
@@ -140,6 +141,7 @@ void I18nManager::LoadTranslations() {
     zh["LBL_KP"] = "Kp (\xE6\xAF\x94\xE4\xBE\x8B)";
     zh["LBL_KI"] = "Ki (\xE7\xA7\xAF\xE5\x88\x86)";
     zh["LBL_KD"] = "Kd (\xE5\xBE\xAE\xE5\x88\x86)";
+    zh["LBL_PID_VISUAL"] = "PID \xE5\x8F\x82\xE6\x95\xB0\xE5\x8F\xAF\xE8\xA7\x86\xE5\x8C\x96";
     zh["BTN_RESET_PID"] = "\xE9\x87\x8D\xE7\xBD\xAE PID \xE4\xB8\xBA\xE9\xBB\x98\xE8\xAE\xA4\xE5\x80\xBC";
     zh["BTN_AUTOTUNE"] = "\xE5\xBC\x80\xE5\xA7\x8B\xE8\x87\xAA\xE5\x8A\xA8\xE6\xA0\xA1\xE5\x87\x86";
     zh["BTN_STOP_AUTOTUNE"] = "\xE5\x81\x9C\xE6\xAD\xA2\xE8\x87\xAA\xE5\x8A\xA8\xE6\xA0\xA1\xE5\x87\x86";
