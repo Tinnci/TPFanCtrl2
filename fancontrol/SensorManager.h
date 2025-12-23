@@ -20,6 +20,15 @@ private:
     std::shared_ptr<ECManager> m_ecManager;
     std::vector<SensorData> m_sensors;
     std::vector<SensorOffset> m_offsets;
+    int m_lastMaxTemp = 0;
+    
+    struct SensorHistory {
+        int values[5] = {0};
+        int count = 0;
+        int lastValid = 0;
+        int invalidCycles = 0;
+    };
+    std::vector<SensorHistory> m_history;
 
     static constexpr int MAX_SENSORS = 12;
 };

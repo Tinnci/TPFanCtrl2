@@ -47,27 +47,27 @@ TEST_F(FanControlTest, SmartControlLogic) {
     
     // Test 2: Temp reaches 55
     mockIO->SetECByte(0x78, 55);
-    sensorManager->UpdateSensors(false, false, false);
+    for(int i=0; i<5; i++) sensorManager->UpdateSensors(false, false, false);
     int maxTemp = sensorManager->GetMaxTemp(maxIndex, "");
     fanController->UpdateSmartControl(maxTemp, levels);
     EXPECT_EQ(fanController->GetCurrentFanCtrl(), 0);
 
     // Test 3: Temp reaches 65
     mockIO->SetECByte(0x78, 65);
-    sensorManager->UpdateSensors(false, false, false);
+    for(int i=0; i<5; i++) sensorManager->UpdateSensors(false, false, false);
     maxTemp = sensorManager->GetMaxTemp(maxIndex, "");
     fanController->UpdateSmartControl(maxTemp, levels);
     EXPECT_EQ(fanController->GetCurrentFanCtrl(), 3);
 
     // Test 4: Hysteresis check (cooling down)
     mockIO->SetECByte(0x78, 59); // Should stay at Fan 3 because 59 > 60 - 2
-    sensorManager->UpdateSensors(false, false, false);
+    for(int i=0; i<5; i++) sensorManager->UpdateSensors(false, false, false);
     maxTemp = sensorManager->GetMaxTemp(maxIndex, "");
     fanController->UpdateSmartControl(maxTemp, levels);
     EXPECT_EQ(fanController->GetCurrentFanCtrl(), 3);
 
     mockIO->SetECByte(0x78, 57); // Should drop to Fan 0 because 57 < 60 - 2
-    sensorManager->UpdateSensors(false, false, false);
+    for(int i=0; i<5; i++) sensorManager->UpdateSensors(false, false, false);
     maxTemp = sensorManager->GetMaxTemp(maxIndex, "");
     fanController->UpdateSmartControl(maxTemp, levels);
     EXPECT_EQ(fanController->GetCurrentFanCtrl(), 0);

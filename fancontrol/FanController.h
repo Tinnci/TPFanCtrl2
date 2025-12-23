@@ -25,6 +25,7 @@ public:
     FanController(std::shared_ptr<ECManager> ecManager);
 
     bool SetFanLevel(int level, bool isDualFan = true);
+    bool SetFanLevels(int level1, int level2);
     bool UpdateSmartControl(int maxTemp, const std::vector<SmartLevel>& levels);
     bool UpdatePIDControl(float currentTemp, const PIDSettings& settings, float dt);
     

@@ -7,6 +7,7 @@ SensorManager::SensorManager(std::shared_ptr<ECManager> ecManager)
     : m_ecManager(ecManager) {
     m_sensors.resize(MAX_SENSORS);
     m_offsets.resize(MAX_SENSORS, {0, -1, -1});
+    m_history.resize(MAX_SENSORS);
 }
 
 void SensorManager::SetOffset(int index, int offset, int hystMin, int hystMax) {
@@ -34,20 +35,52 @@ bool SensorManager::UpdateSensors(bool showBiasedTemps, bool noExtSensor, bool u
             return false;
         }
         
-        m_sensors[idx].rawTemp = (unsigned char)temp;
+        int raw = (unsigned char)temp;
+        bool isValid = (raw > 0 && raw < 128);
         
-        // Mark as available if temperature is valid
-        if (m_sensors[idx].rawTemp > 0 && m_sensors[idx].rawTemp < 128) {
-            m_sensors[idx].isAvailable = true;
+        // Special case: 0 might be valid on cold start if it's the very first reading
+        if (raw == 0 && !m_sensors[idx].isAvailable) {
+            isValid = true; 
         }
+
+        if (isValid) {
+            m_sensors[idx].isAvailable = true;
+            m_history[idx].lastValid = raw;
+            m_history[idx].invalidCycles = 0;
+            
+            // Update moving average
+            m_history[idx].values[m_history[idx].count % 5] = raw;
+            m_history[idx].count++;
+        } else {
+            // If invalid, use last valid for a few cycles to prevent fan jitter/stoppage
+            if (m_sensors[idx].isAvailable && m_history[idx].invalidCycles < 3) {
+                raw = m_history[idx].lastValid;
+                m_history[idx].invalidCycles++;
+            } else {
+                // Truly invalid or timed out
+                m_sensors[idx].rawTemp = raw;
+                m_sensors[idx].biasedTemp = raw;
+                return true;
+            }
+        }
+
+        // Calculate smoothed value
+        int sum = 0;
+        int samples = (std::min)(m_history[idx].count, 5);
+        for (int i = 0; i < samples; i++) {
+            sum += m_history[idx].values[i];
+        }
+        int smoothed = sum / samples;
+
+        m_sensors[idx].rawTemp = smoothed;
 
         // Apply offset with hysteresis
         int offset = m_offsets[idx].offset;
-        if (m_sensors[idx].rawTemp >= m_offsets[idx].hystMin && 
-            m_sensors[idx].rawTemp <= m_offsets[idx].hystMax) {
+        if (smoothed >= m_offsets[idx].hystMin && 
+            smoothed <= m_offsets[idx].hystMax) {
             offset = 0;
         }
-        m_sensors[idx].biasedTemp = m_sensors[idx].rawTemp - offset;
+        m_sensors[idx].biasedTemp = smoothed - offset;
         return true;
     };
 
@@ -77,6 +110,7 @@ bool SensorManager::UpdateSensors(bool showBiasedTemps, bool noExtSensor, bool u
 int SensorManager::GetMaxTemp(int& maxIndex, const std::string& ignoreList) const {
     int maxTemp = 0;
     maxIndex = 0;
+    int validCount = 0;
 
     for (int i = 0; i < MAX_SENSORS; i++) {
         // 1. Skip if not available (never returned a valid reading)
@@ -92,11 +126,20 @@ int SensorManager::GetMaxTemp(int& maxIndex, const std::string& ignoreList) cons
             continue;
         }
 
-        int temp = m_sensors[i].biasedTemp;
+        validCount++;
+        int temp = (int)(m_sensors[i].biasedTemp * m_sensors[i].weight);
         if (temp > maxTemp) {
             maxTemp = temp;
             maxIndex = i;
         }
     }
+
+    // If no valid sensors found, but we had some before, return last known max
+    // to prevent fan from stopping suddenly.
+    if (validCount == 0 && m_lastMaxTemp > 0) {
+        return m_lastMaxTemp;
+    }
+
+    const_cast<SensorManager*>(this)->m_lastMaxTemp = maxTemp;
     return maxTemp;
 }

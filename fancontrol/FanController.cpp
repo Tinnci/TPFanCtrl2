@@ -57,6 +57,42 @@ bool FanController::SetFanLevel(int level, bool isDualFan) {
     return ok;
 }
 
+bool FanController::SetFanLevels(int level1, int level2) {
+    std::lock_guard<std::recursive_timed_mutex> lock(m_ecManager->GetMutex());
+    bool ok1 = false, ok2 = false;
+
+    for (int i = 0; i < 3; i++) {
+        // Set Fan 1
+        m_ecManager->WriteByte(TP_ECOFFSET_FAN_SWITCH, TP_ECVALUE_SELFAN1);
+        m_ecManager->WriteByte(TP_ECOFFSET_FAN, (char)level1);
+        ::Sleep(50);
+
+        // Set Fan 2
+        m_ecManager->WriteByte(TP_ECOFFSET_FAN_SWITCH, TP_ECVALUE_SELFAN2);
+        m_ecManager->WriteByte(TP_ECOFFSET_FAN, (char)level2);
+        ::Sleep(50);
+
+        // Verify
+        char c1, c2;
+        m_ecManager->WriteByte(TP_ECOFFSET_FAN_SWITCH, TP_ECVALUE_SELFAN1);
+        m_ecManager->ReadByte(TP_ECOFFSET_FAN, &c1);
+        m_ecManager->WriteByte(TP_ECOFFSET_FAN_SWITCH, TP_ECVALUE_SELFAN2);
+        m_ecManager->ReadByte(TP_ECOFFSET_FAN, &c2);
+
+        if ((unsigned char)c1 == (unsigned char)level1 && (unsigned char)c2 == (unsigned char)level2) {
+            ok1 = ok2 = true;
+            break;
+        }
+        ::Sleep(100);
+    }
+
+    if (ok1 && ok2) {
+        m_currentFanCtrl = level1; // For legacy compatibility
+        if (m_onChange) m_onChange(level1);
+    }
+    return ok1 && ok2;
+}
+
 bool FanController::UpdateSmartControl(int maxTemp, const std::vector<SmartLevel>& levels) {
     if (levels.empty()) return false;
 

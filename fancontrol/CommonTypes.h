@@ -29,5 +29,6 @@ struct SensorData {
     int addr;
     int rawTemp;
     int biasedTemp;
+    float weight = 1.0f;
     bool isAvailable = false; // True if it has ever returned a valid reading
 };
