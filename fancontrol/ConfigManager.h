@@ -45,6 +45,7 @@ public:
     int MinimizeToSysTray = 1;
     int MinimizeOnClose = 1;
     int UseTWR = 0;
+    std::string Language = "en";
 
     // PID Settings
     float PID_Target = 60.0f;

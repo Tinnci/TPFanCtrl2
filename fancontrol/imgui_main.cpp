@@ -42,6 +42,7 @@
 #include "TVicPortProvider.h"
 #include "TVicPort.h"
 #include "DynamicIcon.h"
+#include "I18nManager.h"
 
 // --- Tray Constants ---
 #define WM_TRAYICON (WM_USER + 100)
@@ -125,7 +126,11 @@ void UpdateTrayIcon(HWND hWnd, int temp, int fan) {
     nid.hIcon = hIcon;
     
     wchar_t tip[128];
-    swprintf_s(tip, L"TPFanCtrl2\nTemp: %d°C\nFan: %d RPM", temp, fan);
+    wchar_t wTemp[32], wFan[32];
+    MultiByteToWideChar(CP_UTF8, 0, _TR("LBL_TEMP"), -1, wTemp, 32);
+    MultiByteToWideChar(CP_UTF8, 0, _TR("LBL_FAN"), -1, wFan, 32);
+
+    swprintf_s(tip, L"TPFanCtrl2\n%s: %d\u00B0\x43\n%s: %d RPM", wTemp, temp, wFan, fan);
     wcscpy_s(nid.szTip, tip);
 
     Shell_NotifyIconW(NIM_MODIFY, &nid);
@@ -469,6 +474,7 @@ int main(int argc, char** argv) {
     // Logic Init
     g_Config = std::make_shared<ConfigManager>();
     g_Config->LoadConfig("TPFanCtrl2.ini");
+    I18nManager::Get().SetLanguage(g_Config->Language);
 
     // Sync UI State with Config
     {
@@ -576,9 +582,20 @@ int main(int argc, char** argv) {
     // 1. Optimize Font Rendering with FreeType
     ImFontConfig font_cfg;
     font_cfg.FontLoaderFlags |= ImGuiFreeTypeBuilderFlags_LightHinting;
-    ImFont* mainFont = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segoeui.ttf", 18.0f * dpiScale, &font_cfg);
+    
+    // Try to load a font that supports Chinese to allow dynamic language switching
+    ImFont* mainFont = nullptr;
+    const char* msyhPath = "C:\\Windows\\Fonts\\msyh.ttc";
+    if (::GetFileAttributesA(msyhPath) != INVALID_FILE_ATTRIBUTES) {
+        mainFont = io.Fonts->AddFontFromFileTTF(msyhPath, 18.0f * dpiScale, &font_cfg, io.Fonts->GetGlyphRangesChineseSimplifiedCommon());
+    }
+    
     if (!mainFont) {
-        Log(LOG_WARN, "Failed to load segoeui.ttf, using default font.");
+        mainFont = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segoeui.ttf", 18.0f * dpiScale, &font_cfg, io.Fonts->GetGlyphRangesDefault());
+    }
+
+    if (!mainFont) {
+        Log(LOG_WARN, "Failed to load system fonts, using default font.");
     }
     
     // 2. Load Icons (Segoe MDL2 Assets is built-in on Windows 10+)
@@ -762,26 +779,26 @@ int main(int argc, char** argv) {
             if (maxTemp > 65) tempColor = ImVec4(1, 0.6f, 0, 1);
             if (maxTemp > 85) tempColor = ImVec4(1, 0.2f, 0.2f, 1);
             
-            ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1), "MAX TEMPERATURE");
-            ImGui::TextColored(tempColor, "%d°C", maxTemp);
+            ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1), _TR("LBL_MAX_TEMP"));
+            ImGui::TextColored(tempColor, "%d\xC2\xB0\x43", maxTemp);
             ImGui::SameLine();
             ImGui::TextColored(ImVec4(0.4f, 0.4f, 0.4f, 1), "(%s)", maxName.c_str());
             
             ImGui::NextColumn();
             
             // Fan Metric
-            ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1), "FAN SPEEDS");
+            ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1), _TR("LBL_FAN_SPEEDS"));
             ImGui::Text("%s %d RPM", ICON_FAN, f1);
             if (f2 > 0) ImGui::Text("%s %d RPM", ICON_FAN, f2);
             
             ImGui::NextColumn();
             
             // Mode Metric
-            const char* modeStr = "BIOS";
-            if (g_UIState.Mode == 1) modeStr = "MANUAL";
-            else if (g_UIState.Mode == 2) modeStr = (g_UIState.Algorithm == ControlAlgorithm::Step ? "SMART (STEP)" : "SMART (PID)");
+            const char* modeStr = _TR("MODE_BIOS");
+            if (g_UIState.Mode == 1) modeStr = _TR("MODE_MANUAL");
+            else if (g_UIState.Mode == 2) modeStr = (g_UIState.Algorithm == ControlAlgorithm::Step ? _TR("LBL_SMART_STEP") : _TR("LBL_SMART_PID"));
             
-            ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1), "CONTROL MODE");
+            ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1), _TR("LBL_CONTROL_MODE"));
             ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), "%s", modeStr);
             
             ImGui::Columns(1);
@@ -793,13 +810,13 @@ int main(int argc, char** argv) {
 
         // --- 2. Main Content (Tabs) ---
         if (ImGui::BeginTabBar("MainTabs", ImGuiTabBarFlags_None)) {
-            if (ImGui::BeginTabItem("Dashboard")) {
+            if (ImGui::BeginTabItem(_TR("TAB_DASHBOARD"))) {
                 if (ImGui::BeginTable("Layout", 2, ImGuiTableFlags_Resizable)) {
                     ImGui::TableNextColumn();
                     
                     // --- Left Column: Sensors & Fan ---
                     ImGui::BeginChild("Sensors", ImVec2(0, 380 * dpiScale), true, ImGuiWindowFlags_None);
-                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), "Sensors");
+                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), _TR("SECTION_STATUS"));
                     ImGui::Separator();
                     ImGui::Spacing();
                     {
@@ -824,7 +841,7 @@ int main(int argc, char** argv) {
                             ImGui::PushStyleColor(ImGuiCol_PlotHistogram, color);
                             ImGui::Text("%s %-8s", (s.name.find("GPU") != std::string::npos ? ICON_GPU : ICON_CPU), s.name.c_str());
                             ImGui::SameLine(ImGui::GetContentRegionAvail().x - 50 * dpiScale);
-                            ImGui::Text("%.1f°C", currentTemp);
+                            ImGui::Text("%.1f\xC2\xB0\x43", currentTemp);
                             ImGui::ProgressBar(progress, ImVec2(-1, 6 * dpiScale), "");
                             ImGui::PopStyleColor();
                             ImGui::Spacing();
@@ -833,24 +850,24 @@ int main(int argc, char** argv) {
                     ImGui::EndChild();
 
                     ImGui::BeginChild("Control", ImVec2(0, 0), true);
-                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), "Quick Control");
+                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), _TR("SECTION_CONTROL"));
                     ImGui::Separator();
                     ImGui::Spacing();
                     {
                         std::lock_guard<std::mutex> lock(g_UIState.Mutex);
                         ImGui::PushItemWidth(-1);
-                        if (ImGui::RadioButton("BIOS", &g_UIState.Mode, 0)) {} ImGui::SameLine();
-                        if (ImGui::RadioButton("Manual", &g_UIState.Mode, 1)) {} ImGui::SameLine();
-                        if (ImGui::RadioButton("Smart", &g_UIState.Mode, 2)) {}
+                        if (ImGui::RadioButton(_TR("MODE_BIOS"), &g_UIState.Mode, 0)) {} ImGui::SameLine();
+                        if (ImGui::RadioButton(_TR("MODE_MANUAL"), &g_UIState.Mode, 1)) {} ImGui::SameLine();
+                        if (ImGui::RadioButton(_TR("MODE_SMART"), &g_UIState.Mode, 2)) {}
                         ImGui::PopItemWidth();
 
                         ImGui::Spacing();
                         if (g_UIState.Mode == 1) {
-                            ImGui::Text("Manual Level:");
+                            ImGui::Text(_TR("LBL_MANUAL_LEVEL"));
                             ImGui::SliderInt("##Level", &g_UIState.ManualLevel, 0, 7);
                         } else if (g_UIState.Mode == 2) {
-                            ImGui::Text("Algorithm:");
-                            const char* algoNames[] = { "Step (Classic)", "PID (Modern)" };
+                            ImGui::Text(_TR("LBL_ALGORITHM"));
+                            const char* algoNames[] = { _TR("ALGO_STEP"), _TR("ALGO_PID") };
                             int algoIdx = (int)g_UIState.Algorithm;
                             ImGui::PushItemWidth(-1);
                             if (ImGui::Combo("##Algo", &algoIdx, algoNames, 2)) {
@@ -860,7 +877,7 @@ int main(int argc, char** argv) {
                         }
                     }
                     ImGui::Spacing();
-                    if (ImGui::Button("Minimize to Tray", ImVec2(-1, 35 * dpiScale))) {
+                    if (ImGui::Button(_TR("BTN_MINIMIZE"), ImVec2(-1, 35 * dpiScale))) {
                         ::ShowWindow(hwnd, SW_HIDE);
                     }
                     ImGui::EndChild();
@@ -869,7 +886,7 @@ int main(int argc, char** argv) {
                     
                     // --- Right Column: History & Logs ---
                     ImGui::BeginChild("History", ImVec2(0, 380 * dpiScale), true);
-                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), "History");
+                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), _TR("SECTION_HISTORY"));
                     ImGui::Separator();
                     ImGui::Spacing();
                     {
@@ -879,7 +896,7 @@ int main(int argc, char** argv) {
                     ImGui::EndChild();
 
                     ImGui::BeginChild("Logs", ImVec2(0, 0), true);
-                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), "System Logs");
+                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), _TR("SECTION_LOGS"));
                     ImGui::Separator();
                     {
                         std::lock_guard<std::mutex> lock(g_AppLog.Mutex);
@@ -899,38 +916,49 @@ int main(int argc, char** argv) {
                 ImGui::EndTabItem();
             }
 
-            if (ImGui::BeginTabItem("Settings")) {
+            if (ImGui::BeginTabItem(_TR("TAB_SETTINGS"))) {
                 ImGui::BeginChild("SettingsScroll", ImVec2(0, 0), false, ImGuiWindowFlags_AlwaysVerticalScrollbar);
                 
                 if (ImGui::BeginTable("SettingsLayout", 2, ImGuiTableFlags_SizingStretchSame)) {
                     ImGui::TableNextColumn();
                     
                     // --- Left Column: Behavior & Polling ---
-                    ImGui::BeginChild("BehaviorGroup", ImVec2(0, 220 * dpiScale), true);
-                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), ICON_CHIP " Application Behavior");
+                    ImGui::BeginChild("BehaviorGroup", ImVec2(0, 250 * dpiScale), true);
+                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), ICON_CHIP " %s", _TR("SETTING_BEHAVIOR"));
                     ImGui::Separator();
                     ImGui::Spacing();
                     {
                         bool startMin = g_Config->StartMinimized != 0;
-                        if (ImGui::Checkbox("Start Minimized to Tray", &startMin)) g_Config->StartMinimized = startMin;
-                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Automatically hide the window on startup.");
+                        if (ImGui::Checkbox(_TR("OPT_START_MINIMIZED"), &startMin)) g_Config->StartMinimized = startMin;
                         
                         bool minToTray = g_Config->MinimizeToSysTray != 0;
-                        if (ImGui::Checkbox("Minimize to Tray", &minToTray)) g_Config->MinimizeToSysTray = minToTray;
-                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Hide to system tray instead of taskbar when minimized.");
+                        if (ImGui::Checkbox(_TR("OPT_MINIMIZE_TRAY"), &minToTray)) g_Config->MinimizeToSysTray = minToTray;
                         
                         bool minOnClose = g_Config->MinimizeOnClose != 0;
-                        if (ImGui::Checkbox("Close Button Minimizes", &minOnClose)) g_Config->MinimizeOnClose = minOnClose;
-                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Clicking the 'X' button will hide the window instead of exiting.");
+                        if (ImGui::Checkbox(_TR("OPT_MINIMIZE_CLOSE"), &minOnClose)) g_Config->MinimizeOnClose = minOnClose;
+
+                        ImGui::Spacing();
+                        ImGui::Text("Language / \xE8\xAF\xAD\xE8\xA8\x80:");
+                        const auto& langs = I18nManager::Get().GetAvailableLanguages();
+                        if (ImGui::BeginCombo("##Lang", I18nManager::Get().GetCurrentLanguage() == "zh" ? "\xE7\xAE\x80\xE4\xBD\x93\xE4\xB8\xAD\xE6\x96\x87" : "English")) {
+                            for (const auto& lang : langs) {
+                                if (ImGui::Selectable(lang.name.c_str(), I18nManager::Get().GetCurrentLanguage() == lang.code)) {
+                                    I18nManager::Get().SetLanguage(lang.code);
+                                    g_Config->Language = lang.code;
+                                }
+                            }
+                            ImGui::EndCombo();
+                        }
                     }
                     ImGui::EndChild();
 
-                    ImGui::BeginChild("PollingGroup", ImVec2(0, 120 * dpiScale), true);
-                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), ICON_FAN " Hardware Polling");
+                    ImGui::BeginChild("PollingGroup", ImVec2(0, 150 * dpiScale), true);
+                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), ICON_FAN " %s", _TR("SETTING_POLLING"));
                     ImGui::Separator();
                     ImGui::Spacing();
                     {
                         int cycle = g_Config->Cycle;
+                        ImGui::Text(_TR("LBL_CYCLE"));
                         ImGui::PushItemWidth(-1);
                         if (ImGui::InputInt("##Cycle", &cycle)) {
                             if (cycle < 1) cycle = 1;
@@ -938,51 +966,46 @@ int main(int argc, char** argv) {
                             g_Config->Cycle = cycle;
                         }
                         ImGui::PopItemWidth();
-                        ImGui::TextDisabled("Sensor Refresh: %ds", cycle);
-                        ImGui::TextDisabled("Fan RPM Refresh: 1s (Fixed)");
-                        ImGui::TextDisabled("Control Frequency: 100ms (10Hz)");
-                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("The PID/Step logic runs at 10Hz for ultra-smooth fan transitions.");
+                        ImGui::TextDisabled("%s: %ds", _TR("LBL_REFRESH_SENSOR"), cycle);
+                        ImGui::TextDisabled("%s: 1s", _TR("LBL_REFRESH_FAN"));
+                        ImGui::TextDisabled("%s: 100ms (10Hz)", _TR("LBL_REFRESH_CTRL"));
                     }
                     ImGui::EndChild();
 
                     ImGui::TableNextColumn();
 
                     // --- Right Column: PID Parameters ---
-                    ImGui::BeginChild("PIDGroup", ImVec2(0, 350 * dpiScale), true);
-                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), ICON_CPU " PID Controller (Advanced)");
+                    ImGui::BeginChild("PIDGroup", ImVec2(0, 380 * dpiScale), true);
+                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), ICON_CPU " %s", _TR("SETTING_PID"));
                     ImGui::Separator();
                     ImGui::Spacing();
                     {
                         std::lock_guard<std::mutex> lock(g_UIState.Mutex);
                         float itemWidth = -120 * dpiScale;
                         
-                        ImGui::Text("Target Temp:"); ImGui::SameLine(120 * dpiScale);
+                        ImGui::Text("%s:", _TR("LBL_TARGET_TEMP")); ImGui::SameLine(120 * dpiScale);
                         ImGui::PushItemWidth(itemWidth);
-                        ImGui::InputFloat("##Target", &g_UIState.PID.targetTemp, 1.0f, 5.0f, "%.1f°C");
+                        ImGui::InputFloat("##Target", &g_UIState.PID.targetTemp, 1.0f, 5.0f, "%.1f\xC2\xB0\x43");
                         ImGui::PopItemWidth();
-                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("The temperature the PID controller tries to maintain.");
 
-                        ImGui::Text("Kp (Prop):"); ImGui::SameLine(120 * dpiScale);
+                        ImGui::Text("%s:", _TR("LBL_KP")); ImGui::SameLine(120 * dpiScale);
                         ImGui::PushItemWidth(itemWidth);
                         ImGui::InputFloat("##Kp", &g_UIState.PID.Kp, 0.01f, 0.1f, "%.3f");
                         ImGui::PopItemWidth();
-                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Proportional gain: Higher values mean faster response but more oscillation.");
 
-                        ImGui::Text("Ki (Int):"); ImGui::SameLine(120 * dpiScale);
+                        ImGui::Text("%s:", _TR("LBL_KI")); ImGui::SameLine(120 * dpiScale);
                         ImGui::PushItemWidth(itemWidth);
                         ImGui::InputFloat("##Ki", &g_UIState.PID.Ki, 0.001f, 0.01f, "%.4f");
                         ImGui::PopItemWidth();
-                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Integral gain: Eliminates steady-state error but can cause overshoot.");
 
-                        ImGui::Text("Kd (Deriv):"); ImGui::SameLine(120 * dpiScale);
+                        ImGui::Text("%s:", _TR("LBL_KD")); ImGui::SameLine(120 * dpiScale);
                         ImGui::PushItemWidth(itemWidth);
                         ImGui::InputFloat("##Kd", &g_UIState.PID.Kd, 0.01f, 0.1f, "%.3f");
                         ImGui::PopItemWidth();
-                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Derivative gain: Dampens the response and reduces overshoot.");
                         
                         ImGui::Spacing();
                         ImGui::Separator();
-                        if (ImGui::Button("Reset PID to Defaults", ImVec2(-1, 30 * dpiScale))) {
+                        if (ImGui::Button(_TR("BTN_RESET_PID"), ImVec2(-1, 30 * dpiScale))) {
                             g_UIState.PID.targetTemp = 60.0f;
                             g_UIState.PID.Kp = 0.5f;
                             g_UIState.PID.Ki = 0.01f;
@@ -995,9 +1018,9 @@ int main(int argc, char** argv) {
                 }
 
                 ImGui::BeginChild("SensorGroup", ImVec2(0, 200 * dpiScale), true);
-                ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), ICON_GPU " Sensor Management");
+                ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), ICON_GPU " %s", _TR("SETTING_SENSORS"));
                 ImGui::Separator();
-                ImGui::TextDisabled("Uncheck sensors that provide invalid readings. Grayed out sensors have never returned a valid value.");
+                ImGui::TextDisabled("%s", _TR("DESC_SENSORS"));
                 ImGui::Spacing();
                 {
                     std::lock_guard<std::mutex> lock(g_UIState.Mutex);
@@ -1023,7 +1046,7 @@ int main(int argc, char** argv) {
                             if (!s.isAvailable) ImGui::EndDisabled();
                             
                             if (ImGui::IsItemHovered() && !s.isAvailable) {
-                                ImGui::SetTooltip("This sensor index (0x%02X) has not returned any valid temperature data since startup.", s.addr);
+                                ImGui::SetTooltip(_TR("TIP_SENSOR_UNAVAILABLE"), s.addr);
                             }
                         }
                         ImGui::EndTable();
@@ -1033,13 +1056,13 @@ int main(int argc, char** argv) {
 
                 ImGui::Spacing();
                 ImGui::Separator();
-                ImGui::TextDisabled("Debug Info:");
+                ImGui::TextDisabled("%s:", _TR("LBL_DEBUG_INFO"));
                 ImGui::SameLine();
                 ImGui::TextDisabled("DPI: %.2f | Fonts: %d", dpiScale, io.Fonts->Fonts.Size);
                 
                 ImGui::Spacing();
                 
-                if (ImGui::Button(ICON_CHIP " Save All Settings to INI", ImVec2(-1, 50 * dpiScale))) {
+                if (ImGui::Button(_TR("BTN_SAVE_ALL"), ImVec2(-1, 50 * dpiScale))) {
                     {
                         std::lock_guard<std::mutex> lock(g_UIState.Mutex);
                         g_Config->ActiveMode = g_UIState.Mode;
@@ -1051,9 +1074,9 @@ int main(int argc, char** argv) {
                         g_Config->PID_Kd = g_UIState.PID.Kd;
                     }
                     if (g_Config->SaveConfig("TPFanCtrl2.ini")) {
-                        g_AppLog.AddLog("[Config] All settings saved successfully.");
+                        g_AppLog.AddLog("[Config] %s", _TR("LOG_SAVE_SUCCESS"));
                     } else {
-                        g_AppLog.AddLog("[Config] ERROR: Failed to save to TPFanCtrl2.ini");
+                        g_AppLog.AddLog("[Config] %s", _TR("LOG_SAVE_ERROR"));
                     }
                 }
                 

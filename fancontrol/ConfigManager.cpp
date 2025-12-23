@@ -67,6 +67,7 @@ void ConfigManager::ParseLine(const std::string& line) {
     else if (key == "PID_Kd") PID_Kd = std::stof(value);
     else if (key == "ControlAlgorithm") ControlAlgorithm = std::stoi(value);
     else if (key == "IgnoreSensors") IgnoreSensors = value;
+    else if (key == "Language") Language = value;
     else if (key == "MenuLabelSM1") MenuLabelSM1 = value.substr(0, value.find('/'));
     else if (key == "MenuLabelSM2") MenuLabelSM2 = value.substr(0, value.find('/'));
     else if (key == "level") {
@@ -137,6 +138,7 @@ bool ConfigManager::SaveConfig(const std::string& filename) {
     file << "NoExtSensor=" << NoExtSensor << "\n";
     file << "UseTWR=" << UseTWR << "\n";
     file << "IgnoreSensors=" << IgnoreSensors << "\n";
+    file << "Language=" << Language << "\n";
     
     file << "\n; PID Settings\n";
     file << "ControlAlgorithm=" << ControlAlgorithm << "\n";
