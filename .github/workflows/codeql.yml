@@ -46,13 +46,11 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-xmake-v1-
 
-    - name: Setup MSVC
-      uses: ilammy/msvc-dev-cmd@v1
-      with:
-        arch: x86
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
 
     - name: Configure xmake
-      run: xmake f -c -m release -a x86 -y -v
+      run: xmake f -m release -a x86 -y
       env:
         XMAKE_PCH: false
 
