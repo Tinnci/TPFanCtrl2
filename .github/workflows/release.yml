@@ -49,6 +49,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-xmake-v1-
 
+      - name: Get Version
+        id: get_version
+        run: echo "version=$(xmake l -c 'print(project.version())')" >> $GITHUB_OUTPUT
+        shell: bash
+
       - name: Configure and Build
         run: |
           xmake f -m release -a x86 -y
@@ -60,10 +65,11 @@ jobs:
 
       - name: Prepare Artifacts
         run: |
+          $ver = "${{ steps.get_version.outputs.version }}"
           New-Item -ItemType Directory -Force -Path release_assets
           Copy-Item "bin/TPFanCtrl2.exe" -Destination "release_assets/"
           Copy-Item "fancontrol/TPFanCtrl2.ini" -Destination "release_assets/"
-          Compress-Archive -Path "release_assets/*" -DestinationPath "TPFanCtrl2-v$($env:GITHUB_REF_NAME).zip"
+          Compress-Archive -Path "release_assets/*" -DestinationPath "TPFanCtrl2-v$ver.zip"
         shell: pwsh
 
       - name: Upload Artifacts

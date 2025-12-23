@@ -1,6 +1,8 @@
 -- Project Information
 set_project("TPFanCtrl2")
-set_version("2.2.0")
+set_version("2.4.0", {build = function () 
+    return try { function() return os.ioread("git rev-parse --short HEAD"):trim() end } or "unknown"
+end})
 
 -- Add dependencies
 add_requires("gtest")
