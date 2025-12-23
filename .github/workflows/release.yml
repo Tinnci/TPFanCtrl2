@@ -49,9 +49,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-xmake-v1-
 
+      - name: Setup MSVC (x86)
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x86
+
       - name: Get Version
         id: get_version
-        run: echo "version=$(xmake l -c 'print(project.version())')" >> $GITHUB_OUTPUT
+        run: |
+          VERSION=$(xmake l -c "import('core.project.project'); print(project.version())")
+          if [ -z "$VERSION" ]; then echo "Error: Version extraction failed"; exit 1; fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
         shell: bash
 
       - name: Configure and Build
