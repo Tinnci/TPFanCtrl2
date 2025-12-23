@@ -309,10 +309,16 @@ void HardwareWorker(std::shared_ptr<ConfigManager> config,
                 g_UIState.Sensors = sensors->GetSensors();
                 g_UIState.LastUpdate = time(nullptr);
                 for (const auto& s : g_UIState.Sensors) {
-                    g_UIState.SmoothTemps[s.name].Target = (float)s.rawTemp;
-                    auto& history = g_UIState.TempHistory[s.name];
-                    history.push_back((float)s.rawTemp);
-                    if (history.size() > 300) history.pop_front();
+                    // Only record history for valid sensors (0 < temp < 128)
+                    if (s.rawTemp > 0 && s.rawTemp < 128) {
+                        g_UIState.SmoothTemps[s.name].Target = (float)s.rawTemp;
+                        auto& history = g_UIState.TempHistory[s.name];
+                        history.push_back((float)s.rawTemp);
+                        if (history.size() > 300) history.pop_front();
+                    } else {
+                        // If a sensor becomes invalid, we can optionally clear its history
+                        // or just stop updating it. Here we just don't add new points.
+                    }
                 }
             }
             tempCycleCounter = config->Cycle > 0 ? config->Cycle : 1;
