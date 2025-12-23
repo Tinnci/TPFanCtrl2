@@ -26,6 +26,7 @@
 #include "FanController.h"
 #include "ECManager.h"
 #include "TVicPortProvider.h"
+#include "TVicPort.h"
 
 // --- Animation Helper ---
 struct SmoothValue {
@@ -280,6 +281,32 @@ int main(int argc, char** argv) {
     // Logic Init
     auto configManager = std::make_shared<ConfigManager>();
     configManager->LoadConfig("TPFanCtrl2.ini");
+
+    // Initialize Hardware Driver (TVicPort)
+    Log(LOG_INFO, "Initializing TVicPort driver...");
+    bool driverOk = false;
+    for (int i = 0; i < 5; i++) {
+        if (OpenTVicPort()) {
+            driverOk = true;
+            break;
+        }
+        Log(LOG_WARN, "Failed to open TVicPort, retrying... (%d/5)", i + 1);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    }
+
+    if (driverOk) {
+        Log(LOG_INFO, "TVicPort driver opened successfully.");
+        SetHardAccess(TRUE);
+        if (TestHardAccess()) {
+            Log(LOG_INFO, "Hardware access (Ring 0) granted.");
+        } else {
+            Log(LOG_ERROR, "Hardware access denied even with driver opened.");
+        }
+    } else {
+        Log(LOG_ERROR, "CRITICAL: Could not initialize TVicPort driver. Hardware control will not work.");
+        MessageBoxW(NULL, L"Could not initialize TVicPort driver.\nEnsure TVicPort.dll is present and you are running as Administrator.", L"Driver Error", MB_OK | MB_ICONERROR);
+    }
+
     auto ecManager = std::make_shared<ECManager>(std::make_shared<TVicPortProvider>(), [](const char* msg) { g_AppLog.AddLog("[EC] %s", msg); });
     auto sensorManager = std::make_shared<SensorManager>(ecManager);
     auto fanController = std::make_shared<FanController>(ecManager);
@@ -583,6 +610,9 @@ int main(int argc, char** argv) {
     vkDestroyDescriptorPool(g_Device, g_DescriptorPool, g_Allocator);
     vkDestroyDevice(g_Device, g_Allocator);
     vkDestroyInstance(g_Instance, g_Allocator);
+
+    CloseTVicPort();
+    Log(LOG_INFO, "TVicPort driver closed.");
 
     ::DestroyWindow(hwnd);
     ::UnregisterClassW(wc.lpszClassName, wc.hInstance);

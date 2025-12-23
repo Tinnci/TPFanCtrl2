@@ -39,59 +39,79 @@ void ECManager::SwitchECType() {
 
 bool ECManager::ReadByte(int offset, char* pdata) {
     std::lock_guard<std::recursive_timed_mutex> lock(m_mutex);
-    if (!WaitForFlags(m_ctrlPort, ACPI_EC_FLAG_IBF | ACPI_EC_FLAG_OBF)) {
-        if (m_trace) m_trace("readec: timed out #1, switching EC type");
-        SwitchECType();
-        return false;
-    }
+    
+    auto attemptRead = [&]() -> bool {
+        if (!WaitForFlags(m_ctrlPort, ACPI_EC_FLAG_IBF | ACPI_EC_FLAG_OBF)) {
+            return false;
+        }
 
-    m_io->WritePort(m_ctrlPort, ACPI_EC_COMMAND_READ);
+        m_io->WritePort(m_ctrlPort, ACPI_EC_COMMAND_READ);
 
-    if (!WaitForFlags(m_ctrlPort, ACPI_EC_FLAG_IBF)) {
-        if (m_trace) m_trace("readec: timed out #2");
-        return false;
-    }
+        if (!WaitForFlags(m_ctrlPort, ACPI_EC_FLAG_IBF)) {
+            return false;
+        }
 
-    m_io->WritePort(m_dataPort, (char)offset);
+        m_io->WritePort(m_dataPort, (char)offset);
 
-    if (!WaitForFlags(m_ctrlPort, ACPI_EC_FLAG_IBF)) {
-        if (m_trace) m_trace("readec: timed out #3");
-        return false;
-    }
+        if (!WaitForFlags(m_ctrlPort, ACPI_EC_FLAG_IBF)) {
+            return false;
+        }
 
-    *pdata = m_io->ReadPort(m_dataPort);
-    return true;
+        *pdata = m_io->ReadPort(m_dataPort);
+        return true;
+    };
+
+    if (attemptRead()) return true;
+
+    // If failed, switch type and try one more time
+    if (m_trace) m_trace("readec: timed out, switching EC type and retrying...");
+    SwitchECType();
+    
+    if (attemptRead()) return true;
+
+    if (m_trace) m_trace("readec: critical timeout on both EC types");
+    return false;
 }
 
 bool ECManager::WriteByte(int offset, char data) {
     std::lock_guard<std::recursive_timed_mutex> lock(m_mutex);
-    if (!WaitForFlags(m_ctrlPort, ACPI_EC_FLAG_IBF | ACPI_EC_FLAG_OBF)) {
-        if (m_trace) m_trace("writeec: timed out #1");
-        return false;
-    }
 
-    m_io->WritePort(m_ctrlPort, ACPI_EC_COMMAND_WRITE);
+    auto attemptWrite = [&]() -> bool {
+        if (!WaitForFlags(m_ctrlPort, ACPI_EC_FLAG_IBF | ACPI_EC_FLAG_OBF)) {
+            return false;
+        }
 
-    if (!WaitForFlags(m_ctrlPort, ACPI_EC_FLAG_IBF)) {
-        if (m_trace) m_trace("writeec: timed out #2");
-        return false;
-    }
+        m_io->WritePort(m_ctrlPort, ACPI_EC_COMMAND_WRITE);
 
-    m_io->WritePort(m_dataPort, (char)offset);
+        if (!WaitForFlags(m_ctrlPort, ACPI_EC_FLAG_IBF)) {
+            return false;
+        }
 
-    if (!WaitForFlags(m_ctrlPort, ACPI_EC_FLAG_IBF)) {
-        if (m_trace) m_trace("writeec: timed out #3");
-        return false;
-    }
+        m_io->WritePort(m_dataPort, (char)offset);
 
-    m_io->WritePort(m_dataPort, data);
+        if (!WaitForFlags(m_ctrlPort, ACPI_EC_FLAG_IBF)) {
+            return false;
+        }
 
-    if (!WaitForFlags(m_ctrlPort, ACPI_EC_FLAG_IBF)) {
-        if (m_trace) m_trace("writeec: timed out #4");
-        return false;
-    }
+        m_io->WritePort(m_dataPort, data);
 
-    return true;
+        if (!WaitForFlags(m_ctrlPort, ACPI_EC_FLAG_IBF)) {
+            return false;
+        }
+
+        return true;
+    };
+
+    if (attemptWrite()) return true;
+
+    // If failed, switch type and try one more time
+    if (m_trace) m_trace("writeec: timed out, switching EC type and retrying...");
+    SwitchECType();
+
+    if (attemptWrite()) return true;
+
+    if (m_trace) m_trace("writeec: critical timeout on both EC types");
+    return false;
 }
 
 bool ECManager::ToggleBitsWithVerify(int offset, char bits, char anywayBit, char& resultValue) {
