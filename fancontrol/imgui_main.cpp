@@ -211,6 +211,21 @@ void HardwareWorker(std::shared_ptr<ConfigManager> config,
         
         int maxIdx = 0;
         int maxTemp = sensors->GetMaxTemp(maxIdx);
+        
+        static int logCounter = 0;
+        if (logCounter++ % 6 == 0) { // Log every 30s (assuming 5s cycle)
+            auto allSensors = sensors->GetSensors();
+            std::string sensorLog = "";
+            for (const auto& s : allSensors) {
+                if (s.rawTemp > 0 && s.rawTemp < 128) {
+                    sensorLog += s.name + ":" + std::to_string(s.rawTemp) + " ";
+                }
+            }
+            Log(LOG_INFO, "Hardware Status: MaxTemp=%d (%s), Fan1=%d, Fan2=%d. All: %s", 
+                maxTemp, (maxIdx >= 0 && maxIdx < (int)allSensors.size()) ? allSensors[maxIdx].name.c_str() : "N/A", 
+                g_UIState.Fan1Speed, g_UIState.Fan2Speed, sensorLog.c_str());
+        }
+
         fans->UpdateSmartControl(maxTemp, config->SmartLevels1);
 
         // 2. Sync to UI State
@@ -323,6 +338,21 @@ int main(int argc, char** argv) {
 
     auto ecManager = std::make_shared<ECManager>(std::make_shared<TVicPortProvider>(), [](const char* msg) { g_AppLog.AddLog("[EC] %s", msg); });
     auto sensorManager = std::make_shared<SensorManager>(ecManager);
+    
+    // Initialize Sensor Names (matching original TPFanControl)
+    sensorManager->SetSensorName(0, "CPU");
+    sensorManager->SetSensorName(1, "APS");
+    sensorManager->SetSensorName(2, "PCM");
+    sensorManager->SetSensorName(3, "GPU");
+    sensorManager->SetSensorName(4, "BAT");
+    sensorManager->SetSensorName(5, "X7D");
+    sensorManager->SetSensorName(6, "BAT");
+    sensorManager->SetSensorName(7, "X7F");
+    sensorManager->SetSensorName(8, "BUS");
+    sensorManager->SetSensorName(9, "PCI");
+    sensorManager->SetSensorName(10, "PWR");
+    sensorManager->SetSensorName(11, "XC3");
+
     auto fanController = std::make_shared<FanController>(ecManager);
 
     fanController->SetOnChangeCallback([](int level) {

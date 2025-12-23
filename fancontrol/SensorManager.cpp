@@ -78,9 +78,11 @@ int SensorManager::GetMaxTemp(int& maxIndex) const {
     for (auto& c : normalizedList) if (c == ',') c = '|';
 
     for (int i = 0; i < MAX_SENSORS; i++) {
-        std::string sensorMatch = "|" + m_sensors[i].name + "|";
-        if (normalizedList.find(sensorMatch) != std::string::npos) {
-            continue;
+        if (!m_sensors[i].name.empty()) {
+            std::string sensorMatch = "|" + m_sensors[i].name + "|";
+            if (normalizedList.find(sensorMatch) != std::string::npos) {
+                continue;
+            }
         }
 
         if (m_sensors[i].rawTemp != 0x80 && m_sensors[i].rawTemp != 0x00) {
