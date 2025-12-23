@@ -1108,7 +1108,6 @@ int main(int argc, char** argv) {
                     ImGui::Separator();
                     ImGui::Spacing();
 
-                    ImGui::BeginChild("BehaviorGroup", ImVec2(0, 220 * dpiScale), true);
                     ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "%s", _TR("SETTING_BEHAVIOR"));
                     ImGui::Spacing();
                     {
@@ -1134,9 +1133,11 @@ int main(int argc, char** argv) {
                             ImGui::EndCombo();
                         }
                     }
-                    ImGui::EndChild();
+                    
+                    ImGui::Spacing();
+                    ImGui::Separator();
+                    ImGui::Spacing();
 
-                    ImGui::BeginChild("PollingGroup", ImVec2(0, 160 * dpiScale), true);
                     ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "%s", _TR("SETTING_POLLING"));
                     ImGui::Spacing();
                     {
@@ -1153,7 +1154,6 @@ int main(int argc, char** argv) {
                         ImGui::TextDisabled("%s: 1s", _TR("LBL_REFRESH_FAN"));
                         ImGui::TextDisabled("%s: 100ms (10Hz)", _TR("LBL_REFRESH_CTRL"));
                     }
-                    ImGui::EndChild();
                 }
                 else if (g_UIState.SelectedSettingsTab == 1) {
                     // --- PID Tuning ---
@@ -1161,7 +1161,6 @@ int main(int argc, char** argv) {
                     ImGui::Separator();
                     ImGui::Spacing();
 
-                    ImGui::BeginChild("PIDGroup", ImVec2(0, 350 * dpiScale), true);
                     ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "%s", _TR("SETTING_PID"));
                     ImGui::Spacing();
                     {
@@ -1232,11 +1231,11 @@ int main(int argc, char** argv) {
                             ImGui::ProgressBar((float)g_UIState.Autotune.CyclesCount / 4.0f, ImVec2(-1, 20 * dpiScale));
                         }
                     }
-                    ImGui::EndChild();
 
                     // --- PID Step Response Preview ---
                     ImGui::Spacing();
-                    ImGui::BeginChild("PIDPreview", ImVec2(0, 220 * dpiScale), true);
+                    ImGui::Separator();
+                    ImGui::Spacing();
                     ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "%s", _TR("SETTING_PID_PREVIEW"));
                     ImGui::TextDisabled("%s", _TR("DESC_PID_PREVIEW"));
                     ImGui::Spacing();
@@ -1283,7 +1282,6 @@ int main(int argc, char** argv) {
                     
                     // Legend
                     ImGui::TextDisabled("0%% = %s, 100%% = %s", _TR("LBL_FAN_OFF"), _TR("LBL_FAN_MAX"));
-                    ImGui::EndChild();
                 }
                 else if (g_UIState.SelectedSettingsTab == 2) {
                     // --- Sensors ---
@@ -1291,7 +1289,6 @@ int main(int argc, char** argv) {
                     ImGui::Separator();
                     ImGui::Spacing();
 
-                    ImGui::BeginChild("SensorGroup", ImVec2(0, 0), true);
                     ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "%s", _TR("SETTING_SENSORS"));
                     ImGui::Spacing();
                     ImGui::TextDisabled("%s", _TR("DESC_SENSORS"));
@@ -1326,7 +1323,6 @@ int main(int argc, char** argv) {
                             ImGui::EndTable();
                         }
                     }
-                    ImGui::EndChild();
                 }
 
                 ImGui::Unindent(10 * dpiScale);
