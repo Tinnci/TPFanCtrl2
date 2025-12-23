@@ -35,11 +35,8 @@ FANCONTROL::HandleData(void) {
 	// determine highest temp.
 	//
 
-	// Sync ignored sensors to SensorManager
-	m_sensorManager->SetIgnoreSensors(m_configManager->IgnoreSensors);
-	
 	// Get max temp from SensorManager
-	this->MaxTemp = m_sensorManager->GetMaxTemp(this->iMaxTemp);
+	this->MaxTemp = m_sensorManager->GetMaxTemp(this->iMaxTemp, m_configManager->IgnoreSensors);
 	maxtemp = this->MaxTemp;
 	imaxtemp = this->iMaxTemp;
 

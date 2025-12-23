@@ -165,6 +165,9 @@ void DrawSimplePlot(const char* label, const std::map<std::string, std::deque<fl
 
     float legendX = canvas_p0.x + 40 * dpiScale;
     for (auto const& [name, data] : history) {
+        // Skip ignored sensors in plot
+        if (g_Config && g_Config->IgnoreSensors.find(name) != std::string::npos) continue;
+
         if (data.size() < 2) continue;
 
         ImU32 color = colors[colorIdx % 5];
@@ -352,7 +355,7 @@ void HardwareWorker(std::shared_ptr<ConfigManager> config,
             }
             
             int maxIdx = 0;
-            maxTemp = sensors->GetMaxTemp(maxIdx);
+            maxTemp = sensors->GetMaxTemp(maxIdx, config->IgnoreSensors);
             
             // Sync to UI State
             {
@@ -360,15 +363,25 @@ void HardwareWorker(std::shared_ptr<ConfigManager> config,
                 g_UIState.Sensors = sensors->GetSensors();
                 g_UIState.LastUpdate = time(nullptr);
                 for (const auto& s : g_UIState.Sensors) {
-                    // Check if sensor is ignored
-                    if (config->IgnoreSensors.find(s.name) != std::string::npos) continue;
-
-                    if (s.rawTemp > 0 && s.rawTemp < 128) {
+                    // Update smooth animation target
+                    if (s.isAvailable && s.rawTemp > 0 && s.rawTemp < 128) {
                         g_UIState.SmoothTemps[s.name].Target = (float)s.rawTemp;
-                        auto& history = g_UIState.TempHistory[s.name];
-                        history.push_back((float)s.rawTemp);
-                        if (history.size() > 300) history.pop_front();
                     }
+
+                    // Update history - ALWAYS push a value to keep timelines synchronized
+                    // If sensor is not available, we don't push anything to avoid cluttering the map
+                    if (!s.isAvailable) continue;
+
+                    auto& history = g_UIState.TempHistory[s.name];
+                    
+                    float valToPush = (float)s.rawTemp;
+                    // If value is clearly invalid (0 or 128), use the last known value to avoid spikes
+                    if ((s.rawTemp <= 0 || s.rawTemp >= 128) && !history.empty()) {
+                        valToPush = history.back();
+                    }
+
+                    history.push_back(valToPush);
+                    if (history.size() > 300) history.pop_front();
                 }
             }
 
@@ -502,9 +515,9 @@ int main(int argc, char** argv) {
     sensorManager->SetSensorName(1, "APS");
     sensorManager->SetSensorName(2, "PCM");
     sensorManager->SetSensorName(3, "GPU");
-    sensorManager->SetSensorName(4, "BAT");
+    sensorManager->SetSensorName(4, "BAT1");
     sensorManager->SetSensorName(5, "X7D");
-    sensorManager->SetSensorName(6, "BAT");
+    sensorManager->SetSensorName(6, "BAT2");
     sensorManager->SetSensorName(7, "X7F");
     sensorManager->SetSensorName(8, "BUS");
     sensorManager->SetSensorName(9, "PCI");
@@ -792,24 +805,29 @@ int main(int argc, char** argv) {
                     {
                         std::lock_guard<std::mutex> lock(g_UIState.Mutex);
                         for (const auto& s : g_UIState.Sensors) {
-                            if (s.rawTemp > 0 && s.rawTemp < 128) {
-                                float currentTemp = g_UIState.SmoothTemps[s.name].Current;
-                                float progress = currentTemp / 100.0f;
-                                
-                                // Smooth color interpolation
-                                ImVec4 color;
-                                if (currentTemp < 50) color = ImVec4(0, 0.7f, 0.9f, 1); // Cool Blue
-                                else if (currentTemp < 75) color = ImVec4(0.9f, 0.6f, 0, 1); // Warm Orange
-                                else color = ImVec4(0.9f, 0.1f, 0.1f, 1); // Hot Red
-                                
-                                ImGui::PushStyleColor(ImGuiCol_PlotHistogram, color);
-                                ImGui::Text("%s %-8s", (s.name.find("GPU") != std::string::npos ? ICON_GPU : ICON_CPU), s.name.c_str());
-                                ImGui::SameLine(ImGui::GetContentRegionAvail().x - 50 * dpiScale);
-                                ImGui::Text("%.1f°C", currentTemp);
-                                ImGui::ProgressBar(progress, ImVec2(-1, 6 * dpiScale), "");
-                                ImGui::PopStyleColor();
-                                ImGui::Spacing();
-                            }
+                            // 1. Skip if never seen a valid reading
+                            if (!s.isAvailable) continue;
+
+                            // 2. Skip if user explicitly ignored it
+                            if (g_Config->IgnoreSensors.find(s.name) != std::string::npos) continue;
+
+                            // 3. Show reading (even if currently 0/128, the progress bar will just be empty)
+                            float currentTemp = g_UIState.SmoothTemps[s.name].Current;
+                            float progress = currentTemp / 100.0f;
+                            
+                            // Smooth color interpolation
+                            ImVec4 color;
+                            if (currentTemp < 50) color = ImVec4(0, 0.7f, 0.9f, 1); // Cool Blue
+                            else if (currentTemp < 75) color = ImVec4(0.9f, 0.6f, 0, 1); // Warm Orange
+                            else color = ImVec4(0.9f, 0.1f, 0.1f, 1); // Hot Red
+                            
+                            ImGui::PushStyleColor(ImGuiCol_PlotHistogram, color);
+                            ImGui::Text("%s %-8s", (s.name.find("GPU") != std::string::npos ? ICON_GPU : ICON_CPU), s.name.c_str());
+                            ImGui::SameLine(ImGui::GetContentRegionAvail().x - 50 * dpiScale);
+                            ImGui::Text("%.1f°C", currentTemp);
+                            ImGui::ProgressBar(progress, ImVec2(-1, 6 * dpiScale), "");
+                            ImGui::PopStyleColor();
+                            ImGui::Spacing();
                         }
                     }
                     ImGui::EndChild();
@@ -976,18 +994,21 @@ int main(int argc, char** argv) {
                     ImGui::EndTable();
                 }
 
-                // --- Bottom Section: Sensor Management ---
                 ImGui::BeginChild("SensorGroup", ImVec2(0, 200 * dpiScale), true);
                 ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), ICON_GPU " Sensor Management");
                 ImGui::Separator();
-                ImGui::TextDisabled("Uncheck sensors that provide invalid readings (e.g., 0 or 128).");
+                ImGui::TextDisabled("Uncheck sensors that provide invalid readings. Grayed out sensors have never returned a valid value.");
                 ImGui::Spacing();
                 {
                     std::lock_guard<std::mutex> lock(g_UIState.Mutex);
                     if (ImGui::BeginTable("SensorsIgnore", 4, ImGuiTableFlags_NoSavedSettings)) {
                         for (const auto& s : g_UIState.Sensors) {
                             ImGui::TableNextColumn();
+                            
                             bool ignored = g_Config->IgnoreSensors.find(s.name) != std::string::npos;
+                            
+                            if (!s.isAvailable) ImGui::BeginDisabled();
+                            
                             if (ImGui::Checkbox(s.name.c_str(), &ignored)) {
                                 if (ignored) {
                                     if (g_Config->IgnoreSensors.find(s.name) == std::string::npos)
@@ -997,6 +1018,12 @@ int main(int argc, char** argv) {
                                     if (pos != std::string::npos)
                                         g_Config->IgnoreSensors.erase(pos, s.name.length() + 1);
                                 }
+                            }
+                            
+                            if (!s.isAvailable) ImGui::EndDisabled();
+                            
+                            if (ImGui::IsItemHovered() && !s.isAvailable) {
+                                ImGui::SetTooltip("This sensor index (0x%02X) has not returned any valid temperature data since startup.", s.addr);
                             }
                         }
                         ImGui::EndTable();

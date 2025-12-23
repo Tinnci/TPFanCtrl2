@@ -24,9 +24,6 @@ void SensorManager::SetSensorName(int index, const std::string& name) {
 bool SensorManager::UpdateSensors(bool showBiasedTemps, bool noExtSensor, bool useTWR) {
     std::lock_guard<std::recursive_timed_mutex> lock(m_ecManager->GetMutex());
     if (useTWR) {
-        // TWR logic is complex and specific to some models, 
-        // for now we focus on the standard EC read.
-        // TODO: Implement TWR if needed for the baseline.
         return false; 
     }
 
@@ -35,6 +32,12 @@ bool SensorManager::UpdateSensors(bool showBiasedTemps, bool noExtSensor, bool u
         char temp;
         if (m_ecManager->ReadByte(m_sensors[i].addr, &temp)) {
             m_sensors[i].rawTemp = (unsigned char)temp;
+            
+            // Discovery logic: if it's a valid temp, mark as available
+            if (m_sensors[i].rawTemp > 0 && m_sensors[i].rawTemp < 128) {
+                m_sensors[i].isAvailable = true;
+            }
+
             int offset = m_offsets[i].offset;
             if (m_sensors[i].rawTemp >= m_offsets[i].hystMin && m_sensors[i].rawTemp <= m_offsets[i].hystMax) {
                 offset = 0;
@@ -56,6 +59,11 @@ bool SensorManager::UpdateSensors(bool showBiasedTemps, bool noExtSensor, bool u
         char temp;
         if (m_ecManager->ReadByte(m_sensors[idx].addr, &temp)) {
             m_sensors[idx].rawTemp = (unsigned char)temp;
+
+            if (m_sensors[idx].rawTemp > 0 && m_sensors[idx].rawTemp < 128) {
+                m_sensors[idx].isAvailable = true;
+            }
+
             int offset = m_offsets[idx].offset;
             if (m_sensors[idx].rawTemp >= m_offsets[idx].hystMin && m_sensors[idx].rawTemp <= m_offsets[idx].hystMax) {
                 offset = 0;
@@ -69,30 +77,28 @@ bool SensorManager::UpdateSensors(bool showBiasedTemps, bool noExtSensor, bool u
     return true;
 }
 
-int SensorManager::GetMaxTemp(int& maxIndex) const {
+int SensorManager::GetMaxTemp(int& maxIndex, const std::string& ignoreList) const {
     int maxTemp = 0;
     maxIndex = 0;
 
-    // Normalize ignore list: replace commas with pipes and wrap in pipes
-    std::string normalizedList = "|" + m_ignoreList + "|";
-    for (auto& c : normalizedList) if (c == ',') c = '|';
-
     for (int i = 0; i < MAX_SENSORS; i++) {
-        if (!m_sensors[i].name.empty()) {
-            std::string sensorMatch = "|" + m_sensors[i].name + "|";
-            if (normalizedList.find(sensorMatch) != std::string::npos) {
-                continue;
-            }
+        // 1. Skip if not available (never returned a valid reading)
+        if (!m_sensors[i].isAvailable) continue;
+
+        // 2. Skip if in ignore list
+        if (!m_sensors[i].name.empty() && ignoreList.find(m_sensors[i].name) != std::string::npos) {
+            continue;
         }
 
-        if (m_sensors[i].rawTemp != 0x80 && m_sensors[i].rawTemp != 0x00) {
-            int temp = m_sensors[i].biasedTemp;
-            if (temp < 128) {
-                if (temp > maxTemp) {
-                    maxTemp = temp;
-                    maxIndex = i;
-                }
-            }
+        // 3. Skip if current reading is invalid (but it was available before)
+        if (m_sensors[i].rawTemp <= 0 || m_sensors[i].rawTemp >= 128) {
+            continue;
+        }
+
+        int temp = m_sensors[i].biasedTemp;
+        if (temp > maxTemp) {
+            maxTemp = temp;
+            maxIndex = i;
         }
     }
     return maxTemp;
