@@ -92,6 +92,10 @@ void I18nManager::LoadTranslations() {
     en["LBL_SMART_PID"] = "SMART (PID)";
     en["LBL_RPM"] = "RPM";
     en["LBL_CELSIUS"] = "\xC2\xB0\x43";
+    en["SETTING_PID_PREVIEW"] = "Step Response Preview";
+    en["DESC_PID_PREVIEW"] = "Simulates fan response when temperature spikes to 70C. Smooth curves = stable, oscillating = needs tuning.";
+    en["LBL_FAN_OFF"] = "Fan Off";
+    en["LBL_FAN_MAX"] = "Full Speed";
 
     // Chinese (Simplified)
     auto& zh = m_translations["zh"];
@@ -145,4 +149,8 @@ void I18nManager::LoadTranslations() {
     zh["LBL_SMART_PID"] = "\xE6\x99\xBA\xE8\x83\xBD (PID)";
     zh["LBL_RPM"] = "RPM";
     zh["LBL_CELSIUS"] = "\xC2\xB0\x43";
+    zh["SETTING_PID_PREVIEW"] = "\xE6\xAD\xA5\xE8\xBF\x9B\xE5\x93\x8D\xE5\xBA\x94\xE9\xA2\x84\xE8\xA7\x88";
+    zh["DESC_PID_PREVIEW"] = "\xE6\xA8\xA1\xE6\x8B\x9F\xE6\xB8\xA9\xE5\xBA\xA6\xE7\xAA\x81\xE5\x8D\x87\xE5\x88\xB0 70\xC2\xB0" "C \xE6\x97\xB6\xE9\xA3\x8E\xE6\x89\x87\xE7\x9A\x84\xE5\x93\x8D\xE5\xBA\x94\xE3\x80\x82\xE5\xB9\xB3\xE6\xBB\x91\xE6\x9B\xB2\xE7\xBA\xBF = \xE7\xA8\xB3\xE5\xAE\x9A\xEF\xBC\x8C\xE6\x8C\xAF\xE8\x8D\xA1 = \xE9\x9C\x80\xE8\xB0\x83\xE4\xBC\x98\xE3\x80\x82";
+    zh["LBL_FAN_OFF"] = "\xE9\xA3\x8E\xE6\x89\x87\xE5\x85\xB3\xE9\x97\xAD";
+    zh["LBL_FAN_MAX"] = "\xE5\x85\xA8\xE9\x80\x9F";
 }

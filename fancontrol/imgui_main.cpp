@@ -1099,6 +1099,57 @@ int main(int argc, char** argv) {
                         }
                     }
                     ImGui::EndChild();
+
+                    // --- PID Step Response Preview ---
+                    ImGui::Spacing();
+                    ImGui::BeginChild("PIDPreview", ImVec2(0, 220 * dpiScale), true);
+                    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "%s", _TR("SETTING_PID_PREVIEW"));
+                    ImGui::TextDisabled("%s", _TR("DESC_PID_PREVIEW"));
+                    ImGui::Spacing();
+                    
+                    // Simulate PID step response (temperature jumps from 50 to 70, target is user's setting)
+                    static float pidResponse[100];
+                    static float lastKp = -1, lastKi = -1, lastKd = -1, lastTarget = -1;
+                    
+                    // Only recalculate if parameters changed
+                    if (lastKp != g_UIState.PID.Kp || lastKi != g_UIState.PID.Ki || 
+                        lastKd != g_UIState.PID.Kd || lastTarget != g_UIState.PID.targetTemp) {
+                        
+                        lastKp = g_UIState.PID.Kp;
+                        lastKi = g_UIState.PID.Ki;
+                        lastKd = g_UIState.PID.Kd;
+                        lastTarget = g_UIState.PID.targetTemp;
+                        
+                        float simTemp = 70.0f;  // Simulated current temperature (spike)
+                        float integral = 0.0f;
+                        float prevError = simTemp - lastTarget;
+                        
+                        for (int i = 0; i < 100; i++) {
+                            float error = simTemp - lastTarget;
+                            integral += error * 0.1f;
+                            integral = std::clamp(integral, -50.0f, 50.0f);
+                            float derivative = (error - prevError) / 0.1f;
+                            
+                            float output = lastKp * error + lastKi * integral + lastKd * derivative;
+                            output = std::clamp(output, 0.0f, 100.0f);
+                            pidResponse[i] = output;
+                            
+                            // Simulate temperature drop due to fan (simplified thermal model)
+                            float coolingPower = output * 0.15f;
+                            simTemp -= coolingPower * 0.1f;
+                            simTemp = (std::max)(simTemp, lastTarget - 5.0f);
+                            
+                            prevError = error;
+                        }
+                    }
+                    
+                    // Draw the response curve
+                    ImGui::PlotLines("##PIDResponse", pidResponse, 100, 0, nullptr, 0.0f, 100.0f, 
+                                     ImVec2(ImGui::GetContentRegionAvail().x, 120 * dpiScale));
+                    
+                    // Legend
+                    ImGui::TextDisabled("0%% = %s, 100%% = %s", _TR("LBL_FAN_OFF"), _TR("LBL_FAN_MAX"));
+                    ImGui::EndChild();
                 }
                 else if (g_UIState.SelectedSettingsTab == 2) {
                     // --- Sensors ---
