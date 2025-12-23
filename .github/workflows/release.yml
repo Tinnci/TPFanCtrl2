@@ -31,9 +31,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ steps.xmake-cachedir.outputs.dir }}
-          key: ${{ runner.os }}-xmake-${{ hashFiles('xmake.lua') }}
+          key: ${{ runner.os }}-xmake-v1-${{ hashFiles('xmake.lua') }}
           restore-keys: |
-            ${{ runner.os }}-xmake-
+            ${{ runner.os }}-xmake-v1-
 
       - name: Configure and Build
         run: |

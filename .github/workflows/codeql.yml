@@ -42,9 +42,9 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ${{ steps.xmake-cachedir.outputs.dir }}
-        key: ${{ runner.os }}-xmake-${{ hashFiles('xmake.lua') }}
+        key: ${{ runner.os }}-xmake-v1-${{ hashFiles('xmake.lua') }}
         restore-keys: |
-          ${{ runner.os }}-xmake-
+          ${{ runner.os }}-xmake-v1-
 
     - name: Setup MSVC
       uses: ilammy/msvc-dev-cmd@v1
@@ -52,7 +52,7 @@ jobs:
         arch: x86
 
     - name: Configure xmake
-      run: xmake f -m release -a x86 -y
+      run: xmake f -c -m release -a x86 -y -v
       env:
         XMAKE_PCH: false
 
