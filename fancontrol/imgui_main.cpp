@@ -10,6 +10,7 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdarg>
+#include <ctime>
 
 #include "imgui.h"
 #include "imgui_impl_win32.h"
@@ -81,13 +82,20 @@ void Log(LogLevel level, const char* fmt, ...) {
     vsnprintf(buf, 1024, fmt, args);
     va_end(args);
 
+    // Get timestamp
+    char timeBuf[32];
+    time_t now = time(nullptr);
+    struct tm tm_info;
+    localtime_s(&tm_info, &now);
+    strftime(timeBuf, sizeof(timeBuf), "%H:%M:%S", &tm_info);
+
     // Print to console
-    printf("%s%s\n", prefix, buf);
+    printf("[%s] %s%s\n", timeBuf, prefix, buf);
 
     // Also write to file for elevated process diagnostics
     FILE* f = fopen("TPFanCtrl2_debug.log", "a");
     if (f) {
-        fprintf(f, "%s%s\n", prefix, buf);
+        fprintf(f, "[%s] %s%s\n", timeBuf, prefix, buf);
         fclose(f);
     }
 }
@@ -102,6 +110,10 @@ struct AppLog {
         va_start(args, fmt);
         vsnprintf(buf, 1024, fmt, args);
         va_end(args);
+
+        // Persist to file and console as well
+        Log(LOG_INFO, "%s", buf);
+
         std::lock_guard<std::mutex> lock(Mutex);
         Items.push_back(buf);
         if (Items.size() > 100) Items.pop_front();
@@ -193,7 +205,9 @@ void HardwareWorker(std::shared_ptr<ConfigManager> config,
                     bool* running) {
     while (*running) {
         // 1. Update Hardware
-        sensors->UpdateSensors(config->ShowBiasedTemps, config->NoExtSensor, config->UseTWR);
+        if (!sensors->UpdateSensors(config->ShowBiasedTemps, config->NoExtSensor, config->UseTWR)) {
+            Log(LOG_WARN, "Failed to update sensors from EC.");
+        }
         
         int maxIdx = 0;
         int maxTemp = sensors->GetMaxTemp(maxIdx);
@@ -310,6 +324,10 @@ int main(int argc, char** argv) {
     auto ecManager = std::make_shared<ECManager>(std::make_shared<TVicPortProvider>(), [](const char* msg) { g_AppLog.AddLog("[EC] %s", msg); });
     auto sensorManager = std::make_shared<SensorManager>(ecManager);
     auto fanController = std::make_shared<FanController>(ecManager);
+
+    fanController->SetOnChangeCallback([](int level) {
+        g_AppLog.AddLog("[Fan] Level changed to %d", level);
+    });
 
     // Start Hardware Thread
     bool hwRunning = true;
