@@ -65,6 +65,8 @@ struct SmoothValue {
 #define ICON_GPU (const char*)u8"\uE9AB" // Video / GPU
 #define ICON_FAN (const char*)u8"\uE9F6" // Fan / Ventilation
 #define ICON_CHIP (const char*)u8"\uEA67" // Chipset / RAM
+#define ICON_CHART (const char*)u8"\uE999" // Chart
+#define ICON_LOG (const char*)u8"\uE81C" // Log / List
 
 struct UIState {
     std::vector<SensorData> Sensors;
@@ -755,112 +757,140 @@ int main(int argc, char** argv) {
         ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
         ImGui::Begin("Main", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus);
 
-        // --- 1. Hero Section (Top Status Bar) ---
-        {
-            ImGui::BeginChild("Hero", ImVec2(0, 80 * dpiScale), false);
-            
-            int f1, f2, maxTemp = 0;
-            std::string maxName = "N/A";
-            {
-                std::lock_guard<std::mutex> lock(g_UIState.Mutex);
-                f1 = g_UIState.Fan1Speed;
-                f2 = g_UIState.Fan2Speed;
-                for (const auto& s : g_UIState.Sensors) {
-                    if (s.rawTemp > maxTemp && s.rawTemp < 128) {
-                        maxTemp = s.rawTemp;
-                        maxName = s.name;
-                    }
-                }
-            }
-
-            ImGui::Columns(3, "HeroColumns", false);
-            
-            // Temp Metric
-            ImVec4 tempColor = ImVec4(0, 0.8f, 1, 1);
-            if (maxTemp > 65) tempColor = ImVec4(1, 0.6f, 0, 1);
-            if (maxTemp > 85) tempColor = ImVec4(1, 0.2f, 0.2f, 1);
-            
-            ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1), _TR("LBL_MAX_TEMP"));
-            ImGui::TextColored(tempColor, "%d\xC2\xB0\x43", maxTemp);
-            ImGui::SameLine();
-            ImGui::TextColored(ImVec4(0.4f, 0.4f, 0.4f, 1), "(%s)", maxName.c_str());
-            
-            ImGui::NextColumn();
-            
-            // Fan Metric
-            ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1), _TR("LBL_FAN_SPEEDS"));
-            ImGui::Text("%s %d RPM", ICON_FAN, f1);
-            if (f2 > 0) ImGui::Text("%s %d RPM", ICON_FAN, f2);
-            
-            ImGui::NextColumn();
-            
-            // Mode Metric
-            const char* modeStr = _TR("MODE_BIOS");
-            if (g_UIState.Mode == 1) modeStr = _TR("MODE_MANUAL");
-            else if (g_UIState.Mode == 2) modeStr = (g_UIState.Algorithm == ControlAlgorithm::Step ? _TR("LBL_SMART_STEP") : _TR("LBL_SMART_PID"));
-            
-            ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1), _TR("LBL_CONTROL_MODE"));
-            ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), "%s", modeStr);
-            
-            ImGui::Columns(1);
-            ImGui::EndChild();
-        }
-
-        ImGui::Separator();
-        ImGui::Spacing();
-
-        // --- 2. Main Content (Tabs) ---
+        // --- Main Content (Tabs) ---
         if (ImGui::BeginTabBar("MainTabs", ImGuiTabBarFlags_None)) {
             if (ImGui::BeginTabItem(_TR("TAB_DASHBOARD"))) {
-                if (ImGui::BeginTable("Layout", 2, ImGuiTableFlags_Resizable)) {
+                ImGui::Spacing();
+
+                // --- 1. Metric Cards ---
+                ImGui::Columns(2, "MetricCards", false);
+                
+                auto drawMetricCard = [&](const char* icon, const char* label, const char* value, const char* subValue, ImVec4 color) {
+                    ImGui::BeginChild(label, ImVec2(0, 90 * dpiScale), true);
+                    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1), "%s %s", icon, label);
+                    ImGui::Spacing();
+                    
+                    ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]); // Use a slightly larger font if available, or just bold
+                    ImGui::TextColored(color, "%s", value);
+                    ImGui::PopFont();
+
+                    if (subValue && subValue[0] != '\0') {
+                        ImGui::SameLine();
+                        ImGui::TextColored(ImVec4(0.4f, 0.4f, 0.4f, 1), "(%s)", subValue);
+                    }
+                    ImGui::EndChild();
+                };
+
+                int f1, f2, maxTemp = 0;
+                std::string maxName = "N/A";
+                {
+                    std::lock_guard<std::mutex> lock(g_UIState.Mutex);
+                    f1 = g_UIState.Fan1Speed;
+                    f2 = g_UIState.Fan2Speed;
+                    for (const auto& s : g_UIState.Sensors) {
+                        if (s.rawTemp > maxTemp && s.rawTemp < 128) {
+                            maxTemp = s.rawTemp;
+                            maxName = s.name;
+                        }
+                    }
+                }
+
+                ImVec4 tempColor = ImVec4(0, 0.8f, 1, 1);
+                if (maxTemp > 65) tempColor = ImVec4(1, 0.6f, 0, 1);
+                if (maxTemp > 85) tempColor = ImVec4(1, 0.2f, 0.2f, 1);
+
+                char tempVal[32], fanVal[64], fanSub[64];
+                sprintf_s(tempVal, "%d\xC2\xB0\x43", maxTemp);
+                sprintf_s(fanVal, "%d %s", f1, _TR("LBL_RPM"));
+                if (f2 > 0) sprintf_s(fanSub, "%d %s", f2, _TR("LBL_RPM"));
+                else fanSub[0] = '\0';
+
+                drawMetricCard(ICON_CPU, _TR("LBL_MAX_TEMP"), tempVal, maxName.c_str(), tempColor);
+                ImGui::NextColumn();
+                drawMetricCard(ICON_FAN, _TR("LBL_FAN_SPEEDS"), fanVal, (f2 > 0 ? fanSub : nullptr), ImVec4(1, 1, 1, 1));
+                ImGui::Columns(1);
+
+                ImGui::Spacing();
+
+                // --- 2. Main Layout ---
+                if (ImGui::BeginTable("DashboardMain", 2, ImGuiTableFlags_Resizable)) {
                     ImGui::TableNextColumn();
                     
-                    // --- Left Column: Sensors & Fan ---
-                    ImGui::BeginChild("Sensors", ImVec2(0, 380 * dpiScale), true, ImGuiWindowFlags_None);
-                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), _TR("SECTION_STATUS"));
+                    // --- Left: Sensors Grid & History ---
+                    ImGui::BeginChild("SensorsArea", ImVec2(0, 0), false);
+                    
+                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), "%s %s", ICON_CHIP, _TR("SECTION_STATUS"));
                     ImGui::Separator();
                     ImGui::Spacing();
-                    {
-                        std::lock_guard<std::mutex> lock(g_UIState.Mutex);
-                        for (const auto& s : g_UIState.Sensors) {
-                            // 1. Skip if never seen a valid reading
-                            if (!s.isAvailable) continue;
 
-                            // 2. Skip if user explicitly ignored it
-                            if (g_Config->IgnoreSensors.find(s.name) != std::string::npos) continue;
+                    // Sensors in a grid
+                    if (ImGui::BeginChild("SensorsScroll", ImVec2(0, 280 * dpiScale), true)) {
+                        ImGui::Columns(2, "SensorGrid", false);
+                        {
+                            std::lock_guard<std::mutex> lock(g_UIState.Mutex);
+                            for (const auto& s : g_UIState.Sensors) {
+                                if (!s.isAvailable) continue;
+                                if (g_Config->IgnoreSensors.find(s.name) != std::string::npos) continue;
 
-                            // 3. Show reading (even if currently 0/128, the progress bar will just be empty)
-                            float currentTemp = g_UIState.SmoothTemps[s.name].Current;
-                            float progress = currentTemp / 100.0f;
-                            
-                            // Smooth color interpolation
-                            ImVec4 color;
-                            if (currentTemp < 50) color = ImVec4(0, 0.7f, 0.9f, 1); // Cool Blue
-                            else if (currentTemp < 75) color = ImVec4(0.9f, 0.6f, 0, 1); // Warm Orange
-                            else color = ImVec4(0.9f, 0.1f, 0.1f, 1); // Hot Red
-                            
-                            ImGui::PushStyleColor(ImGuiCol_PlotHistogram, color);
-                            ImGui::Text("%s %-8s", (s.name.find("GPU") != std::string::npos ? ICON_GPU : ICON_CPU), s.name.c_str());
-                            ImGui::SameLine(ImGui::GetContentRegionAvail().x - 50 * dpiScale);
-                            ImGui::Text("%.1f\xC2\xB0\x43", currentTemp);
-                            ImGui::ProgressBar(progress, ImVec2(-1, 6 * dpiScale), "");
-                            ImGui::PopStyleColor();
-                            ImGui::Spacing();
+                                float currentTemp = g_UIState.SmoothTemps[s.name].Current;
+                                float progress = currentTemp / 100.0f;
+                                ImVec4 color = (currentTemp < 50 ? ImVec4(0, 0.7f, 0.9f, 1) : (currentTemp < 75 ? ImVec4(0.9f, 0.6f, 0, 1) : ImVec4(0.9f, 0.1f, 0.1f, 1)));
+
+                                ImGui::BeginChild(s.name.c_str(), ImVec2(0, 65 * dpiScale), true);
+                                ImGui::Text("%s %s", (s.name.find("GPU") != std::string::npos ? ICON_GPU : ICON_CPU), s.name.c_str());
+                                ImGui::SameLine(ImGui::GetContentRegionAvail().x - 45 * dpiScale);
+                                ImGui::Text("%.0f\xC2\xB0\x43", currentTemp);
+                                
+                                ImGui::PushStyleColor(ImGuiCol_PlotHistogram, color);
+                                ImGui::ProgressBar(progress, ImVec2(-1, 5 * dpiScale), "");
+                                ImGui::PopStyleColor();
+                                ImGui::EndChild();
+
+                                ImGui::NextColumn();
+                            }
                         }
+                        ImGui::Columns(1);
                     }
                     ImGui::EndChild();
 
-                    ImGui::BeginChild("Control", ImVec2(0, 0), true);
-                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), _TR("SECTION_CONTROL"));
+                    ImGui::Spacing();
+                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), "%s %s", ICON_CHART, _TR("SECTION_HISTORY"));
                     ImGui::Separator();
                     ImGui::Spacing();
                     {
                         std::lock_guard<std::mutex> lock(g_UIState.Mutex);
-                        ImGui::PushItemWidth(-1);
-                        if (ImGui::RadioButton(_TR("MODE_BIOS"), &g_UIState.Mode, 0)) {} ImGui::SameLine();
-                        if (ImGui::RadioButton(_TR("MODE_MANUAL"), &g_UIState.Mode, 1)) {} ImGui::SameLine();
-                        if (ImGui::RadioButton(_TR("MODE_SMART"), &g_UIState.Mode, 2)) {}
-                        ImGui::PopItemWidth();
+                        DrawSimplePlot("TempPlot", g_UIState.TempHistory, 0, dpiScale);
+                    }
+                    ImGui::EndChild();
+
+                    ImGui::TableNextColumn();
+
+                    // --- Right: Control & Logs ---
+                    ImGui::BeginChild("ControlPanel", ImVec2(0, 240 * dpiScale), true);
+                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), "%s %s", ICON_FAN, _TR("SECTION_CONTROL"));
+                    ImGui::Separator();
+                    ImGui::Spacing();
+                    
+                    auto drawSegmented = [&](const char* label, int id, int* current) {
+                        bool active = (*current == id);
+                        if (active) {
+                            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.89f, 0.12f, 0.16f, 0.8f));
+                            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.89f, 0.12f, 0.16f, 0.9f));
+                            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.89f, 0.12f, 0.16f, 1.0f));
+                        }
+                        if (ImGui::Button(label, ImVec2(ImGui::GetContentRegionAvail().x / 3.2f, 35 * dpiScale))) {
+                            *current = id;
+                        }
+                        if (active) ImGui::PopStyleColor(3);
+                        ImGui::SameLine();
+                    };
+
+                    {
+                        std::lock_guard<std::mutex> lock(g_UIState.Mutex);
+                        drawSegmented(_TR("MODE_BIOS"), 0, &g_UIState.Mode);
+                        drawSegmented(_TR("MODE_MANUAL"), 1, &g_UIState.Mode);
+                        drawSegmented(_TR("MODE_SMART"), 2, &g_UIState.Mode);
+                        ImGui::NewLine();
 
                         ImGui::Spacing();
                         if (g_UIState.Mode == 1) {
@@ -877,38 +907,26 @@ int main(int argc, char** argv) {
                             ImGui::PopItemWidth();
                         }
                     }
-                    ImGui::Spacing();
-                    if (ImGui::Button(_TR("BTN_MINIMIZE"), ImVec2(-1, 35 * dpiScale))) {
+                    
+                    ImGui::SetCursorPosY(ImGui::GetWindowHeight() - 55 * dpiScale);
+                    if (ImGui::Button(_TR("BTN_MINIMIZE"), ImVec2(-1, 40 * dpiScale))) {
                         ::ShowWindow(hwnd, SW_HIDE);
                     }
                     ImGui::EndChild();
 
-                    ImGui::TableNextColumn();
-                    
-                    // --- Right Column: History & Logs ---
-                    ImGui::BeginChild("History", ImVec2(0, 380 * dpiScale), true);
-                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), _TR("SECTION_HISTORY"));
-                    ImGui::Separator();
-                    ImGui::Spacing();
-                    {
-                        std::lock_guard<std::mutex> lock(g_UIState.Mutex);
-                        DrawSimplePlot("TempPlot", g_UIState.TempHistory, 0, dpiScale);
-                    }
-                    ImGui::EndChild();
-
-                    ImGui::BeginChild("Logs", ImVec2(0, 0), true);
-                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), _TR("SECTION_LOGS"));
+                    ImGui::BeginChild("LogsPanel", ImVec2(0, 0), true);
+                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), "%s %s", ICON_LOG, _TR("SECTION_LOGS"));
                     ImGui::Separator();
                     {
                         std::lock_guard<std::mutex> lock(g_AppLog.Mutex);
-                        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 2 * dpiScale));
+                        ImGui::BeginChild("LogScroll");
                         for (const auto& line : g_AppLog.Items) {
                             if (line.find("[ERROR]") != std::string::npos) ImGui::TextColored(ImVec4(1, 0.2f, 0.2f, 1), line.c_str());
                             else if (line.find("[WARN]") != std::string::npos) ImGui::TextColored(ImVec4(1, 0.8f, 0, 1), line.c_str());
                             else ImGui::TextUnformatted(line.c_str());
                         }
-                        ImGui::PopStyleVar();
                         if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY()) ImGui::SetScrollHereY(1.0f);
+                        ImGui::EndChild();
                     }
                     ImGui::EndChild();
 

@@ -90,6 +90,8 @@ void I18nManager::LoadTranslations() {
     en["LBL_CONTROL_MODE"] = "CONTROL MODE";
     en["LBL_SMART_STEP"] = "SMART (STEP)";
     en["LBL_SMART_PID"] = "SMART (PID)";
+    en["LBL_RPM"] = "RPM";
+    en["LBL_CELSIUS"] = "\xC2\xB0\x43";
 
     // Chinese (Simplified)
     auto& zh = m_translations["zh"];
@@ -141,4 +143,6 @@ void I18nManager::LoadTranslations() {
     zh["LBL_CONTROL_MODE"] = "\xE6\x8E\xA7\xE5\x88\xB6\xE6\xA8\xA1\xE5\xBC\x8F";
     zh["LBL_SMART_STEP"] = "\xE6\x99\xBA\xE8\x83\xBD (\xE5\x88\x86\xE7\xBA\xA7)";
     zh["LBL_SMART_PID"] = "\xE6\x99\xBA\xE8\x83\xBD (PID)";
+    zh["LBL_RPM"] = "RPM";
+    zh["LBL_CELSIUS"] = "\xC2\xB0\x43";
 }

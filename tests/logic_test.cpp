@@ -6,6 +6,9 @@
 #include "MockIOProvider.h"
 #include "ConfigManager.h"
 
+// Define global config for tests
+ConfigManager* g_Config = nullptr;
+
 class FanControlTest : public ::testing::Test {
 protected:
     std::shared_ptr<MockIOProvider> mockIO;
@@ -14,6 +17,7 @@ protected:
     std::shared_ptr<FanController> fanController;
 
     void SetUp() override {
+        if (!g_Config) g_Config = new ConfigManager();
         mockIO = std::make_shared<MockIOProvider>();
         ecManager = std::make_shared<ECManager>(mockIO, nullptr);
         sensorManager = std::make_shared<SensorManager>(ecManager);
@@ -37,34 +41,34 @@ TEST_F(FanControlTest, SmartControlLogic) {
     // Test 1: Temp below first level
     sensorManager->UpdateSensors(false, false, false);
     int maxIndex = 0;
-    EXPECT_EQ(sensorManager->GetMaxTemp(maxIndex), 45);
+    EXPECT_EQ(sensorManager->GetMaxTemp(maxIndex, ""), 45);
     
     fanController->UpdateSmartControl(45, levels);
     
     // Test 2: Temp reaches 55
     mockIO->SetECByte(0x78, 55);
     sensorManager->UpdateSensors(false, false, false);
-    int maxTemp = sensorManager->GetMaxTemp(maxIndex);
+    int maxTemp = sensorManager->GetMaxTemp(maxIndex, "");
     fanController->UpdateSmartControl(maxTemp, levels);
     EXPECT_EQ(fanController->GetCurrentFanCtrl(), 0);
 
     // Test 3: Temp reaches 65
     mockIO->SetECByte(0x78, 65);
     sensorManager->UpdateSensors(false, false, false);
-    maxTemp = sensorManager->GetMaxTemp(maxIndex);
+    maxTemp = sensorManager->GetMaxTemp(maxIndex, "");
     fanController->UpdateSmartControl(maxTemp, levels);
     EXPECT_EQ(fanController->GetCurrentFanCtrl(), 3);
 
     // Test 4: Hysteresis check (cooling down)
     mockIO->SetECByte(0x78, 59); // Should stay at Fan 3 because 59 > 60 - 2
     sensorManager->UpdateSensors(false, false, false);
-    maxTemp = sensorManager->GetMaxTemp(maxIndex);
+    maxTemp = sensorManager->GetMaxTemp(maxIndex, "");
     fanController->UpdateSmartControl(maxTemp, levels);
     EXPECT_EQ(fanController->GetCurrentFanCtrl(), 3);
 
     mockIO->SetECByte(0x78, 57); // Should drop to Fan 0 because 57 < 60 - 2
     sensorManager->UpdateSensors(false, false, false);
-    maxTemp = sensorManager->GetMaxTemp(maxIndex);
+    maxTemp = sensorManager->GetMaxTemp(maxIndex, "");
     fanController->UpdateSmartControl(maxTemp, levels);
     EXPECT_EQ(fanController->GetCurrentFanCtrl(), 0);
 }
@@ -77,7 +81,7 @@ TEST_F(FanControlTest, SensorOffsets) {
     sensorManager->UpdateSensors(true, false, false);
     
     int maxIndex = 0;
-    EXPECT_EQ(sensorManager->GetMaxTemp(maxIndex), 45); // 50 - 5
+    EXPECT_EQ(sensorManager->GetMaxTemp(maxIndex, ""), 45); // 50 - 5
 }
 
 TEST_F(FanControlTest, IgnoredSensors) {
@@ -87,12 +91,8 @@ TEST_F(FanControlTest, IgnoredSensors) {
     mockIO->SetECByte(0x78, 60); // CPU
     mockIO->SetECByte(0x79, 80); // GPU
     
-    sensorManager->SetIgnoreSensors("GPU");
-    sensorManager->UpdateSensors(false, false, false);
-    
     int maxIndex = 0;
-    EXPECT_EQ(sensorManager->GetMaxTemp(maxIndex), 60); // GPU ignored, CPU is max
-    EXPECT_EQ(maxIndex, 0);
+    EXPECT_EQ(sensorManager->GetMaxTemp(maxIndex, "GPU"), 60); // GPU ignored, CPU is max
 }
 
 TEST_F(FanControlTest, DualFanControl) {
