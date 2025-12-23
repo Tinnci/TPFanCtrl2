@@ -34,8 +34,13 @@ target("TPFanCtrl2")
 
     add_packages("imgui", "vulkan-loader", "freetype", "vulkan-memory-allocator", "spdlog")
     
-    -- Set subsystem to Console for debugging (change to WINDOWS for final release)
-    add_ldflags("/SUBSYSTEM:CONSOLE", {force = true})
+    -- Set subsystem to Windows to hide console (use CONSOLE for debugging if needed)
+    set_kind("binary")
+    if is_mode("release") then
+        add_ldflags("/SUBSYSTEM:WINDOWS", "/ENTRY:mainCRTStartup", {force = true})
+    else
+        add_ldflags("/SUBSYSTEM:CONSOLE", {force = true})
+    end
     
     -- Precompiled Header (Disable in CodeQL environment to avoid PCH issues)
     if os.getenv("XMAKE_PCH") ~= "false" and not os.getenv("CODEQL_ACTION_INIT_HAS_RUN") then
