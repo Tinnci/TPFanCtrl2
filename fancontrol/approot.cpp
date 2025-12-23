@@ -69,7 +69,7 @@ int APIENTRY WinMain(HINSTANCE instance, HINSTANCE, LPSTR aArgs, int) {
         }
 
 		if (debug) {
-			WorkerThread(NULL);
+			WorkerThread(std::stop_token{});
 			return 0;
 		}
 
@@ -84,7 +84,7 @@ int APIENTRY WinMain(HINSTANCE instance, HINSTANCE, LPSTR aArgs, int) {
 		}
     }
     else {
-		WorkerThread(NULL);
+		WorkerThread(std::stop_token{});
 		return 0;
     }
 
@@ -213,25 +213,17 @@ VOID WINAPI Handler(DWORD fdwControl) {
 static std::unique_ptr<std::jthread> g_jthread;
 
 void StartWorkerThread() {
-    g_jthread = std::make_unique<std::jthread>(WorkerThread, nullptr);
+    g_jthread = std::make_unique<std::jthread>(WorkerThread);
 }
 
 void StopWorkerThread() {
+    // Send close message to the dialog's message loop
     ::PostMessage(g_dialogWnd, WM_COMMAND, 5020, 0);
-    if (g_jthread) {
-        g_jthread->request_stop();
-        g_jthread->join();
-        g_jthread.reset();
-    }
+    // jthread automatically calls request_stop() and join() on destruction
+    g_jthread.reset();
 }
 
-void WorkerThread(void *dummy) {
-	char curdir[MAX_PATH]= "";
-	
-	//   #ifdef _DEBUG   
-	//   Sleep(30000);
-	//   #endif
-
+void WorkerThread(std::stop_token stopToken) {
 	hInstRes=GetModuleHandle(NULL);
 	hInstApp=hInstRes;
 
@@ -256,12 +248,21 @@ void WorkerThread(void *dummy) {
 	bool HardAccess = false;
 	bool NewHardAccess = true;
 
-    for (int i = 0; i < 180; i++) {
+    // Try to open TVicPort driver, with cooperative cancellation support
+    for (int i = 0; i < 180 && !stopToken.stop_requested(); i++) {
         if (OpenTVicPort()) {
             ok = true;
             break;
         }
-        ::Sleep(1000);
+        // Use shorter sleep intervals to respond to stop requests faster
+        for (int j = 0; j < 10 && !stopToken.stop_requested(); j++) {
+            ::Sleep(100);
+        }
+    }
+    
+    // Early exit if stop was requested during initialization
+    if (stopToken.stop_requested()) {
+        return;
     }
 	if (ok) {	
 		HardAccess = TestHardAccess();

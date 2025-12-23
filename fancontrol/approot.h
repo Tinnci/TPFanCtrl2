@@ -38,6 +38,6 @@ void StartWorkerThread();
 
 void StopWorkerThread();
 
-void WorkerThread(void* dummy);
+void WorkerThread(std::stop_token stopToken);
 
 void debug(const char* msg);
