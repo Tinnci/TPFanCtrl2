@@ -33,6 +33,11 @@ jobs:
       with:
         xmake-version: latest
 
+    - name: Setup MSVC
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: x86
+
     - name: Configure xmake
       run: xmake f -m release -a x86 -y
       env:
