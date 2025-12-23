@@ -63,6 +63,9 @@ void I18nManager::LoadTranslations() {
     en["SETTING_POLLING"] = "Hardware Polling";
     en["SETTING_PID"] = "PID Controller (Advanced)";
     en["SETTING_SENSORS"] = "Sensor Management";
+    en["SIDEBAR_GENERAL"] = "General";
+    en["SIDEBAR_PID"] = "PID Tuning";
+    en["SIDEBAR_SENSORS"] = "Sensors";
     en["OPT_START_MINIMIZED"] = "Start Minimized to Tray";
     en["OPT_MINIMIZE_TRAY"] = "Minimize to Tray";
     en["OPT_MINIMIZE_CLOSE"] = "Close Button Minimizes";
@@ -111,6 +114,9 @@ void I18nManager::LoadTranslations() {
     zh["SETTING_POLLING"] = "\xE7\xA1\xAC\xE4\xBB\xB6\xE8\xBD\xAE\xE8\xAF\xA2";
     zh["SETTING_PID"] = "PID \xE6\x8E\xA7\xE5\x88\xB6\xE5\x99\xA8 (\xE9\xAB\x98\xE7\xBA\xA7)";
     zh["SETTING_SENSORS"] = "\xE4\xBC\xA0\xE6\x84\x9F\xE5\x99\xA8\xE7\xAE\xA1\xE7\x90\x86";
+    zh["SIDEBAR_GENERAL"] = "\xE5\xB8\xB8\xE8\xA7\x84\xE8\xAE\xBE\xE7\xBD\xAE";
+    zh["SIDEBAR_PID"] = "PID \xE8\xB0\x83\xE4\xBC\x98";
+    zh["SIDEBAR_SENSORS"] = "\xE4\xBC\xA0\xE6\x84\x9F\xE5\x99\xA8";
     zh["OPT_START_MINIMIZED"] = "\xE5\x90\xAF\xE5\x8A\xA8\xE6\x97\xB6\xE6\x9C\x80\xE5\xB0\x8F\xE5\x8C\x96\xE5\x88\xB0\xE6\x89\x98\xE7\x9B\x98";
     zh["OPT_MINIMIZE_TRAY"] = "\xE6\x9C\x80\xE5\xB0\x8F\xE5\x8C\x96\xE5\x88\xB0\xE6\x89\x98\xE7\x9B\x98";
     zh["OPT_MINIMIZE_CLOSE"] = "\xE5\x85\xB3\xE9\x97\xAD\xE6\x8C\x89\xE9\x92\xAE\xE6\x9C\x80\xE5\xB0\x8F\xE5\x8C\x96";

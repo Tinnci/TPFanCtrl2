@@ -79,6 +79,7 @@ struct UIState {
     PIDSettings PID;
     int ManualLevel = 0;
     int Mode = 2; // 0: BIOS, 1: Manual, 2: Smart
+    int SelectedSettingsTab = 0; // 0: General, 1: Hardware, 2: PID, 3: Sensors
     
     std::mutex Mutex;
 } g_UIState;
@@ -917,15 +918,68 @@ int main(int argc, char** argv) {
             }
 
             if (ImGui::BeginTabItem(_TR("TAB_SETTINGS"))) {
-                ImGui::BeginChild("SettingsScroll", ImVec2(0, 0), false, ImGuiWindowFlags_AlwaysVerticalScrollbar);
+                // --- Sidebar ---
+                ImGui::BeginChild("SettingsSidebar", ImVec2(180 * dpiScale, 0), true);
                 
-                if (ImGui::BeginTable("SettingsLayout", 2, ImGuiTableFlags_SizingStretchSame)) {
-                    ImGui::TableNextColumn();
+                auto drawSidebarItem = [&](int id, const char* icon, const char* labelKey) {
+                    bool selected = (g_UIState.SelectedSettingsTab == id);
+                    if (selected) ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.89f, 0.12f, 0.16f, 0.2f));
+                    if (selected) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.89f, 0.12f, 0.16f, 1.0f));
                     
-                    // --- Left Column: Behavior & Polling ---
-                    ImGui::BeginChild("BehaviorGroup", ImVec2(0, 250 * dpiScale), true);
-                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), ICON_CHIP " %s", _TR("SETTING_BEHAVIOR"));
+                    char buf[128];
+                    sprintf_s(buf, "%s  %s", icon, _TR(labelKey));
+                    if (ImGui::Selectable(buf, selected, 0, ImVec2(0, 40 * dpiScale))) {
+                        g_UIState.SelectedSettingsTab = id;
+                    }
+                    
+                    if (selected) ImGui::PopStyleColor(2);
+                };
+
+                ImGui::Spacing();
+                drawSidebarItem(0, ICON_CHIP, "SIDEBAR_GENERAL");
+                drawSidebarItem(1, ICON_CPU, "SIDEBAR_PID");
+                drawSidebarItem(2, ICON_GPU, "SIDEBAR_SENSORS");
+
+                // Bottom Save Button
+                float availH = ImGui::GetContentRegionAvail().y;
+                if (availH > 60 * dpiScale) {
+                    ImGui::SetCursorPosY(ImGui::GetWindowHeight() - 70 * dpiScale);
                     ImGui::Separator();
+                    if (ImGui::Button(_TR("BTN_SAVE_ALL"), ImVec2(-1, 50 * dpiScale))) {
+                        {
+                            std::lock_guard<std::mutex> lock(g_UIState.Mutex);
+                            g_Config->ActiveMode = g_UIState.Mode;
+                            g_Config->ManFanSpeed = g_UIState.ManualLevel;
+                            g_Config->ControlAlgorithm = (int)g_UIState.Algorithm;
+                            g_Config->PID_Target = g_UIState.PID.targetTemp;
+                            g_Config->PID_Kp = g_UIState.PID.Kp;
+                            g_Config->PID_Ki = g_UIState.PID.Ki;
+                            g_Config->PID_Kd = g_UIState.PID.Kd;
+                        }
+                        if (g_Config->SaveConfig("TPFanCtrl2.ini")) {
+                            g_AppLog.AddLog("[Config] %s", _TR("LOG_SAVE_SUCCESS"));
+                        } else {
+                            g_AppLog.AddLog("[Config] %s", _TR("LOG_SAVE_ERROR"));
+                        }
+                    }
+                }
+                ImGui::EndChild();
+
+                ImGui::SameLine();
+
+                // --- Content Area ---
+                ImGui::BeginChild("SettingsContent", ImVec2(0, 0), false);
+                ImGui::Indent(10 * dpiScale);
+                ImGui::Spacing();
+
+                if (g_UIState.SelectedSettingsTab == 0) {
+                    // --- General Settings ---
+                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), "%s", _TR("SIDEBAR_GENERAL"));
+                    ImGui::Separator();
+                    ImGui::Spacing();
+
+                    ImGui::BeginChild("BehaviorGroup", ImVec2(0, 220 * dpiScale), true);
+                    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "%s", _TR("SETTING_BEHAVIOR"));
                     ImGui::Spacing();
                     {
                         bool startMin = g_Config->StartMinimized != 0;
@@ -952,14 +1006,13 @@ int main(int argc, char** argv) {
                     }
                     ImGui::EndChild();
 
-                    ImGui::BeginChild("PollingGroup", ImVec2(0, 150 * dpiScale), true);
-                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), ICON_FAN " %s", _TR("SETTING_POLLING"));
-                    ImGui::Separator();
+                    ImGui::BeginChild("PollingGroup", ImVec2(0, 160 * dpiScale), true);
+                    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "%s", _TR("SETTING_POLLING"));
                     ImGui::Spacing();
                     {
                         int cycle = g_Config->Cycle;
                         ImGui::Text(_TR("LBL_CYCLE"));
-                        ImGui::PushItemWidth(-1);
+                        ImGui::PushItemWidth(200 * dpiScale);
                         if (ImGui::InputInt("##Cycle", &cycle)) {
                             if (cycle < 1) cycle = 1;
                             if (cycle > 60) cycle = 60;
@@ -971,41 +1024,43 @@ int main(int argc, char** argv) {
                         ImGui::TextDisabled("%s: 100ms (10Hz)", _TR("LBL_REFRESH_CTRL"));
                     }
                     ImGui::EndChild();
-
-                    ImGui::TableNextColumn();
-
-                    // --- Right Column: PID Parameters ---
-                    ImGui::BeginChild("PIDGroup", ImVec2(0, 380 * dpiScale), true);
-                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), ICON_CPU " %s", _TR("SETTING_PID"));
+                }
+                else if (g_UIState.SelectedSettingsTab == 1) {
+                    // --- PID Tuning ---
+                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), "%s", _TR("SIDEBAR_PID"));
                     ImGui::Separator();
+                    ImGui::Spacing();
+
+                    ImGui::BeginChild("PIDGroup", ImVec2(0, 350 * dpiScale), true);
+                    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "%s", _TR("SETTING_PID"));
                     ImGui::Spacing();
                     {
                         std::lock_guard<std::mutex> lock(g_UIState.Mutex);
-                        float itemWidth = -120 * dpiScale;
+                        float itemWidth = 200 * dpiScale;
                         
-                        ImGui::Text("%s:", _TR("LBL_TARGET_TEMP")); ImGui::SameLine(120 * dpiScale);
+                        ImGui::Text("%s:", _TR("LBL_TARGET_TEMP")); ImGui::SameLine(150 * dpiScale);
                         ImGui::PushItemWidth(itemWidth);
                         ImGui::InputFloat("##Target", &g_UIState.PID.targetTemp, 1.0f, 5.0f, "%.1f\xC2\xB0\x43");
                         ImGui::PopItemWidth();
 
-                        ImGui::Text("%s:", _TR("LBL_KP")); ImGui::SameLine(120 * dpiScale);
+                        ImGui::Text("%s:", _TR("LBL_KP")); ImGui::SameLine(150 * dpiScale);
                         ImGui::PushItemWidth(itemWidth);
                         ImGui::InputFloat("##Kp", &g_UIState.PID.Kp, 0.01f, 0.1f, "%.3f");
                         ImGui::PopItemWidth();
 
-                        ImGui::Text("%s:", _TR("LBL_KI")); ImGui::SameLine(120 * dpiScale);
+                        ImGui::Text("%s:", _TR("LBL_KI")); ImGui::SameLine(150 * dpiScale);
                         ImGui::PushItemWidth(itemWidth);
                         ImGui::InputFloat("##Ki", &g_UIState.PID.Ki, 0.001f, 0.01f, "%.4f");
                         ImGui::PopItemWidth();
 
-                        ImGui::Text("%s:", _TR("LBL_KD")); ImGui::SameLine(120 * dpiScale);
+                        ImGui::Text("%s:", _TR("LBL_KD")); ImGui::SameLine(150 * dpiScale);
                         ImGui::PushItemWidth(itemWidth);
                         ImGui::InputFloat("##Kd", &g_UIState.PID.Kd, 0.01f, 0.1f, "%.3f");
                         ImGui::PopItemWidth();
                         
                         ImGui::Spacing();
                         ImGui::Separator();
-                        if (ImGui::Button(_TR("BTN_RESET_PID"), ImVec2(-1, 30 * dpiScale))) {
+                        if (ImGui::Button(_TR("BTN_RESET_PID"), ImVec2(200 * dpiScale, 35 * dpiScale))) {
                             g_UIState.PID.targetTemp = 60.0f;
                             g_UIState.PID.Kp = 0.5f;
                             g_UIState.PID.Ki = 0.01f;
@@ -1013,74 +1068,54 @@ int main(int argc, char** argv) {
                         }
                     }
                     ImGui::EndChild();
-
-                    ImGui::EndTable();
                 }
+                else if (g_UIState.SelectedSettingsTab == 2) {
+                    // --- Sensors ---
+                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), "%s", _TR("SIDEBAR_SENSORS"));
+                    ImGui::Separator();
+                    ImGui::Spacing();
 
-                ImGui::BeginChild("SensorGroup", ImVec2(0, 200 * dpiScale), true);
-                ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), ICON_GPU " %s", _TR("SETTING_SENSORS"));
-                ImGui::Separator();
-                ImGui::TextDisabled("%s", _TR("DESC_SENSORS"));
-                ImGui::Spacing();
-                {
-                    std::lock_guard<std::mutex> lock(g_UIState.Mutex);
-                    if (ImGui::BeginTable("SensorsIgnore", 4, ImGuiTableFlags_NoSavedSettings)) {
-                        for (const auto& s : g_UIState.Sensors) {
-                            ImGui::TableNextColumn();
-                            
-                            bool ignored = g_Config->IgnoreSensors.find(s.name) != std::string::npos;
-                            
-                            if (!s.isAvailable) ImGui::BeginDisabled();
-                            
-                            if (ImGui::Checkbox(s.name.c_str(), &ignored)) {
-                                if (ignored) {
-                                    if (g_Config->IgnoreSensors.find(s.name) == std::string::npos)
-                                        g_Config->IgnoreSensors += s.name + " ";
-                                } else {
-                                    size_t pos = g_Config->IgnoreSensors.find(s.name);
-                                    if (pos != std::string::npos)
-                                        g_Config->IgnoreSensors.erase(pos, s.name.length() + 1);
-                                }
-                            }
-                            
-                            if (!s.isAvailable) ImGui::EndDisabled();
-                            
-                            if (ImGui::IsItemHovered() && !s.isAvailable) {
-                                ImGui::SetTooltip(_TR("TIP_SENSOR_UNAVAILABLE"), s.addr);
-                            }
-                        }
-                        ImGui::EndTable();
-                    }
-                }
-                ImGui::EndChild();
-
-                ImGui::Spacing();
-                ImGui::Separator();
-                ImGui::TextDisabled("%s:", _TR("LBL_DEBUG_INFO"));
-                ImGui::SameLine();
-                ImGui::TextDisabled("DPI: %.2f | Fonts: %d", dpiScale, io.Fonts->Fonts.Size);
-                
-                ImGui::Spacing();
-                
-                if (ImGui::Button(_TR("BTN_SAVE_ALL"), ImVec2(-1, 50 * dpiScale))) {
+                    ImGui::BeginChild("SensorGroup", ImVec2(0, 0), true);
+                    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "%s", _TR("SETTING_SENSORS"));
+                    ImGui::Spacing();
+                    ImGui::TextDisabled("%s", _TR("DESC_SENSORS"));
+                    ImGui::Spacing();
                     {
                         std::lock_guard<std::mutex> lock(g_UIState.Mutex);
-                        g_Config->ActiveMode = g_UIState.Mode;
-                        g_Config->ManFanSpeed = g_UIState.ManualLevel;
-                        g_Config->ControlAlgorithm = (int)g_UIState.Algorithm;
-                        g_Config->PID_Target = g_UIState.PID.targetTemp;
-                        g_Config->PID_Kp = g_UIState.PID.Kp;
-                        g_Config->PID_Ki = g_UIState.PID.Ki;
-                        g_Config->PID_Kd = g_UIState.PID.Kd;
+                        if (ImGui::BeginTable("SensorsIgnore", 3, ImGuiTableFlags_NoSavedSettings)) {
+                            for (const auto& s : g_UIState.Sensors) {
+                                ImGui::TableNextColumn();
+                                
+                                bool ignored = g_Config->IgnoreSensors.find(s.name) != std::string::npos;
+                                
+                                if (!s.isAvailable) ImGui::BeginDisabled();
+                                
+                                if (ImGui::Checkbox(s.name.c_str(), &ignored)) {
+                                    if (ignored) {
+                                        if (g_Config->IgnoreSensors.find(s.name) == std::string::npos)
+                                            g_Config->IgnoreSensors += s.name + " ";
+                                    } else {
+                                        size_t pos = g_Config->IgnoreSensors.find(s.name);
+                                        if (pos != std::string::npos)
+                                            g_Config->IgnoreSensors.erase(pos, s.name.length() + 1);
+                                    }
+                                }
+                                
+                                if (!s.isAvailable) ImGui::EndDisabled();
+                                
+                                if (ImGui::IsItemHovered() && !s.isAvailable) {
+                                    ImGui::SetTooltip(_TR("TIP_SENSOR_UNAVAILABLE"), s.addr);
+                                }
+                            }
+                            ImGui::EndTable();
+                        }
                     }
-                    if (g_Config->SaveConfig("TPFanCtrl2.ini")) {
-                        g_AppLog.AddLog("[Config] %s", _TR("LOG_SAVE_SUCCESS"));
-                    } else {
-                        g_AppLog.AddLog("[Config] %s", _TR("LOG_SAVE_ERROR"));
-                    }
+                    ImGui::EndChild();
                 }
-                
+
+                ImGui::Unindent(10 * dpiScale);
                 ImGui::EndChild();
+
                 ImGui::EndTabItem();
             }
             ImGui::EndTabBar();
