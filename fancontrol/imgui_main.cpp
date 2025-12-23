@@ -8,6 +8,8 @@
 #include <mutex>
 #include <thread>
 #include <chrono>
+#include <cstdio>
+#include <cstdarg>
 
 #include "imgui.h"
 #include "imgui_impl_win32.h"
@@ -71,12 +73,22 @@ void Log(LogLevel level, const char* fmt, ...) {
     if (level == LOG_DEBUG) prefix = "[DEBUG] ";
     if (level == LOG_WARN)  prefix = "[WARN]  ";
     if (level == LOG_ERROR) prefix = "[ERROR] ";
-    printf("%s", prefix);
+    
+    char buf[1024];
     va_list args;
     va_start(args, fmt);
-    vprintf(fmt, args);
+    vsnprintf(buf, 1024, fmt, args);
     va_end(args);
-    printf("\n");
+
+    // Print to console
+    printf("%s%s\n", prefix, buf);
+
+    // Also write to file for elevated process diagnostics
+    FILE* f = fopen("TPFanCtrl2_debug.log", "a");
+    if (f) {
+        fprintf(f, "%s%s\n", prefix, buf);
+        fclose(f);
+    }
 }
 
 // --- Log System ---
@@ -206,7 +218,64 @@ void HardwareWorker(std::shared_ptr<ConfigManager> config,
 
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
+// --- Helper Functions ---
+bool IsUserAdmin() {
+    BOOL isAdmin = FALSE;
+    PSID adminGroup = NULL;
+    SID_IDENTIFIER_AUTHORITY ntAuthority = SECURITY_NT_AUTHORITY;
+    if (AllocateAndInitializeSid(&ntAuthority, 2, SECURITY_BUILTIN_DOMAIN_RID,
+        DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, &adminGroup)) {
+        CheckTokenMembership(NULL, adminGroup, &isAdmin);
+        FreeSid(adminGroup);
+    }
+    return isAdmin;
+}
+
 int main(int argc, char** argv) {
+    // Clear old log file for a fresh session
+    remove("TPFanCtrl2_debug.log");
+    Log(LOG_INFO, "--- TPFanCtrl2 Session Started ---");
+
+    // 0. Check Privileges
+    bool isAdmin = IsUserAdmin();
+    Log(LOG_INFO, "Running as Administrator: %s", isAdmin ? "YES" : "NO");
+
+    if (!isAdmin) {
+        int result = MessageBoxW(NULL, 
+            L"TPFanCtrl2 requires Administrator privileges to access hardware (TVicPort).\n\n"
+            L"Would you like to restart as Administrator?", 
+            L"Privilege Elevation Required", 
+            MB_YESNO | MB_ICONWARNING);
+
+        if (result == IDYES) {
+            wchar_t szPath[MAX_PATH];
+            GetModuleFileNameW(NULL, szPath, MAX_PATH);
+            
+            wchar_t szDir[MAX_PATH];
+            wcscpy(szDir, szPath);
+            wchar_t* lastSlash = wcsrchr(szDir, L'\\');
+            if (lastSlash) *lastSlash = L'\0';
+
+            SHELLEXECUTEINFOW sei = { sizeof(sei) };
+            sei.lpVerb = L"runas";
+            sei.lpFile = szPath;
+            sei.lpDirectory = szDir; // Set working directory to exe location
+            sei.hwnd = NULL;
+            sei.nShow = SW_NORMAL;
+            
+            if (ShellExecuteExW(&sei)) {
+                return 0;
+            } else {
+                DWORD err = GetLastError();
+                wchar_t msg[256];
+                swprintf(msg, 256, L"Failed to elevate privileges. Error code: %lu", err);
+                MessageBoxW(NULL, msg, L"Elevation Error", MB_OK | MB_ICONERROR);
+            }
+        }
+        // If user chose NO or elevation failed, we continue but log a warning
+        Log(LOG_WARN, "Running without Administrator privileges. Hardware access will likely fail.");
+    }
+
     HINSTANCE hInstance = GetModuleHandle(NULL);
     // Logic Init
     auto configManager = std::make_shared<ConfigManager>();

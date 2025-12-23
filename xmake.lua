@@ -25,9 +25,10 @@ add_cxflags("/J", "/source-charset:utf-8", {tools = "msvc"})
 target("TPFanCtrl2")
     set_kind("binary")
     set_plat("windows")
+    add_packages("imgui", "implot", "vulkan-loader", "freetype", "vulkan-memory-allocator")
     
-    -- Set subsystem to Windows (GUI)
-    add_ldflags("/SUBSYSTEM:WINDOWS", {force = true})
+    -- Set subsystem to Console for debugging (change to WINDOWS for final release)
+    add_ldflags("/SUBSYSTEM:CONSOLE", {force = true})
     
     -- Precompiled Header
     set_pcxxheader("fancontrol/_prec.h")
@@ -42,7 +43,7 @@ target("TPFanCtrl2")
     -- Link libraries
     add_linkdirs("fancontrol")
     add_links("TVicPort")
-    add_links("comctl32", "user32", "gdi32", "advapi32", "shell32", "ole32", "oleaut32", "uuid")
+    add_links("comctl32", "user32", "gdi32", "advapi32", "shell32", "ole32", "oleaut32", "uuid", "dwmapi")
     
     -- Output directory
     set_targetdir("bin")
@@ -56,36 +57,6 @@ target("TPFanCtrl2")
         add_ldflags("/LTCG", {tools = "msvc"})
         add_vectorexts("sse2")
     end
-
--- Target: imgui_demo (ImGui Experiment)
-target("imgui_demo")
-    set_kind("binary")
-    set_plat("windows")
-    add_packages("imgui", "implot", "vulkan-loader", "freetype", "vulkan-memory-allocator")
-    
-    -- Console application for debugging
-    add_ldflags("/SUBSYSTEM:CONSOLE", {force = true})
-    
-    -- Source files
-    add_files("fancontrol/imgui_main.cpp")
-    add_files("fancontrol/ECManager.cpp")
-    add_files("fancontrol/SensorManager.cpp")
-    add_files("fancontrol/FanController.cpp")
-    add_files("fancontrol/ConfigManager.cpp")
-    add_files("fancontrol/TVicPortProvider.cpp")
-    add_files("fancontrol/portio.cpp")
-    add_files("fancontrol/misc.cpp")
-    
-    -- Include directories
-    add_includedirs("fancontrol")
-    
-    -- Link libraries
-    add_linkdirs("fancontrol")
-    add_links("TVicPort")
-    add_links("comctl32", "user32", "gdi32", "advapi32", "shell32", "ole32", "oleaut32", "uuid", "dwmapi")
-    
-    -- Output directory
-    set_targetdir("bin")
 
 -- Target: logic_test (Unit Tests)
 target("logic_test")
