@@ -27,51 +27,48 @@ bool SensorManager::UpdateSensors(bool showBiasedTemps, bool noExtSensor, bool u
         return false; 
     }
 
-    for (int i = 0; i < 8; i++) {
-        m_sensors[i].addr = TP_ECOFFSET_TEMP0 + i;
+    // Helper lambda to read and process a single sensor
+    auto readSensor = [this](int idx) -> bool {
         char temp;
-        if (m_ecManager->ReadByte(m_sensors[i].addr, &temp)) {
-            m_sensors[i].rawTemp = (unsigned char)temp;
-            
-            // Discovery logic: if it's a valid temp, mark as available
-            if (m_sensors[i].rawTemp > 0 && m_sensors[i].rawTemp < 128) {
-                m_sensors[i].isAvailable = true;
-            }
-
-            int offset = m_offsets[i].offset;
-            if (m_sensors[i].rawTemp >= m_offsets[i].hystMin && m_sensors[i].rawTemp <= m_offsets[i].hystMax) {
-                offset = 0;
-            }
-            m_sensors[i].biasedTemp = m_sensors[i].rawTemp - offset;
-        } else {
+        if (!m_ecManager->ReadByte(m_sensors[idx].addr, &temp)) {
             return false;
         }
+        
+        m_sensors[idx].rawTemp = (unsigned char)temp;
+        
+        // Mark as available if temperature is valid
+        if (m_sensors[idx].rawTemp > 0 && m_sensors[idx].rawTemp < 128) {
+            m_sensors[idx].isAvailable = true;
+        }
+
+        // Apply offset with hysteresis
+        int offset = m_offsets[idx].offset;
+        if (m_sensors[idx].rawTemp >= m_offsets[idx].hystMin && 
+            m_sensors[idx].rawTemp <= m_offsets[idx].hystMax) {
+            offset = 0;
+        }
+        m_sensors[idx].biasedTemp = m_sensors[idx].rawTemp - offset;
+        return true;
+    };
+
+    // Read primary sensors (0-7) at addresses 0x78-0x7F
+    for (int i = 0; i < 8; i++) {
+        m_sensors[i].addr = TP_ECOFFSET_TEMP0 + i;
+        if (!readSensor(i)) return false;
     }
 
+    // Read extended sensors (8-11) at addresses 0xC0-0xC3
     for (int i = 0; i < 4; i++) {
         int idx = 8 + i;
         m_sensors[idx].addr = TP_ECOFFSET_TEMP1 + i;
+        
         if (noExtSensor) {
             m_sensors[idx].rawTemp = 0;
             m_sensors[idx].biasedTemp = 0;
             continue;
         }
-        char temp;
-        if (m_ecManager->ReadByte(m_sensors[idx].addr, &temp)) {
-            m_sensors[idx].rawTemp = (unsigned char)temp;
-
-            if (m_sensors[idx].rawTemp > 0 && m_sensors[idx].rawTemp < 128) {
-                m_sensors[idx].isAvailable = true;
-            }
-
-            int offset = m_offsets[idx].offset;
-            if (m_sensors[idx].rawTemp >= m_offsets[idx].hystMin && m_sensors[idx].rawTemp <= m_offsets[idx].hystMax) {
-                offset = 0;
-            }
-            m_sensors[idx].biasedTemp = m_sensors[idx].rawTemp - offset;
-        } else {
-            return false;
-        }
+        
+        if (!readSensor(idx)) return false;
     }
 
     return true;

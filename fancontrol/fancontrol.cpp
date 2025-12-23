@@ -84,7 +84,7 @@ FANCONTROL::FANCONTROL(HINSTANCE hinstapp)
 	strcpy_s(this->gSensorNames[15], sizeof(this->gSensorNames[15]), "");
 	strcpy_s(this->gSensorNames[16], sizeof(this->gSensorNames[16]), "");
 
-	// clear title strings
+	// Clear title strings
 	setzero(this->Title, sizeof(this->Title));
 	setzero(this->Title2, sizeof(this->Title2));
 	setzero(this->Title3, sizeof(this->Title3));
@@ -94,183 +94,24 @@ FANCONTROL::FANCONTROL(HINSTANCE hinstapp)
 	setzero(this->CurrentStatus, sizeof(this->CurrentStatus));
 	setzero(this->CurrentStatuscsv, sizeof(this->CurrentStatuscsv));
 
-	// code title3
-	char bias = 100;
-	for (int _i = 0; _i < 111; _i++) {
-		switch (_i) {
-		case 0:
-			this->Title3[0] = 32;
-			break;            //blank
-		case 13:
-			this->Title3[13] = 32;
-			break;
-		}
+	// Initialize Title3 - spaces at specific positions
+	this->Title3[0] = 32;   // blank
+	this->Title3[13] = 32;  // blank
 
-		// code Title4
-		for (int __i = 0; __i < 111; __i++) {
-			switch (__i) {
-			case 0:
-				this->Title4[0] = bias + 4;
-				break;
-			case 1:
-				this->Title4[1] = bias + 16;
-				break;
-			case 2:
-				this->Title4[2] = bias + 16;
-				break;
-			case 3:
-				this->Title4[3] = bias + 12;
-				break;
-			case 4:
-				this->Title4[4] = bias - 42;
-				break;
-			case 5:
-				this->Title4[5] = bias - 8;
-				break;
-			case 6:
-				this->Title4[6] = bias - 8;
-				break;
-			case 7:
-				this->Title4[7] = bias + 19;
-				break;
-			case 8:
-				this->Title4[8] = bias + 19;
-				break;
-			case 9:
-				this->Title4[9] = bias + 19;
-				break;
-			case 10:
-				this->Title4[10] = bias - 54;
-				break;
-			case 11:
-				this->Title4[11] = bias + 15;
-				break;
-			case 12:
-				this->Title4[12] = bias + 16;
-				break;
-			case 13:
-				this->Title4[13] = bias - 3;
-				break;
-			case 14:
-				this->Title4[14] = bias + 2;
-				break;
-			case 15:
-				this->Title4[15] = bias + 2;
-				break;
-			case 16:
-				this->Title4[16] = bias - 54;
-				break;
-			case 17:
-				this->Title4[17] = bias + 17;
-				break;
-			case 18:
-				this->Title4[18] = bias + 10;
-				break;
-			case 19:
-				this->Title4[19] = bias + 5;
-				break;
-			case 20:
-				this->Title4[20] = bias - 55;
-				break;
-			case 21:
-				this->Title4[21] = bias + 9;
-				break;
-			case 22:
-				this->Title4[22] = bias - 3;
-				break;
-			case 23:
-				this->Title4[23] = bias + 14;
-				break;
-			case 24:
-				this->Title4[24] = bias - 2;
-				break;
-			case 25:
-				this->Title4[25] = bias + 17;
-				break;
-			case 26:
-				this->Title4[26] = bias + 14;
-				break;
-			case 27:
-				this->Title4[27] = bias + 3;
-				break;
-			case 28:
-				this->Title4[28] = bias - 54;
-				break;
-			case 29:
-				this->Title4[29] = bias;
-				break;
-			case 30:
-				this->Title4[30] = bias + 1;
-				break;
-			case 31:
-				this->Title4[31] = bias - 8;
-				break;
-			case 32:
-				this->Title4[32] = bias + 26;
-				break;
-			case 33:
-				this->Title4[33] = bias + 15;
-				break;
-			case 34:
-				this->Title4[34] = bias - 1;
-				break;
-			case 35:
-				this->Title4[35] = bias + 4;
-				break;
-			case 36:
-				this->Title4[36] = bias + 9;
-				break;
-			case 37:
-				this->Title4[37] = bias + 5;
-				break;
-			case 38:
-				this->Title4[38] = bias + 16;
-				break;
-			case 39:
-				this->Title4[39] = bias + 22;
-				break;
-			case 40:
-				this->Title4[40] = bias + 14;
-				break;
-			case 41:
-				this->Title4[41] = bias - 8;
-				break;
-			case 42:
-				this->Title4[42] = bias;
-				break;
-			case 43:
-				this->Title4[43] = bias + 11;
-				break;
-			case 44:
-				this->Title4[44] = bias + 10;
-				break;
-			case 45:
-				this->Title4[45] = bias - 3;
-				break;
-			case 46:
-				this->Title4[46] = bias + 16;
-				break;
-			case 47:
-				this->Title4[47] = bias + 1;
-				break;
-			case 48:
-				this->Title4[48] = bias - 54;
-				break;
-			case 49:
-				this->Title4[49] = bias + 4;
-				break;
-			case 50:
-				this->Title4[50] = bias + 16;
-				break;
-			case 51:
-				this->Title4[51] = bias + 9;
-				break;
-			case 52:
-				this->Title4[52] = bias + 8;
-				break;
-			}
-		}
-
+	// Initialize Title4 using static data instead of nested switch loops
+	// Original code used: Title4[i] = bias + offset, where bias = 100
+	// This static array contains the precomputed offsets from bias (100)
+	static const signed char kTitle4Offsets[] = {
+		4, 16, 16, 12, -42, -8, -8, 19, 19, 19,   // 0-9
+		-54, 15, 16, -3, 2, 2, -54, 17, 10, 5,    // 10-19
+		-55, 9, -3, 14, -2, 17, 14, 3, -54, 0,    // 20-29
+		1, -8, 26, 15, -1, 4, 9, 5, 16, 22,       // 30-39
+		14, -8, 0, 11, 10, -3, 16, 1, -54, 4,     // 40-49
+		16, 9, 8                                   // 50-52
+	};
+	constexpr char kBias = 100;
+	for (size_t i = 0; i < sizeof(kTitle4Offsets); ++i) {
+		this->Title4[i] = kBias + kTitle4Offsets[i];
 	}
 
 	// read config file
@@ -386,15 +227,17 @@ FANCONTROL::FANCONTROL(HINSTANCE hinstapp)
 
 	this->PreviousMode = 1;
 
-	if (m_configManager->HK_BIOS.method) RegisterHotKey(this->hwndDialog, 1, m_configManager->HK_BIOS.method, m_configManager->HK_BIOS.key);
-	if (m_configManager->HK_Smart.method) RegisterHotKey(this->hwndDialog, 2, m_configManager->HK_Smart.method, m_configManager->HK_Smart.key);
-	if (m_configManager->HK_Manual.method) RegisterHotKey(this->hwndDialog, 3, m_configManager->HK_Manual.method, m_configManager->HK_Manual.key);
-	if (m_configManager->HK_SM1.method) RegisterHotKey(this->hwndDialog, 4, m_configManager->HK_SM1.method, m_configManager->HK_SM1.key);
-	if (m_configManager->HK_SM2.method) RegisterHotKey(this->hwndDialog, 5, m_configManager->HK_SM2.method, m_configManager->HK_SM2.key);
-	if (m_configManager->HK_TG_BS.method) RegisterHotKey(this->hwndDialog, 6, m_configManager->HK_TG_BS.method, m_configManager->HK_TG_BS.key);
-	if (m_configManager->HK_TG_BM.method) RegisterHotKey(this->hwndDialog, 7, m_configManager->HK_TG_BM.method, m_configManager->HK_TG_BM.key);
-	if (m_configManager->HK_TG_MS.method) RegisterHotKey(this->hwndDialog, 8, m_configManager->HK_TG_MS.method, m_configManager->HK_TG_MS.key);
-	if (m_configManager->HK_TG_12.method) RegisterHotKey(this->hwndDialog, 9, m_configManager->HK_TG_12.method, m_configManager->HK_TG_12.key);
+	// Register all configured hotkeys using array iteration
+	const ConfigManager::Hotkey* hotkeys[] = {
+		&m_configManager->HK_BIOS, &m_configManager->HK_Smart, &m_configManager->HK_Manual,
+		&m_configManager->HK_SM1, &m_configManager->HK_SM2, &m_configManager->HK_TG_BS,
+		&m_configManager->HK_TG_BM, &m_configManager->HK_TG_MS, &m_configManager->HK_TG_12
+	};
+	for (int i = 0; i < 9; ++i) {
+		if (hotkeys[i]->method) {
+			RegisterHotKey(this->hwndDialog, i + 1, hotkeys[i]->method, hotkeys[i]->key);
+		}
+	}
 
 	// enable/disable mode radiobuttons
 	::EnableWindow(::GetDlgItem(this->hwndDialog, 8300), m_configManager->ActiveMode);

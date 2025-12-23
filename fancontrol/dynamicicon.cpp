@@ -34,40 +34,29 @@ CDynamicIcon::CDynamicIcon(const char *line1, const char *line2, const int iFarb
     // draw background on both bitmaps
     rgn = CreateRectRgn(0, 0, iconWidth_, iconHeight_);
 
-    switch (iFarbeIconA) {
-        case 10:
-            hBrush = CreateSolidBrush(RGB(245, 245, 245)); //grau
-            break;
-        case 11:
-            hBrush = CreateSolidBrush(RGB(191, 239, 255)); //blau
-            break;
-        case 12:
-            hBrush = CreateSolidBrush(RGB(255, 255, 0)); //gelb
-            break;
-        case 13:
-            hBrush = CreateSolidBrush(RGB(255, 165, 0)); //orange
-            break;
-        case 14:
-            hBrush = CreateSolidBrush(RGB(255, 69, 0)); //rot
-            break;
-        case 21:
-            hBrush = CreateSolidBrush(RGB(175, 255, 175)); //sehr hell grün
-            break;
-        case 22:
-            hBrush = CreateSolidBrush(RGB(123, 255, 123)); //hell grün
-            break;
-        case 23:
-            hBrush = CreateSolidBrush(RGB(0, 255, 0)); //grün
-            break;
-        case 24:
-            hBrush = CreateSolidBrush(RGB(0, 218, 0)); //dunkel grün
-            break;
-        case 25:
-            hBrush = CreateSolidBrush(RGB(0, 164, 0)); //sehr dunkel grün
-            break;
-        default:
-            hBrush = CreateSolidBrush(RGB(255, 255, 255)); // weiss
+    // Color lookup table: [colorId] = RGB color
+    // Using static map for O(1) lookup instead of switch-case
+    static const struct { int id; BYTE r, g, b; } kColorTable[] = {
+        {10, 245, 245, 245},  // grau (gray)
+        {11, 191, 239, 255},  // blau (blue)
+        {12, 255, 255,   0},  // gelb (yellow)
+        {13, 255, 165,   0},  // orange
+        {14, 255,  69,   0},  // rot (red)
+        {21, 175, 255, 175},  // sehr hell grün (very light green)
+        {22, 123, 255, 123},  // hell grün (light green)
+        {23,   0, 255,   0},  // grün (green)
+        {24,   0, 218,   0},  // dunkel grün (dark green)
+        {25,   0, 164,   0},  // sehr dunkel grün (very dark green)
     };
+    
+    COLORREF bgColor = RGB(255, 255, 255);  // Default: white
+    for (const auto& entry : kColorTable) {
+        if (entry.id == iFarbeIconA) {
+            bgColor = RGB(entry.r, entry.g, entry.b);
+            break;
+        }
+    }
+    hBrush = CreateSolidBrush(bgColor);
 
 
     FillRgn(memDC1_, rgn, hBrush);
