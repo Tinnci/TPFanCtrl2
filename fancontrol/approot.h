@@ -9,7 +9,7 @@ HANDLE hPipe4;
 
 HINSTANCE hInstApp, hInstRes;
 
-LPSTR g_ServiceName = "TPFanCtrl2";
+LPCSTR g_ServiceName = "TPFanCtrl2";
 SERVICE_STATUS g_SvcStatus = { 0 };
 SERVICE_STATUS_HANDLE g_SvcHandle = NULL;
 HWND g_dialogWnd = NULL;

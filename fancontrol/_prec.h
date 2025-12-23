@@ -15,5 +15,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <format>
+#include <stop_token>
+#include <spdlog/spdlog.h>
 #include "winuser.h"
 #include "windows.h"

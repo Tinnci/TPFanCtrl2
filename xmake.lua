@@ -18,7 +18,8 @@ set_arch("x86")
 add_rules("mode.debug", "mode.release")
 
 -- Global settings
-set_languages("c++17")
+set_languages("c++20")
+add_requires("spdlog")
 add_defines("WIN32", "_MBCS")
 add_cxflags("/J", "/utf-8", {tools = "msvc"})
 
@@ -31,7 +32,7 @@ target("TPFanCtrl2")
     set_kind("binary")
     set_plat("windows")
 
-    add_packages("imgui", "vulkan-loader", "freetype", "vulkan-memory-allocator")
+    add_packages("imgui", "vulkan-loader", "freetype", "vulkan-memory-allocator", "spdlog")
     
     -- Set subsystem to Console for debugging (change to WINDOWS for final release)
     add_ldflags("/SUBSYSTEM:CONSOLE", {force = true})
@@ -71,7 +72,7 @@ target("TPFanCtrl2")
 target("logic_test")
     set_kind("binary")
     set_plat("windows")
-    add_packages("gtest")
+    add_packages("gtest", "spdlog")
     
     -- Console application
     add_ldflags("/SUBSYSTEM:CONSOLE", {force = true})

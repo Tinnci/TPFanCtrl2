@@ -179,18 +179,16 @@ FANCONTROL::FANCONTROL(HINSTANCE hinstapp)
 	char bufsec[1024] = "";
 	int tickCount = GetTickCount(); // +262144;
 
-	sprintf_s(bufsec, sizeof(bufsec), "Windows uptime since boot %d sec., SecWinUptime= %d sec.", tickCount / 1000,	m_configManager->SecWinUptime);
-	
-	this->Trace(bufsec);
+	std::string uptimeMsg = std::format("Windows uptime since boot {} sec., SecWinUptime= {} sec.", tickCount / 1000, m_configManager->SecWinUptime);
+	this->Trace(uptimeMsg.c_str());
 
 	if ((tickCount / 1000) <= m_configManager->SecWinUptime) {
-		sprintf_s(bufsec, sizeof(bufsec), "Save the icon by a start delay of %d seconds (SecStartDelay)", m_configManager->SecStartDelay);
-
-		this->Trace(bufsec);
+		std::string delayMsg = std::format("Save the icon by a start delay of {} seconds (SecStartDelay)", m_configManager->SecStartDelay);
+		this->Trace(delayMsg.c_str());
 
 		if (!m_configManager->NoWaitMessage) {
-			sprintf_s(bufsec, sizeof(bufsec),
-				"TPFanCtrl2 is started %d sec. after\nboot time (SecWinUptime=%d sec.)\n\nTo prevent missing systray icons\nand communication errors between\nTPFanCtrl2 and embedded controller\nit will sleep for %d sec. (SecStartDelay)\n\nTo void this message box please set\nNoWaitMessage=1 in TPFanCtrl2.ini",
+			std::string waitMsg = std::format(
+				"TPFanCtrl2 is started {} sec. after\nboot time (SecWinUptime={} sec.)\n\nTo prevent missing systray icons\nand communication errors between\nTPFanCtrl2 and embedded controller\nit will sleep for {} sec. (SecStartDelay)\n\nTo void this message box please set\nNoWaitMessage=1 in TPFanCtrl2.ini",
 				tickCount / 1000, m_configManager->SecWinUptime, m_configManager->SecStartDelay);
 
 			// Don't show message box when as service in Vista
@@ -199,7 +197,7 @@ FANCONTROL::FANCONTROL(HINSTANCE hinstapp)
 			if (os.dwMajorVersion >= 6 && Runs_as_service == TRUE)
 				;
 			else
-				MessageBox(NULL, bufsec, "TPFanCtrl2 is sleeping", MB_ICONEXCLAMATION);
+				MessageBox(NULL, waitMsg.c_str(), "TPFanCtrl2 is sleeping", MB_ICONEXCLAMATION);
 		}
 	}
 
@@ -465,8 +463,7 @@ FANCONTROL::DlgProc(HWND
 		case 4:
 			this->ModeToDialog(2);
 			if (this->IndSmartLevel == 1) {
-				sprintf_s(obuf,	sizeof(obuf), "Activation of Fan Control Profile 'Smart Mode 1'");
-				this->Trace(obuf);
+				this->Trace("Activation of Fan Control Profile 'Smart Mode 1'");
 			}
 			this->IndSmartLevel = 0;
 			::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0L);
@@ -475,8 +472,7 @@ FANCONTROL::DlgProc(HWND
 		case 5:
 			this->ModeToDialog(2);
 			if (this->IndSmartLevel == 0) {
-				sprintf_s(obuf,	sizeof(obuf), "Activation of Fan Control Profile 'Smart Mode 2'");
-				this->Trace(obuf);
+				this->Trace("Activation of Fan Control Profile 'Smart Mode 2'");
 			}
 			this->IndSmartLevel = 1;
 			::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0L);
@@ -520,15 +516,12 @@ FANCONTROL::DlgProc(HWND
 			this->ModeToDialog(2);
 			switch (IndSmartLevel) {
 			case 0:
-				sprintf_s(obuf,	sizeof(obuf), "Activation of Fan Control Profile 'Smart Mode 2'");
-				this->Trace(obuf);
+				this->Trace("Activation of Fan Control Profile 'Smart Mode 2'");
 				this->IndSmartLevel = 1;
 				::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0L);
 				break;
 			case 1:
-				sprintf_s(obuf,
-					sizeof(obuf), "Activation of Fan Control Profile 'Smart Mode 1'");
-				this->Trace(obuf);
+				this->Trace("Activation of Fan Control Profile 'Smart Mode 1'");
 				this->IndSmartLevel = 0;
 				::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0L);
 				break;
@@ -769,20 +762,19 @@ FANCONTROL::DlgProc(HWND
 			if (m_configManager->Fahrenheit) {
 				if (fan1speed > 0x1fff)
 					fan1speed = lastfan1speed;
-				sprintf_s(str_value,
-					sizeof(str_value), "%d %d %s %d %d %d ",
+				std::string speedMsg = std::format("{} {} {} {} {} {} ",
 					this->CurrentMode, (this->MaxTemp * 9 / 5 + 32), this->gSensorNames[iMaxTemp],
 					iFarbeIconB, fan1speed, fanctrl2);
+				strcpy_s(szBuffer, speedMsg.c_str());
 			}
 			else {
 				if (fan1speed > 0x1fff)
 					fan1speed = lastfan1speed;
-				sprintf_s(str_value,
-					sizeof(str_value), "%d %d %s %d %d %d ",
+				std::string speedMsg = std::format("{} {} {} {} {} {} ",
 					this->CurrentMode, (this->MaxTemp), this->gSensorNames[iMaxTemp],
 					iFarbeIconB, fan1speed, fanctrl2);
+				strcpy_s(szBuffer, speedMsg.c_str());
 			}
-			strcpy_s(szBuffer, str_value); //write buffer
 
 			//send to client
 			lbResult = bResult;

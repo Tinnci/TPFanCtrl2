@@ -2,6 +2,9 @@
 #include "approot.h"
 #include "fancontrol.h"
 #include "TVicPort.h"
+#include <stop_token>
+#include <thread>
+#include <format>
 
 int APIENTRY WinMain(HINSTANCE instance, HINSTANCE, LPSTR aArgs, int) {
     hInstRes = instance;
@@ -73,7 +76,7 @@ int APIENTRY WinMain(HINSTANCE instance, HINSTANCE, LPSTR aArgs, int) {
 		if (run) {
 			// HANDLE hLockS = CreateMutex(NULL,FALSE,"TPFanControlMutex02");
 			SERVICE_TABLE_ENTRY svcEntry[2];
-			svcEntry[0].lpServiceName = g_ServiceName;
+			svcEntry[0].lpServiceName = const_cast<LPSTR>(g_ServiceName);
 			svcEntry[0].lpServiceProc = ServiceMain;
 			svcEntry[1].lpServiceName = NULL;
 			svcEntry[1].lpServiceProc = NULL;
@@ -102,12 +105,11 @@ DWORD InstallService(bool quiet) {
 
     char ExePath[MAX_PATH];
     GetModuleFileName(NULL, ExePath, sizeof(ExePath));
-	sprintf_s(ExePath+strlen(ExePath),sizeof(ExePath)-strlen(ExePath)," -s");
-//	sprintf_s(ExePath,sizeof(ExePath)," -s");
+    std::string fullPath = std::format("{} -s", ExePath);
 
     SC_HANDLE svc = CreateService(SCMgr, g_ServiceName, g_ServiceName, SERVICE_ALL_ACCESS,
         SERVICE_WIN32_OWN_PROCESS | SERVICE_INTERACTIVE_PROCESS, SERVICE_AUTO_START, SERVICE_ERROR_NORMAL, 
-        ExePath, NULL, NULL, NULL, NULL, NULL);
+        fullPath.c_str(), NULL, NULL, NULL, NULL, NULL);
 
     if (!svc) {
         CloseServiceHandle(SCMgr);
@@ -160,13 +162,10 @@ void ShowError(DWORD ec, const char *description) {
         (LPTSTR) &msgBuf,
         0, NULL );
 
-    size_t dispBuf_len = strlen(msgBuf) + strlen(description) + 40;
-    char *dispBuf = (char *)LocalAlloc(LMEM_ZEROINIT, dispBuf_len); 
-    sprintf_s(dispBuf, dispBuf_len, "%s, error code %d: %s", description, ec, msgBuf); 
-    MessageBox(NULL, dispBuf, "Error", MB_OK); 
+    std::string dispStr = std::format("{}, error code {}: {}", description, ec, msgBuf);
+    MessageBox(NULL, dispStr.c_str(), "Error", MB_OK);
 
     LocalFree(msgBuf);
-    LocalFree(dispBuf);
 }
 
 void ShowMessage(const char *title, const char *description) { 
@@ -211,14 +210,19 @@ VOID WINAPI Handler(DWORD fdwControl) {
     }
 }
 
+static std::unique_ptr<std::jthread> g_jthread;
+
 void StartWorkerThread() {
-    g_workerThread = (HANDLE)_beginthread(WorkerThread, 0, NULL);
+    g_jthread = std::make_unique<std::jthread>(WorkerThread, nullptr);
 }
 
 void StopWorkerThread() {
     ::PostMessage(g_dialogWnd, WM_COMMAND, 5020, 0);
-	::WaitForSingleObject(g_workerThread, INFINITE);
-	::CloseHandle(g_workerThread);
+    if (g_jthread) {
+        g_jthread->request_stop();
+        g_jthread->join();
+        g_jthread.reset();
+    }
 }
 
 void WorkerThread(void *dummy) {
@@ -283,11 +287,5 @@ void WorkerThread(void *dummy) {
 }
 
 void debug(const char *msg) {
-	FILE *flog;
-
-    errno_t errflog = fopen_s(&flog,"fancontrol_debug.log", "ab");
-	if (!errflog) {
-		fwrite(msg, strlen(msg), 1, flog); 
-		fclose(flog);
-	}
+    spdlog::debug("{}", msg);
 }

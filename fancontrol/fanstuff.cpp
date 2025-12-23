@@ -75,39 +75,41 @@ FANCONTROL::HandleData(void) {
 	//
 
 	// title string (for minimized window)
-	if (m_configManager->Fahrenheit)
-		sprintf_s(title2, sizeof(title2), "%d° F", this->MaxTemp * 9 / 5 + 32);
-	else
-		sprintf_s(title2, sizeof(title2), "%d° C", this->MaxTemp);
+	std::string title2Str = std::format("{}° {}", this->MaxTemp * (m_configManager->Fahrenheit ? 9 / 5 : 1) + (m_configManager->Fahrenheit ? 32 : 0), m_configManager->Fahrenheit ? "F" : "C");
+	strcpy_s(title2, sizeof(title2), title2Str.c_str());
 
 	// display fan state
 	int fanctrl = this->State.FanCtrl;
 	fanctrl2 = fanctrl;
 
+	std::string obuf2Str;
+	std::string title2Extra;
 	if (m_configManager->SlimDialog == 1) {
-		sprintf_s(obuf2, sizeof(obuf2), "Fan %d ", fanctrl);
+		obuf2Str = std::format("Fan {} ", fanctrl);
 		if (fanctrl & 0x80) {
 			if (!(m_configManager->SlimDialog && m_configManager->StayOnTop))
-				strcat_s(obuf2, sizeof(obuf2), "(= BIOS)");
-			strcat_s(title2, sizeof(title2), " Default Fan");
+				obuf2Str += "(= BIOS)";
+			title2Extra = " Default Fan";
 		}
 		else {
 			if (!(m_configManager->SlimDialog && m_configManager->StayOnTop))
-				sprintf_s(obuf2 + strlen(obuf2), sizeof(obuf2) - strlen(obuf2), " Non Bios");
-			sprintf_s(title2 + strlen(title2), sizeof(title2) - strlen(title2), " Fan %d (%s)",	fanctrl & 0x3F,	this->CurrentModeFromDialog() == 2 ? "Smart" : "Fixed");
+				obuf2Str += " Non Bios";
+			title2Extra = std::format(" Fan {} ({})", fanctrl & 0x3F, this->CurrentModeFromDialog() == 2 ? "Smart" : "Fixed");
 		}
 	}
 	else {
-		sprintf_s(obuf2, sizeof(obuf2), "0x%02x (", fanctrl);
+		obuf2Str = std::format("0x{:02x} (", (unsigned char)fanctrl);
 		if (fanctrl & 0x80) {
-			strcat_s(obuf2, sizeof(obuf2), "BIOS Controlled)");
-			strcat_s(title2, sizeof(title2), " Default Fan");
+			obuf2Str += "BIOS Controlled)";
+			title2Extra = " Default Fan";
 		}
 		else {
-			sprintf_s(obuf2 + strlen(obuf2), sizeof(obuf2) - strlen(obuf2), "Fan Level %d, Non Bios)", fanctrl & 0x3F);
-			sprintf_s(title2 + strlen(title2), sizeof(title2) - strlen(title2), " Fan %d (%s)",	fanctrl & 0x3F,	this->CurrentModeFromDialog() == 2 ? "Smart" : "Fixed");
+			obuf2Str += std::format("Fan Level {}, Non Bios)", fanctrl & 0x3F);
+			title2Extra = std::format(" Fan {} ({})", fanctrl & 0x3F, this->CurrentModeFromDialog() == 2 ? "Smart" : "Fixed");
 		}
 	}
+	strcpy_s(obuf2, sizeof(obuf2), obuf2Str.c_str());
+	strcat_s(title2, sizeof(title2), title2Extra.c_str());
 
 	::SetDlgItemText(this->hwndDialog, 8100, obuf2);
 
@@ -124,99 +126,66 @@ FANCONTROL::HandleData(void) {
 	if (this->fan2speed > 0x1fff)
 		fan2speed = lastfan2speed;
 
-	sprintf_s(obuf2, sizeof(obuf2), "%d/%d RPM", this->fan1speed, this->fan2speed);
-
-	::SetDlgItemText(this->hwndDialog, 8102, obuf2);
+	std::string rpmStr = std::format("{}/{} RPM", this->fan1speed, this->fan2speed);
+	::SetDlgItemText(this->hwndDialog, 8102, rpmStr.c_str());
 
 	// display temperature list
-	if (m_configManager->Fahrenheit)
-		sprintf_s(obuf2, sizeof(obuf2), "%d° F", this->MaxTemp * 9 / 5 + 32);
-	else
-		sprintf_s(obuf2, sizeof(obuf2), "%d° C", this->MaxTemp);
+	std::string maxTempStr = std::format("{}° {}", this->MaxTemp * (m_configManager->Fahrenheit ? 9 / 5 : 1) + (m_configManager->Fahrenheit ? 32 : 0), m_configManager->Fahrenheit ? "F" : "C");
+	::SetDlgItemText(this->hwndDialog, 8103, maxTempStr.c_str());
 
-	::SetDlgItemText(this->hwndDialog, 8103, obuf2);
-
-	strcpy_s(templist2, sizeof(templist2), "");
-
+	std::string templist2Str;
 	for (i = 0; i < 12; i++) {
 		int temp = this->State.Sensors[i];
 
 		if (temp != 0 && temp < 128) {
-			if (m_configManager->Fahrenheit)
-				sprintf_s(obuf2, sizeof(obuf2), "%d° F", temp * 9 / 5 + 32);
-			else
-				sprintf_s(obuf2, sizeof(obuf2), "%d° C", temp);
+			std::string tempStr = std::format("{}° {}", temp * (m_configManager->Fahrenheit ? 9 / 5 : 1) + (m_configManager->Fahrenheit ? 32 : 0), m_configManager->Fahrenheit ? "F" : "C");
 
 			if (m_configManager->SlimDialog && m_configManager->StayOnTop)
-				sprintf_s(templist2 + strlen(templist2), sizeof(templist2) - strlen(templist2), "%d %s %s", i + 1, this->State.SensorName[i], obuf2);
+				templist2Str += std::format("{} {} {}", i + 1, this->State.SensorName[i], tempStr);
 			else
-				sprintf_s(templist2 + strlen(templist2), sizeof(templist2) - strlen(templist2), "%d %s %s (0x%02x)", i + 1, this->State.SensorName[i], obuf2, this->State.SensorAddr[i]);
+				templist2Str += std::format("{} {} {} (0x{:02x})", i + 1, this->State.SensorName[i], tempStr, (unsigned char)this->State.SensorAddr[i]);
 
-			strcat_s(templist2, sizeof(templist2), "\r\n");
+			templist2Str += "\r\n";
 		}
-		else {
-			if (m_configManager->ShowAll == 1) {
-				sprintf_s(obuf2, sizeof(obuf2), "n/a");
+		else if (m_configManager->ShowAll == 1) {
+			if (m_configManager->SlimDialog && m_configManager->StayOnTop)
+				templist2Str += std::format("{} {} n/a", i + 1, this->State.SensorName[i]);
+			else
+				templist2Str += std::format("{} {} n/a (0x{:02x})", i + 1, this->State.SensorName[i], (unsigned char)this->State.SensorAddr[i]);
 
-				size_t strlen_templist = strlen_s(templist2, sizeof(templist2));
-
-				if (m_configManager->SlimDialog && m_configManager->StayOnTop)
-					sprintf_s(templist2 + strlen_templist, sizeof(templist2) - strlen_templist, "%d %s %s", i + 1, this->State.SensorName[i], obuf2);
-				else
-					sprintf_s(templist2 + strlen_templist, sizeof(templist2) - strlen_templist, "%d %s %s (0x%02x)", i + 1, this->State.SensorName[i], obuf2, this->State.SensorAddr[i]);
-
-				strcat_s(templist2, sizeof(templist2), "\r\n");
-			}
+			templist2Str += "\r\n";
 		}
 	}
 
-	::SetDlgItemText(this->hwndDialog, 8101, templist2);
+	::SetDlgItemText(this->hwndDialog, 8101, templist2Str.c_str());
 
 	this->icontemp = this->State.Sensors[iMaxTemp];
 
 	// compact single line status (combined)
-	strcpy_s(templist, sizeof(templist), "");
-
-	if (m_configManager->Fahrenheit) {
-		for (i = 0; i < 12; i++) {
-			if (this->State.Sensors[i] < 128) {
-				if (this->State.Sensors[i] != 0)
-					sprintf_s(templist + strlen(templist), sizeof(templist) - strlen(templist), "%d;", this->State.Sensors[i] * 9 / 5 + 32);
-				else
-					sprintf_s(templist + strlen(templist), sizeof(templist) - strlen(templist), "%d;", 0);
-			}
-			else {
-				strcat_s(templist, sizeof(templist), "0;");
-			}
+	std::string templistStr;
+	for (i = 0; i < 12; i++) {
+		if (this->State.Sensors[i] < 128) {
+			int tempVal = (this->State.Sensors[i] != 0) 
+				? (m_configManager->Fahrenheit ? this->State.Sensors[i] * 9 / 5 + 32 : this->State.Sensors[i])
+				: 0;
+			templistStr += std::format("{};{}", tempVal, m_configManager->Fahrenheit ? "" : " ");
 		}
-	}
-	else {
-		for (i = 0; i < 12; i++) {
-			if (this->State.Sensors[i] != 128) {
-				sprintf_s(templist + strlen(templist), sizeof(templist) - strlen(templist), "%d; ", this->State.Sensors[i]);
-			}
-			else {
-				strcat_s(templist, sizeof(templist), "0; ");
-			}
+		else {
+			templistStr += std::format("0;{}", m_configManager->Fahrenheit ? "" : " ");
 		}
 	}
 
-	templist[strlen(templist) - 1] = '\0';
+	if (!templistStr.empty()) templistStr.pop_back();
 
-	if (m_configManager->Fahrenheit)
-		sprintf_s(CurrentStatus, sizeof(CurrentStatus), "Fan: 0x%02x / Switch: %d° F (%s)", State.FanCtrl, MaxTemp * 9 / 5 + 32, templist);
-	else
-		sprintf_s(CurrentStatus, sizeof(CurrentStatus), "Fan: 0x%02x / Switch: %d° C (%s)", State.FanCtrl, MaxTemp,	templist);
+	std::string statusStr = std::format("Fan: 0x{:02x} / Switch: {}° {} ({})", 
+		(unsigned char)State.FanCtrl, 
+		MaxTemp * (m_configManager->Fahrenheit ? 9 / 5 : 1) + (m_configManager->Fahrenheit ? 32 : 0), 
+		m_configManager->Fahrenheit ? "F" : "C",
+		templistStr);
+	strcpy_s(CurrentStatus, sizeof(CurrentStatus), statusStr.c_str());
 
-	// display fan speed
-
-	if (fan1speed > 0x1fff)
-		fan1speed = lastfan1speed;
-	if (fan2speed > 0x1fff)
-		fan2speed = lastfan2speed;
-	sprintf_s(obuf2, sizeof(obuf2), "%d/%d", this->fan1speed, this->fan2speed);
-
-	sprintf_s(CurrentStatuscsv, sizeof(CurrentStatuscsv), "%s %s; %d; %d; ", templist, obuf2, State.FanCtrl, MaxTemp);
+	std::string csvStatusStr = std::format("{} {}/{}; {:02x}; {}; ", templistStr, this->fan1speed, this->fan2speed, (unsigned char)State.FanCtrl, MaxTemp);
+	strcpy_s(CurrentStatuscsv, sizeof(CurrentStatuscsv), csvStatusStr.c_str());
 
 	::SetDlgItemText(this->hwndDialog, 8112, this->CurrentStatus);
 
@@ -231,10 +200,10 @@ FANCONTROL::HandleData(void) {
 
 	case 1: // BIOS
 		if (this->PreviousMode != this->CurrentMode) {
-			sprintf_s(obuf, sizeof(obuf), "Change Mode from %s->%s, %s",
+			std::string msg = std::format("Change Mode from {}->{}, {}",
 				GetModeName(this->PreviousMode), GetModeName(this->CurrentMode),
 				GetModeAction(this->CurrentMode));
-			this->Trace(obuf);
+			this->Trace(msg.c_str());
 		}
 
 		if (this->State.FanCtrl != 0x080)
@@ -247,10 +216,10 @@ FANCONTROL::HandleData(void) {
 
 	case 3: // Manual
 		if (this->PreviousMode != this->CurrentMode) {
-			sprintf_s(obuf, sizeof(obuf), "Change Mode from %s->%s, %s",
+			std::string msg = std::format("Change Mode from {}->{}, {}",
 				GetModeName(this->PreviousMode), GetModeName(this->CurrentMode),
 				GetModeAction(this->CurrentMode));
-			this->Trace(obuf);
+			this->Trace(msg.c_str());
 		}
 
 		::GetDlgItemText(this->hwndDialog, 8310, manlevel, sizeof(manlevel));
@@ -282,9 +251,9 @@ FANCONTROL::SmartControl(void) {
 
 	// Log mode change from BIOS or Manual to Smart
 	if (this->PreviousMode != 2 && (this->PreviousMode == 1 || this->PreviousMode == 3)) {
-		sprintf_s(obuf, sizeof(obuf), "Change Mode from %s->Smart, recalculate fan speed",
+		std::string msg = std::format("Change Mode from {}->Smart, recalculate fan speed",
 			GetModeName(this->PreviousMode));
-		this->Trace(obuf);
+		this->Trace(msg.c_str());
 	}
 
 	const std::vector<SmartLevel>& levels = (this->IndSmartLevel == 0) 
@@ -311,12 +280,11 @@ FANCONTROL::SetFan(const char* source, int fanctrl, bool final) {
 
 	this->CurrentDateTimeLocalized(datebuf, sizeof(datebuf));
 
-	sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "%s: Set fan control to 0x%02x, ", source, fanctrl);
-	if (this->IndSmartLevel == 1 && !m_configManager->SmartLevels2.empty() && source == "Smart")
-		sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "Mode 2, ");
-	if (this->IndSmartLevel == 0 && !m_configManager->SmartLevels2.empty() && source == "Smart")
-		sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "Mode 1, ");
-	sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "Result: ");
+	std::string obufStr = std::format("{}: Set fan control to 0x{:02x}, ", source, (unsigned char)fanctrl);
+	if (!m_configManager->SmartLevels2.empty() && source == std::string("Smart"))
+		obufStr += std::format("Mode {}, ", this->IndSmartLevel == 1 ? 2 : 1);
+	
+	obufStr += "Result: ";
 
 	if (m_configManager->ActiveMode && !this->FinalSeen) {
 		if (!this->LockECAccess()) return false;
@@ -330,27 +298,26 @@ FANCONTROL::SetFan(const char* source, int fanctrl, bool final) {
 		this->FreeECAccess();
 
 		if (ok) {
-			sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "OK");
+			obufStr += "OK";
 			if (final)
 				this->FinalSeen = true;    // prevent further changes when setting final mode
 
 		}
 		else {
-			sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "FAILED!!");
+			obufStr += "FAILED!!";
 			ok = false;
 		}
 	}
 	else {
-		sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "IGNORED!(passive mode");
+		obufStr += "IGNORED!(passive mode";
 	}
 
 	// display result
-	sprintf_s(obuf2, sizeof(obuf2), "%s   (%s)", obuf, datebuf);
-
-	::SetDlgItemText(this->hwndDialog, 8113, obuf2);
+	std::string obuf2Str = std::format("{}   ({})", obufStr, datebuf);
+	::SetDlgItemText(this->hwndDialog, 8113, obuf2Str.c_str());
 
 	this->Trace(this->CurrentStatus);
-	this->Trace(obuf);
+	this->Trace(obufStr.c_str());
 
 	if (!final)
 		::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0);
@@ -371,22 +338,21 @@ FANCONTROL::SetHdw(const char* source, int hdwctrl, int HdwOffset, int AnyWayBit
 	// Use modernized ECManager
 	ok = m_ecManager->ToggleBitsWithVerify(HdwOffset, (char)hdwctrl, (char)AnyWayBit, resultValue);
 
-	sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "%s: Set EC register 0x%02x to %d, ", source, HdwOffset, (unsigned char)resultValue);
-	sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "Result: ");
+	std::string obufStr = std::format("{}: Set EC register 0x{:02x} to {}, Result: ", source, HdwOffset, (unsigned char)resultValue);
 
 	if (ok) {
-		sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "OK");
+		obufStr += "OK";
 	}
 	else {
-		sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "COULD NOT SET HARDWARE STATE!!!!");
+		obufStr += "COULD NOT SET HARDWARE STATE!!!!";
 	}
 
 	// display result
-	sprintf_s(obuf2, sizeof(obuf2), "%s   (%s)", obuf, datebuf);
+	std::string obuf2Str = std::format("{}   ({})", obufStr, datebuf);
 
-	::SetDlgItemText(this->hwndDialog, 8113, obuf2);
+	::SetDlgItemText(this->hwndDialog, 8113, obuf2Str.c_str());
 
-	this->Trace(obuf);
+	this->Trace(obufStr.c_str());
 
 	this->FreeECAccess();
 

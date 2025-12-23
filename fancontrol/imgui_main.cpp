@@ -20,6 +20,11 @@
 #include <cstdio>
 #include <cstdarg>
 #include <ctime>
+#include <format>
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/basic_file_sink.h>
+#include <spdlog/sinks/msvc_sink.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 
 #include "imgui.h"
 #include "imgui_impl_win32.h"
@@ -135,11 +140,8 @@ void UpdateTrayIcon(HWND hWnd, int temp, int fan) {
         }
     }
 
-    char line1[16], line2[16];
-    sprintf_s(line1, "%d", temp);
-    
-    // Show fan speed in hundreds (e.g. 35 for 3500 RPM)
-    sprintf_s(line2, "%d", fan / 100);
+    std::string line1 = std::format("{}", temp);
+    std::string line2 = std::format("{}", fan / 100);
 
     int color = 0; // white
     if (temp >= 80) color = 14;      // red
@@ -148,7 +150,7 @@ void UpdateTrayIcon(HWND hWnd, int temp, int fan) {
     else if (temp >= 50) color = 23; // green
     else color = 11;                 // blue
 
-    CDynamicIcon dynIcon(line1, line2, color, 0, dpiScale);
+    CDynamicIcon dynIcon(line1.c_str(), line2.c_str(), color, 0, dpiScale);
     HICON hIcon = dynIcon.GetHIcon();
     if (!hIcon) return;
 
@@ -157,14 +159,14 @@ void UpdateTrayIcon(HWND hWnd, int temp, int fan) {
     nid.uID = ID_TRAY_ICON;
     nid.uFlags = NIF_ICON | NIF_TIP;
     nid.hIcon = hIcon;
-    
-    wchar_t tip[128];
-    wchar_t wTemp[32], wFan[32];
-    MultiByteToWideChar(CP_UTF8, 0, _TR("LBL_TEMP"), -1, wTemp, 32);
-    MultiByteToWideChar(CP_UTF8, 0, _TR("LBL_FAN"), -1, wFan, 32);
 
-    swprintf_s(tip, L"TPFanCtrl2\n%s: %d\u00B0\x43\n%s: %d RPM", wTemp, temp, wFan, fan);
-    wcscpy_s(nid.szTip, tip);
+    std::string tempLabel = _TR("LBL_TEMP");
+    std::string fanLabel = _TR("LBL_FAN");
+    std::wstring wTemp(tempLabel.begin(), tempLabel.end());
+    std::wstring wFan(fanLabel.begin(), fanLabel.end());
+
+    std::wstring tip = std::format(L"TPFanCtrl2\n{}: {}\u00B0\x43\n{}: {} RPM", wTemp, temp, wFan, fan);
+    wcscpy_s(nid.szTip, tip.c_str());
 
     Shell_NotifyIconW(NIM_MODIFY, &nid);
 }
@@ -231,52 +233,19 @@ void DrawSimplePlot(const char* label, const std::map<std::string, std::deque<fl
 }
 
 // --- Logging System ---
-static std::mutex g_LogMutex;
-enum LogLevel { LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERROR };
-static LogLevel g_MinLogLevel = LOG_INFO;
-
-void Log(LogLevel level, const char* fmt, ...) {
-    if (level < g_MinLogLevel) return;
-    std::lock_guard<std::mutex> lock(g_LogMutex);
-    const char* prefix = "[INFO] ";
-    if (level == LOG_DEBUG) prefix = "[DEBUG] ";
-    if (level == LOG_WARN)  prefix = "[WARN]  ";
-    if (level == LOG_ERROR) prefix = "[ERROR] ";
-    
-    char buf[1024];
-    va_list args;
-    va_start(args, fmt);
-    vsnprintf(buf, 1024, fmt, args);
-    va_end(args);
-
-    char timeBuf[32];
-    time_t now = time(nullptr);
-    struct tm tm_info;
-    localtime_s(&tm_info, &now);
-    strftime(timeBuf, sizeof(timeBuf), "%H:%M:%S", &tm_info);
-
-    printf("[%s] %s%s\n", timeBuf, prefix, buf);
-
-    FILE* f = fopen("TPFanCtrl2_debug.log", "a");
-    if (f) {
-        fprintf(f, "[%s] %s%s\n", timeBuf, prefix, buf);
-        fclose(f);
-    }
-}
+// Custom Log replaced by spdlog macros: spdlog::debug, spdlog::info, spdlog::warn, spdlog::error
 
 // --- Log System ---
 struct AppLog {
     std::deque<std::string> Items;
     std::mutex Mutex;
-    void AddLog(const char* fmt, ...) {
-        char buf[1024];
-        va_list args;
-        va_start(args, fmt);
-        vsnprintf(buf, 1024, fmt, args);
-        va_end(args);
+    
+    template<typename... Args>
+    void AddLog(std::format_string<Args...> fmt, Args&&... args) {
+        std::string buf = std::format(fmt, std::forward<Args>(args)...);
 
-        // Persist to file and console as well
-        Log(LOG_INFO, "%s", buf);
+        // Persist to spdlog
+        spdlog::info(buf);
 
         std::lock_guard<std::mutex> lock(Mutex);
         Items.push_back(buf);
@@ -298,11 +267,11 @@ void SetupVulkan(const char** extensions, uint32_t extensions_count) {
     create_info.enabledExtensionCount = extensions_count;
     create_info.ppEnabledExtensionNames = extensions;
     err = vkCreateInstance(&create_info, g_Allocator, &g_Instance);
-    if (err != VK_SUCCESS) { Log(LOG_ERROR, "vkCreateInstance failed: %d", err); exit(1); }
+    if (err != VK_SUCCESS) { spdlog::error("vkCreateInstance failed: {}", (int)err); exit(1); }
 
     uint32_t gpu_count;
     vkEnumeratePhysicalDevices(g_Instance, &gpu_count, nullptr);
-    if (gpu_count == 0) { Log(LOG_ERROR, "No GPU found"); exit(1); }
+    if (gpu_count == 0) { spdlog::error("No GPU found"); exit(1); }
     
     std::vector<VkPhysicalDevice> gpus(gpu_count);
     vkEnumeratePhysicalDevices(g_Instance, &gpu_count, gpus.data());
@@ -330,7 +299,7 @@ void SetupVulkan(const char** extensions, uint32_t extensions_count) {
     device_info.enabledExtensionCount = 1;
     device_info.ppEnabledExtensionNames = device_extensions;
     err = vkCreateDevice(g_PhysicalDevice, &device_info, g_Allocator, &g_Device);
-    if (err != VK_SUCCESS) { Log(LOG_ERROR, "vkCreateDevice failed: %d", err); exit(1); }
+    if (err != VK_SUCCESS) { spdlog::error("vkCreateDevice failed: {}", (int)err); exit(1); }
     vkGetDeviceQueue(g_Device, g_QueueFamily, 0, &g_Queue);
 
     // Initialize VMA
@@ -340,7 +309,7 @@ void SetupVulkan(const char** extensions, uint32_t extensions_count) {
     allocatorInfo.device = g_Device;
     allocatorInfo.instance = g_Instance;
     err = vmaCreateAllocator(&allocatorInfo, &g_VmaAllocator);
-    if (err != VK_SUCCESS) { Log(LOG_ERROR, "vmaCreateAllocator failed: %d", err); exit(1); }
+    if (err != VK_SUCCESS) { spdlog::error("vmaCreateAllocator failed: {}", (int)err); exit(1); }
 
     VkDescriptorPoolSize pool_sizes[] = { { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 100 } };
     VkDescriptorPoolCreateInfo pool_info = {};
@@ -363,17 +332,17 @@ void SetupVulkanWindow(ImGui_ImplVulkanH_Window* wd, VkSurfaceKHR surface, int w
 }
 
 // --- Hardware Worker Thread ---
-void HardwareWorker(std::shared_ptr<ConfigManager> config, 
+void HardwareWorker(std::stop_token stopToken,
+                    std::shared_ptr<ConfigManager> config, 
                     std::shared_ptr<SensorManager> sensors, 
                     std::shared_ptr<FanController> fans,
-                    bool* running,
                     HWND hWnd) {
     int fanCounter = 0;
     int sensorCounter = 0;
     int trayCounter = 0;
     int maxTemp = 0;
 
-    while (*running) {
+    while (!stopToken.stop_requested()) {
         // 1. Fan Speed Polling (Every 1s = 10 * 100ms)
         if (fanCounter <= 0) {
             int f1 = 0, f2 = 0;
@@ -389,7 +358,7 @@ void HardwareWorker(std::shared_ptr<ConfigManager> config,
         // 2. Sensor Polling (Every 'Cycle' seconds)
         if (sensorCounter <= 0) {
             if (!sensors->UpdateSensors(config->ShowBiasedTemps, config->NoExtSensor, config->UseTWR)) {
-                Log(LOG_WARN, "Failed to update sensors from EC.");
+                spdlog::warn("Failed to update sensors from EC.");
             }
             
             int maxIdx = 0;
@@ -548,9 +517,17 @@ int main(int argc, char** argv) {
         }
     }
 
-    // Clear old log file for a fresh session
-    remove("TPFanCtrl2_debug.log");
-    Log(LOG_INFO, "--- TPFanCtrl2 Session Started ---");
+    // Initialize spdlog
+    auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+    auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>("TPFanCtrl2_debug.log", true);
+    auto msvc_sink = std::make_shared<spdlog::sinks::msvc_sink_mt>();
+    
+    auto logger = std::make_shared<spdlog::logger>("multi_sink", spdlog::sinks_init_list{ console_sink, file_sink, msvc_sink });
+    spdlog::set_default_logger(logger);
+    spdlog::set_level(spdlog::level::debug);
+    spdlog::set_pattern("[%H:%M:%S] [%^%l%$] %v");
+
+    spdlog::info("--- TPFanCtrl2 Session Started ---");
 
     // Check Privileges
     BOOL isAdmin = FALSE;
@@ -561,7 +538,7 @@ int main(int argc, char** argv) {
         CheckTokenMembership(NULL, adminGroup, &isAdmin);
         FreeSid(adminGroup);
     }
-    Log(LOG_INFO, "Running as Administrator: %s", isAdmin ? "YES" : "NO");
+    spdlog::info("Running as Administrator: {}", isAdmin ? "YES" : "NO");
 
     HINSTANCE hInstance = GetModuleHandle(NULL);
     // Logic Init
@@ -582,27 +559,27 @@ int main(int argc, char** argv) {
     }
 
     // Initialize Hardware Driver (TVicPort)
-    Log(LOG_INFO, "Initializing TVicPort driver...");
+    spdlog::info("Initializing TVicPort driver...");
     bool driverOk = false;
     for (int i = 0; i < 5; i++) {
         if (OpenTVicPort()) {
             driverOk = true;
             break;
         }
-        Log(LOG_WARN, "Failed to open TVicPort, retrying... (%d/5)", i + 1);
+        spdlog::warn("Failed to open TVicPort, retrying... ({}/5)", i + 1);
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
 
     if (driverOk) {
-        Log(LOG_INFO, "TVicPort driver opened successfully.");
+        spdlog::info("TVicPort driver opened successfully.");
         SetHardAccess(TRUE);
         if (TestHardAccess()) {
-            Log(LOG_INFO, "Hardware access (Ring 0) granted.");
+            spdlog::info("Hardware access (Ring 0) granted.");
         } else {
-            Log(LOG_ERROR, "Hardware access denied even with driver opened.");
+            spdlog::error("Hardware access denied even with driver opened.");
         }
     } else {
-        Log(LOG_ERROR, "CRITICAL: Could not initialize TVicPort driver. Hardware control will not work.");
+        spdlog::error("CRITICAL: Could not initialize TVicPort driver. Hardware control will not work.");
         MessageBoxW(NULL, L"Could not initialize TVicPort driver.\nEnsure TVicPort.dll is present and you are running as Administrator.", L"Driver Error", MB_OK | MB_ICONERROR);
     }
 
@@ -634,9 +611,8 @@ int main(int argc, char** argv) {
     ::RegisterClassExW(&wc);
     HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"TPFanCtrl2 - Vulkan Modernized", WS_OVERLAPPEDWINDOW, 100, 100, 1100, 850, nullptr, nullptr, wc.hInstance, nullptr);
 
-    // Start Hardware Thread
-    bool hwRunning = true;
-    std::thread hwThread(HardwareWorker, g_Config, sensorManager, fanController, &hwRunning, hwnd);
+    // Start Hardware Thread with jthread
+    std::jthread hwThread(HardwareWorker, g_Config, sensorManager, fanController, hwnd);
 
     // Get DPI Scale
     float dpiScale = 1.0f;
@@ -647,7 +623,7 @@ int main(int argc, char** argv) {
             dpiScale = (float)pGetDpi(hwnd) / 96.0f;
         }
     }
-    Log(LOG_INFO, "DPI Scale detected: %.2f", dpiScale);
+    spdlog::info("DPI Scale detected: {:.2f}", dpiScale);
 
     BOOL dark = TRUE;
     DwmSetWindowAttribute(hwnd, 20, &dark, sizeof(dark));
@@ -671,7 +647,7 @@ int main(int argc, char** argv) {
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     
-    Log(LOG_INFO, "Loading fonts...");
+    spdlog::info("Loading fonts...");
     // 1. Optimize Font Rendering with FreeType
     ImFontConfig font_cfg;
     font_cfg.FontLoaderFlags |= ImGuiFreeTypeBuilderFlags_LightHinting;
@@ -688,7 +664,7 @@ int main(int argc, char** argv) {
     }
 
     if (!mainFont) {
-        Log(LOG_WARN, "Failed to load system fonts, using default font.");
+        spdlog::warn("Failed to load system fonts, using default font.");
     }
     
     // 2. Load Icons (Segoe Fluent Icons on Win11, Segoe MDL2 Assets on Win10)
@@ -708,14 +684,14 @@ int main(int argc, char** argv) {
     bool iconLoaded = false;
     for (const char* path : iconFontPaths) {
         if (io.Fonts->AddFontFromFileTTF(path, 16.0f * dpiScale, &icon_cfg, icon_ranges)) {
-            Log(LOG_INFO, "Icon font loaded successfully from: %s", path);
+            spdlog::info("Icon font loaded successfully from: {}", path);
             iconLoaded = true;
             break;
         }
     }
     
     if (!iconLoaded) {
-        Log(LOG_ERROR, "CRITICAL: Could not load any icon font. Icons will appear as '?'");
+        spdlog::error("CRITICAL: Could not load any icon font. Icons will appear as '?'");
     }
     
     ImGui::StyleColorsDark();
@@ -754,12 +730,12 @@ int main(int argc, char** argv) {
     style.Colors[ImGuiCol_PlotHistogram] = tpRed;
     style.Colors[ImGuiCol_Separator] = ImVec4(0.25f, 0.25f, 0.25f, 1.0f);
 
-    Log(LOG_INFO, "Initializing Win32 backend...");
+    spdlog::info("Initializing Win32 backend...");
     ImGui_ImplWin32_Init(hwnd);
     
     AddTrayIcon(hwnd);
 
-    Log(LOG_INFO, "Initializing Vulkan backend...");
+    spdlog::info("Initializing Vulkan backend...");
     ImGui_ImplVulkan_InitInfo init_info = {};
     init_info.ApiVersion = VK_API_VERSION_1_2;
     init_info.Instance = g_Instance;
@@ -773,20 +749,20 @@ int main(int argc, char** argv) {
     init_info.PipelineInfoMain.RenderPass = g_MainWindowData.RenderPass;
     init_info.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
     if (!ImGui_ImplVulkan_Init(&init_info)) {
-        Log(LOG_ERROR, "ImGui_ImplVulkan_Init failed");
+        spdlog::error("ImGui_ImplVulkan_Init failed");
         exit(1);
     }
 
     if (g_Config->StartMinimized) {
-        Log(LOG_INFO, "Starting minimized to tray.");
+        spdlog::info("Starting minimized to tray.");
         ::ShowWindow(hwnd, SW_HIDE);
     } else {
-        Log(LOG_INFO, "Showing window...");
+        spdlog::info("Showing window...");
         ::ShowWindow(hwnd, SW_SHOWDEFAULT);
     }
 
     bool done = false;
-    Log(LOG_INFO, "Entering main loop...");
+    spdlog::info("Entering main loop...");
     int frameCount = 0;
     while (!done) {
         MSG msg;
@@ -794,7 +770,7 @@ int main(int argc, char** argv) {
             ::TranslateMessage(&msg);
             ::DispatchMessage(&msg);
             if (msg.message == WM_QUIT) {
-                Log(LOG_INFO, "WM_QUIT received.");
+                spdlog::info("WM_QUIT received.");
                 done = true;
             }
         }
@@ -890,15 +866,14 @@ int main(int argc, char** argv) {
                 if (maxTemp > 65) tempColor = ImVec4(1, 0.6f, 0, 1);
                 if (maxTemp > 85) tempColor = ImVec4(1, 0.2f, 0.2f, 1);
 
-                char tempVal[32], fanVal[64], fanSub[64];
-                sprintf_s(tempVal, "%d\xC2\xB0\x43", maxTemp);
-                sprintf_s(fanVal, "%d %s", f1, _TR("LBL_RPM"));
-                if (f2 > 0) sprintf_s(fanSub, "%d %s", f2, _TR("LBL_RPM"));
-                else fanSub[0] = '\0';
+                std::string tempVal = std::format("{}\u2103", maxTemp);
+                std::string fanVal = std::format("{} {}", f1, _TR("LBL_RPM"));
+                std::string fanSub = "";
+                if (f2 > 0) fanSub = std::format("{} {}", f2, _TR("LBL_RPM"));
 
-                drawMetricCard(ICON_CPU, _TR("LBL_MAX_TEMP"), tempVal, maxName.c_str(), tempColor);
+                drawMetricCard(ICON_CPU, _TR("LBL_MAX_TEMP"), tempVal.c_str(), maxName.c_str(), tempColor);
                 ImGui::NextColumn();
-                drawMetricCard(ICON_FAN, _TR("LBL_FAN_SPEEDS"), fanVal, (f2 > 0 ? fanSub : nullptr), ImVec4(1, 1, 1, 1));
+                drawMetricCard(ICON_FAN, _TR("LBL_FAN_SPEEDS"), fanVal.c_str(), (f2 > 0 ? fanSub.c_str() : nullptr), ImVec4(1, 1, 1, 1));
                 ImGui::Columns(1);
 
                 ImGui::Spacing();
@@ -1066,9 +1041,9 @@ int main(int argc, char** argv) {
                             g_Config->PID_Kd = g_UIState.PID.Kd;
                         }
                         if (g_Config->SaveConfig("TPFanCtrl2.ini")) {
-                            g_AppLog.AddLog("[Config] %s", _TR("LOG_SAVE_SUCCESS"));
+                            g_AppLog.AddLog("[Config] Config saved successfully.");
                         } else {
-                            g_AppLog.AddLog("[Config] %s", _TR("LOG_SAVE_ERROR"));
+                            g_AppLog.AddLog("[Config] Failed to save config.");
                         }
                     }
                 }
@@ -1362,21 +1337,16 @@ int main(int argc, char** argv) {
         wd->SemaphoreIndex = (wd->SemaphoreIndex + 1) % wd->SemaphoreCount;
     }
 
-    Log(LOG_INFO, "Exiting main loop. Starting cleanup...");
+    spdlog::info("Exiting main loop. Starting cleanup...");
 
     // Cleanup
-    hwRunning = false;
-    if (hwThread.joinable()) {
-        Log(LOG_INFO, "Waiting for hardware thread to stop...");
-        hwThread.join();
-    }
 
-    Log(LOG_INFO, "Shutting down ImGui backends...");
+    spdlog::info("Shutting down ImGui backends...");
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
 
-    Log(LOG_INFO, "Destroying Vulkan resources...");
+    spdlog::info("Destroying Vulkan resources...");
     vkDestroySurfaceKHR(g_Instance, surface, g_Allocator);
     ImGui_ImplVulkanH_DestroyWindow(g_Instance, g_Device, &g_MainWindowData, g_Allocator);
     vkDestroyDescriptorPool(g_Device, g_DescriptorPool, g_Allocator);
@@ -1384,12 +1354,12 @@ int main(int argc, char** argv) {
     vkDestroyInstance(g_Instance, g_Allocator);
 
     CloseTVicPort();
-    Log(LOG_INFO, "TVicPort driver closed.");
+    spdlog::info("TVicPort driver closed.");
 
     ::DestroyWindow(hwnd);
     ::UnregisterClassW(wc.lpszClassName, wc.hInstance);
 
-    Log(LOG_INFO, "Application terminated successfully.");
+    spdlog::info("Application terminated successfully.");
     return 0;
 }
 

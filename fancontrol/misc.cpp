@@ -67,18 +67,18 @@ FANCONTROL::FormatLocalizedTime(char* result, size_t sizeof_result, bool include
 	::GetLocaleInfo(LOCALE_USER_DEFAULT, LOCALE_STIMEFORMAT, otfmt, sizeof(otfmt));
 	::GetTimeFormat(LOCALE_USER_DEFAULT, 0, &s, otfmt, otime, sizeof(otime));
 
-	setzero(result, sizeof_result);
-
+	std::string timeStr;
 	if (includeDate) {
 		char odfmt[128], odate[64];
 		::GetLocaleInfo(LOCALE_USER_DEFAULT, LOCALE_SSHORTDATE, odfmt, sizeof(odfmt));
 		::GetDateFormat(LOCALE_USER_DEFAULT, 0, &s, odfmt, odate, sizeof(odate));
-		strncpy_s(result, sizeof_result, odate, sizeof_result - 2);
-		strcat_s(result, sizeof_result, " ");
-		strncat_s(result, sizeof_result, otime, sizeof_result - strlen(result) - 1);
+		timeStr = std::format("{} {}", odate, otime);
 	} else {
-		strncat_s(result, sizeof_result, otime, sizeof_result - 1);
+		timeStr = otime;
 	}
+
+	setzero(result, sizeof_result);
+	strcpy_s(result, sizeof_result, timeStr.c_str());
 }
 
 void
@@ -108,18 +108,18 @@ FANCONTROL::IsMinimized(void) const {
 //-------------------------------------------------------------------------
 void
 FANCONTROL::Trace(const char* text) {
-	char trace[16384] = "", datebuf[128] = "", line[512] = "", linecsv[512] = "";
+	char trace[16384] = "", datebuf[128] = "";
 
 	this->CurrentDateTimeLocalized(datebuf, sizeof(datebuf));
 
-	if (strlen(text))
-		sprintf_s(line, sizeof(line), "[%s] %s\r\n", datebuf, text);	// probably acpi reading conflict
-	else
-		strcpy_s(line, sizeof(line), "\r\n");
+	std::string line = (strlen(text)) ? std::format("[{}] {}\r\n", datebuf, text) : "\r\n";
+	
+	// spdlog integration
+	if (strlen(text)) spdlog::info("{}", text);
 
-	::GetDlgItemText(this->hwndDialog, 9200, trace, sizeof(trace) - strlen(line) - 1);
+	::GetDlgItemText(this->hwndDialog, 9200, trace, sizeof(trace) - line.length() - 1);
 
-	strcat_s(trace, sizeof(trace), line);
+	strcat_s(trace, sizeof(trace), line.c_str());
 
 	// display 100 lines max
 	char* p = trace + strlen(trace);
@@ -135,20 +135,9 @@ FANCONTROL::Trace(const char* text) {
 		p--;
 	}
 
-	// write logfile
-	if (m_configManager->Log2File == 1) {
-		FILE* flog;
-		errno_t errflog = fopen_s(&flog, "TPFanCtrl2.log", "ab");
-		if (!errflog) {
-			//TODO: fwrite_s
-			fwrite(line, strlen(line), 1, flog);
-			fclose(flog);
-		}
-	}
-
 	// redisplay log and scroll to bottom
 	::SetDlgItemText(this->hwndDialog, 9200, p + 1);
-	::SendDlgItemMessage(this->hwndDialog, 9200, EM_SETSEL, strlen(trace) - 2, strlen(trace) - 2);
+	::SendDlgItemMessage(this->hwndDialog, 9200, EM_SETSEL, (int)strlen(trace) - 2, (int)strlen(trace) - 2);
 	::SendDlgItemMessage(this->hwndDialog, 9200, EM_LINESCROLL, 0, 9999);
 }
 
@@ -162,7 +151,7 @@ void
 FANCONTROL::TracecsvInternal(const char* text, bool includeDate, const char* separator) {
 	if (m_configManager->Log2csv != 1) return;
 
-	char datebuf[128] = "", line[512] = "";
+	char datebuf[128] = "";
 	
 	if (includeDate) {
 		this->CurrentDateTimeLocalized(datebuf, sizeof(datebuf));
@@ -170,17 +159,17 @@ FANCONTROL::TracecsvInternal(const char* text, bool includeDate, const char* sep
 		this->CurrentTimeLocalized(datebuf, sizeof(datebuf));
 	}
 
+	std::string line;
 	if (strlen(text)) {
-		sprintf_s(line, sizeof(line), "%s%s%s\r\n", 
-				  separator[0] ? datebuf : "", separator, text);
+		line = std::format("{}{}{}\r\n", separator[0] ? datebuf : "", separator, text);
 	} else {
-		strcpy_s(line, sizeof(line), "\r\n");
+		line = "\r\n";
 	}
 
 	FILE* flogcsv;
 	errno_t err = fopen_s(&flogcsv, "TPFanCtrl2_csv.txt", "ab");
 	if (!err && flogcsv) {
-		fwrite(line, strlen(line), 1, flogcsv);
+		fwrite(line.c_str(), line.length(), 1, flogcsv);
 		fclose(flogcsv);
 	}
 }
