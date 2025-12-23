@@ -21,6 +21,36 @@
 #include "TVicPort.h"
 #include <chrono>
 
+namespace {
+	/**
+	 * @brief Get the display name for a fan control mode
+	 * @param mode The mode number (1=BIOS, 2=Smart, 3=Manual)
+	 * @return Mode name string
+	 */
+	const char* GetModeName(int mode) {
+		switch (mode) {
+			case 1: return "BIOS";
+			case 2: return "Smart";
+			case 3: return "Manual";
+			default: return "Unknown";
+		}
+	}
+
+	/**
+	 * @brief Get the action description for a fan control mode
+	 * @param mode The mode number
+	 * @return Action description string
+	 */
+	const char* GetModeAction(int mode) {
+		switch (mode) {
+			case 1: return "setting fan speed";
+			case 2: return "recalculate fan speed";
+			case 3: return "setting fan speed";
+			default: return "";
+		}
+	}
+} // anonymous namespace
+
 //-------------------------------------------------------------------------
 //  switch fan according to settings
 //-------------------------------------------------------------------------
@@ -201,22 +231,9 @@ FANCONTROL::HandleData(void) {
 
 	case 1: // BIOS
 		if (this->PreviousMode != this->CurrentMode) {
-			sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "Change Mode from ");
-
-			if (this->PreviousMode == 1)
-				sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "BIOS->");
-			if (this->PreviousMode == 2)
-				sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "Smart->");
-			if (this->PreviousMode == 3)
-				sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "Manual->");
-
-			if (this->CurrentMode == 1)
-				sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "BIOS, setting fan speed");
-			if (this->CurrentMode == 2)
-				sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "Smart, recalculate fan speed");
-			if (this->CurrentMode == 3)
-				sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "Manual, setting fan speed");
-
+			sprintf_s(obuf, sizeof(obuf), "Change Mode from %s->%s, %s",
+				GetModeName(this->PreviousMode), GetModeName(this->CurrentMode),
+				GetModeAction(this->CurrentMode));
 			this->Trace(obuf);
 		}
 
@@ -230,22 +247,9 @@ FANCONTROL::HandleData(void) {
 
 	case 3: // Manual
 		if (this->PreviousMode != this->CurrentMode) {
-			sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "Change Mode from ");
-
-			if (this->PreviousMode == 1)
-				sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "BIOS->");
-			if (this->PreviousMode == 2)
-				sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "Smart->");
-			if (this->PreviousMode == 3)
-				sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "Manual->");
-
-			if (this->CurrentMode == 1)
-				sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "BIOS, setting fan speed");
-			if (this->CurrentMode == 2)
-				sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "Smart, recalculate fan speed");
-			if (this->CurrentMode == 3)
-				sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "Manual, setting fan speed");
-
+			sprintf_s(obuf, sizeof(obuf), "Change Mode from %s->%s, %s",
+				GetModeName(this->PreviousMode), GetModeName(this->CurrentMode),
+				GetModeAction(this->CurrentMode));
 			this->Trace(obuf);
 		}
 
@@ -276,15 +280,10 @@ void
 FANCONTROL::SmartControl(void) {
 	char obuf[256] = "";
 
-	if (this->PreviousMode == 1) {
-		sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "Change Mode from BIOS->");
-		sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "Smart, recalculate fan speed");
-		this->Trace(obuf);
-	}
-
-	if (this->PreviousMode == 3) {
-		sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "Change Mode from Manual->");
-		sprintf_s(obuf + strlen(obuf), sizeof(obuf) - strlen(obuf), "Smart, recalculate fan speed");
+	// Log mode change from BIOS or Manual to Smart
+	if (this->PreviousMode != 2 && (this->PreviousMode == 1 || this->PreviousMode == 3)) {
+		sprintf_s(obuf, sizeof(obuf), "Change Mode from %s->Smart, recalculate fan speed",
+			GetModeName(this->PreviousMode));
 		this->Trace(obuf);
 	}
 

@@ -49,54 +49,46 @@ FANCONTROL::ReadConfig(const char* configfile)
 }
 
 //-------------------------------------------------------------------------
-//  localized date&time
+//  localized date&time - unified implementation
 //-------------------------------------------------------------------------
+/**
+ * @brief Internal helper for localized time formatting
+ * @param result Output buffer
+ * @param sizeof_result Size of output buffer
+ * @param includeDate Whether to include date in the output
+ */
 void
-FANCONTROL::CurrentDateTimeLocalized(char* result, size_t sizeof_result) {
+FANCONTROL::FormatLocalizedTime(char* result, size_t sizeof_result, bool includeDate) {
 	SYSTEMTIME s;
 	::GetLocalTime(&s);
 
 	char otfmt[64] = "HH:mm:ss", otime[64];
-	char odfmt[128], odate[64];
-
+	
 	::GetLocaleInfo(LOCALE_USER_DEFAULT, LOCALE_STIMEFORMAT, otfmt, sizeof(otfmt));
-
 	::GetTimeFormat(LOCALE_USER_DEFAULT, 0, &s, otfmt, otime, sizeof(otime));
 
-	::GetLocaleInfo(LOCALE_USER_DEFAULT, LOCALE_SSHORTDATE, odfmt, sizeof(odfmt));
-
-	::GetDateFormat(LOCALE_USER_DEFAULT, 0, &s, odfmt, odate, sizeof(odate));
-
 	setzero(result, sizeof_result);
-	strncpy_s(result, sizeof_result, odate, sizeof_result - 2);
-	strcat_s(result, sizeof_result, " ");
-	strncat_s(result, sizeof_result, otime, sizeof_result - strlen(result) - 1);
+
+	if (includeDate) {
+		char odfmt[128], odate[64];
+		::GetLocaleInfo(LOCALE_USER_DEFAULT, LOCALE_SSHORTDATE, odfmt, sizeof(odfmt));
+		::GetDateFormat(LOCALE_USER_DEFAULT, 0, &s, odfmt, odate, sizeof(odate));
+		strncpy_s(result, sizeof_result, odate, sizeof_result - 2);
+		strcat_s(result, sizeof_result, " ");
+		strncat_s(result, sizeof_result, otime, sizeof_result - strlen(result) - 1);
+	} else {
+		strncat_s(result, sizeof_result, otime, sizeof_result - 1);
+	}
 }
 
-//-------------------------------------------------------------------------
-//  localized time
-//-------------------------------------------------------------------------
+void
+FANCONTROL::CurrentDateTimeLocalized(char* result, size_t sizeof_result) {
+	FormatLocalizedTime(result, sizeof_result, true);
+}
+
 void
 FANCONTROL::CurrentTimeLocalized(char* result, size_t sizeof_result) {
-	SYSTEMTIME s;
-	::GetLocalTime(&s);
-
-	char otfmt[64] = "HH:mm:ss", otime[64];
-	// char odfmt[128], odate[64];
-
-	::GetLocaleInfo(LOCALE_USER_DEFAULT, LOCALE_STIMEFORMAT, otfmt, sizeof(otfmt));
-
-	::GetTimeFormat(LOCALE_USER_DEFAULT, 0, &s, otfmt, otime, sizeof(otime));
-
-	// ::GetLocaleInfo(LOCALE_USER_DEFAULT, LOCALE_SSHORTDATE, odfmt, sizeof(odfmt));
-
-	// ::GetDateFormat(LOCALE_USER_DEFAULT, 0,	&s, odfmt, odate, sizeof(odate));
-
-	setzero(result, sizeof_result);
-	// strncpy_s(result,sizeof_result, odate, sizeof_result-2);
-	// strcat_s(result,sizeof_result, " ");
-	strncat_s(result, sizeof_result, otime, sizeof_result - 1);
-	// strncat_s(result,sizeof_result, otime, sizeof_result-strlen(result)-1);
+	FormatLocalizedTime(result, sizeof_result, false);
 }
 
 //-------------------------------------------------------------------------

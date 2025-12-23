@@ -192,6 +192,8 @@ protected:
 
 	bool IsMinimized(void) const;
 
+	void FormatLocalizedTime(char* result, size_t sizeof_result, bool includeDate);
+
 	void CurrentDateTimeLocalized(char* result, size_t sizeof_result);
 
 	void CurrentTimeLocalized(char* result, size_t sizeof_result);
