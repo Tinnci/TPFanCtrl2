@@ -160,48 +160,47 @@ FANCONTROL::Trace(const char* text) {
 	::SendDlgItemMessage(this->hwndDialog, 9200, EM_LINESCROLL, 0, 9999);
 }
 
+/**
+ * @brief Internal helper for CSV logging
+ * @param text The text to log
+ * @param includeDate Whether to include date in the timestamp
+ * @param separator The separator between timestamp and text
+ */
 void
-FANCONTROL::Tracecsv(const char* text) {
-	char trace[16384] = "", datebuf[128] = "", line[512] = "";
+FANCONTROL::TracecsvInternal(const char* text, bool includeDate, const char* separator) {
+	if (m_configManager->Log2csv != 1) return;
 
-	this->CurrentTimeLocalized(datebuf, sizeof(datebuf));
+	char datebuf[128] = "", line[512] = "";
+	
+	if (includeDate) {
+		this->CurrentDateTimeLocalized(datebuf, sizeof(datebuf));
+	} else {
+		this->CurrentTimeLocalized(datebuf, sizeof(datebuf));
+	}
 
-	if (strlen(text))
-		sprintf_s(line, sizeof(line), "%s; %s\r\n", datebuf, text);	// probably acpi reading conflict
-	else
+	if (strlen(text)) {
+		sprintf_s(line, sizeof(line), "%s%s%s\r\n", 
+				  separator[0] ? datebuf : "", separator, text);
+	} else {
 		strcpy_s(line, sizeof(line), "\r\n");
+	}
 
-	// write logfile
-	if (m_configManager->Log2csv == 1) {
-		FILE* flogcsv;
-		errno_t errflogcsv = fopen_s(&flogcsv, "TPFanCtrl2_csv.txt", "ab");
-		if (!errflogcsv) { 
-			fwrite(line, strlen_s(line, sizeof(line)), 1, flogcsv); 
-			fclose(flogcsv); 
-		}
+	FILE* flogcsv;
+	errno_t err = fopen_s(&flogcsv, "TPFanCtrl2_csv.txt", "ab");
+	if (!err && flogcsv) {
+		fwrite(line, strlen(line), 1, flogcsv);
+		fclose(flogcsv);
 	}
 }
 
 void
+FANCONTROL::Tracecsv(const char* text) {
+	TracecsvInternal(text, false, "; ");
+}
+
+void
 FANCONTROL::Tracecsvod(const char* text) {
-	char trace[16384] = "", datebuf[128] = "", line[512] = "";
-
-	this->CurrentDateTimeLocalized(datebuf, sizeof(datebuf));
-
-	if (strlen(text))
-		sprintf_s(line, sizeof(line), "%s\r\n", text);	// probably acpi reading conflict
-	else
-		strcpy_s(line, sizeof(line), "\r\n");
-
-	// write logfile
-	if (m_configManager->Log2csv == 1) {
-		FILE* flogcsv;
-		errno_t errflogcsv = fopen_s(&flogcsv, "TPFanCtrl2_csv.txt", "ab");
-		if (!errflogcsv) { 
-			fwrite(line, strlen(line), 1, flogcsv); 
-			fclose(flogcsv); 
-		}
-	}
+	TracecsvInternal(text, true, "");
 }
 
 //-------------------------------------------------------------------------

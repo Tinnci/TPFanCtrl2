@@ -188,6 +188,8 @@ protected:
 
 	void Tracecsvod(const char* textcsv);
 
+	void TracecsvInternal(const char* text, bool includeDate, const char* separator);
+
 	bool IsMinimized(void) const;
 
 	void CurrentDateTimeLocalized(char* result, size_t sizeof_result);

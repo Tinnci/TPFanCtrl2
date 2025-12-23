@@ -134,21 +134,25 @@ bool FanController::UpdatePIDControl(float currentTemp, const PIDSettings& setti
 
 bool FanController::GetFanSpeeds(int& fan1, int& fan2) {
     std::lock_guard<std::recursive_timed_mutex> lock(m_ecManager->GetMutex());
-    char lo, hi;
 
-    // Fan 2
-    m_ecManager->WriteByte(TP_ECOFFSET_FAN_SWITCH, TP_ECVALUE_SELFAN2);
-    if (!m_ecManager->ReadByte(TP_ECOFFSET_FANSPEED, &lo) || !m_ecManager->ReadByte(TP_ECOFFSET_FANSPEED + 1, &hi)) {
-        return false;
-    }
-    fan2 = ((unsigned char)hi << 8) | (unsigned char)lo;
+    // Helper lambda to read a single fan's speed
+    auto readFanSpeed = [this](char fanSelect) -> int {
+        m_ecManager->WriteByte(TP_ECOFFSET_FAN_SWITCH, fanSelect);
+        char lo, hi;
+        if (!m_ecManager->ReadByte(TP_ECOFFSET_FANSPEED, &lo) || 
+            !m_ecManager->ReadByte(TP_ECOFFSET_FANSPEED + 1, &hi)) {
+            return -1;  // Error indicator
+        }
+        return ((unsigned char)hi << 8) | (unsigned char)lo;
+    };
 
-    // Fan 1
-    m_ecManager->WriteByte(TP_ECOFFSET_FAN_SWITCH, TP_ECVALUE_SELFAN1);
-    if (!m_ecManager->ReadByte(TP_ECOFFSET_FANSPEED, &lo) || !m_ecManager->ReadByte(TP_ECOFFSET_FANSPEED + 1, &hi)) {
-        return false;
-    }
-    fan1 = ((unsigned char)hi << 8) | (unsigned char)lo;
+    int speed2 = readFanSpeed(TP_ECVALUE_SELFAN2);
+    if (speed2 < 0) return false;
+    fan2 = speed2;
+
+    int speed1 = readFanSpeed(TP_ECVALUE_SELFAN1);
+    if (speed1 < 0) return false;
+    fan1 = speed1;
 
     return true;
 }
