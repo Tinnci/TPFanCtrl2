@@ -21,6 +21,10 @@ and should be used at your own risk. For more information, please refer to <http
 Please note that I'm very busy with other work for the time being so it'll take a while for me to get to new issues, however please feel free to create pull requests,
 I will review those as soon as possible.
 
+## Download
+
+You can download the latest pre-compiled binaries from the [Releases](https://github.com/Tinnci/TPFanCtrl2/releases) page.
+
 ## Requirements
 
 To avoid errors, either install [tvicport](https://www.entechtaiwan.com/dev/port/index.shtm) manually or install the original version of TPFanControl found 
