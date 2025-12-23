@@ -136,6 +136,7 @@ bool ConfigManager::SaveConfig(const std::string& filename) {
     file << "ShowBiasedTemps=" << ShowBiasedTemps << "\n";
     file << "NoExtSensor=" << NoExtSensor << "\n";
     file << "UseTWR=" << UseTWR << "\n";
+    file << "IgnoreSensors=" << IgnoreSensors << "\n";
     
     file << "\n; PID Settings\n";
     file << "ControlAlgorithm=" << ControlAlgorithm << "\n";

@@ -95,6 +95,8 @@ static bool                     g_SwapChainRebuild = false;
 static int                      g_SwapChainResizeWidth = 0;
 static int                      g_SwapChainResizeHeight = 0;
 
+static std::shared_ptr<ConfigManager> g_Config;
+
 // --- Custom Lightweight Plot ---
 void DrawSimplePlot(const char* label, const std::map<std::string, std::deque<float>>& history, float height, float dpiScale) {
     ImVec2 canvas_p0 = ImGui::GetCursorScreenPos();      // Upper-left
@@ -322,6 +324,9 @@ void HardwareWorker(std::shared_ptr<ConfigManager> config,
                 g_UIState.Sensors = sensors->GetSensors();
                 g_UIState.LastUpdate = time(nullptr);
                 for (const auto& s : g_UIState.Sensors) {
+                    // Check if sensor is ignored
+                    if (config->IgnoreSensors.find(s.name) != std::string::npos) continue;
+
                     if (s.rawTemp > 0 && s.rawTemp < 128) {
                         g_UIState.SmoothTemps[s.name].Target = (float)s.rawTemp;
                         auto& history = g_UIState.TempHistory[s.name];
@@ -406,19 +411,19 @@ int main(int argc, char** argv) {
 
     HINSTANCE hInstance = GetModuleHandle(NULL);
     // Logic Init
-    auto configManager = std::make_shared<ConfigManager>();
-    configManager->LoadConfig("TPFanCtrl2.ini");
+    g_Config = std::make_shared<ConfigManager>();
+    g_Config->LoadConfig("TPFanCtrl2.ini");
 
     // Sync UI State with Config
     {
         std::lock_guard<std::mutex> lock(g_UIState.Mutex);
-        g_UIState.Mode = configManager->ActiveMode;
-        g_UIState.ManualLevel = configManager->ManFanSpeed;
-        g_UIState.Algorithm = (ControlAlgorithm)configManager->ControlAlgorithm;
-        g_UIState.PID.targetTemp = configManager->PID_Target;
-        g_UIState.PID.Kp = configManager->PID_Kp;
-        g_UIState.PID.Ki = configManager->PID_Ki;
-        g_UIState.PID.Kd = configManager->PID_Kd;
+        g_UIState.Mode = g_Config->ActiveMode;
+        g_UIState.ManualLevel = g_Config->ManFanSpeed;
+        g_UIState.Algorithm = (ControlAlgorithm)g_Config->ControlAlgorithm;
+        g_UIState.PID.targetTemp = g_Config->PID_Target;
+        g_UIState.PID.Kp = g_Config->PID_Kp;
+        g_UIState.PID.Ki = g_Config->PID_Ki;
+        g_UIState.PID.Kd = g_Config->PID_Kd;
     }
 
     // Initialize Hardware Driver (TVicPort)
@@ -471,7 +476,7 @@ int main(int argc, char** argv) {
 
     // Start Hardware Thread
     bool hwRunning = true;
-    std::thread hwThread(HardwareWorker, configManager, sensorManager, fanController, &hwRunning);
+    std::thread hwThread(HardwareWorker, g_Config, sensorManager, fanController, &hwRunning);
 
     // Window Init
     WNDCLASSEXW wc = { sizeof(wc), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, L"TPFanCtrl2Vulkan", nullptr };
@@ -587,7 +592,7 @@ int main(int argc, char** argv) {
         exit(1);
     }
 
-    if (configManager->StartMinimized) {
+    if (g_Config->StartMinimized) {
         Log(LOG_INFO, "Starting minimized to tray.");
         ::ShowWindow(hwnd, SW_HIDE);
     } else {
@@ -818,50 +823,147 @@ int main(int argc, char** argv) {
             }
 
             if (ImGui::BeginTabItem("Settings")) {
-                ImGui::BeginChild("SettingsScroll");
+                ImGui::BeginChild("SettingsScroll", ImVec2(0, 0), false, ImGuiWindowFlags_AlwaysVerticalScrollbar);
                 
-                ImGui::TextColored(ImVec4(0, 1, 0, 1), "PID Controller Parameters");
-                ImGui::Separator();
-                {
-                    std::lock_guard<std::mutex> lock(g_UIState.Mutex);
-                    ImGui::PushItemWidth(200 * dpiScale);
-                    ImGui::InputFloat("Target Temp (C)", &g_UIState.PID.targetTemp, 1.0f, 5.0f, "%.1f");
-                    ImGui::InputFloat("Kp (Proportional)", &g_UIState.PID.Kp, 0.01f, 0.1f, "%.3f");
-                    ImGui::InputFloat("Ki (Integral)", &g_UIState.PID.Ki, 0.001f, 0.01f, "%.4f");
-                    ImGui::InputFloat("Kd (Derivative)", &g_UIState.PID.Kd, 0.01f, 0.1f, "%.3f");
-                    ImGui::PopItemWidth();
-                }
+                if (ImGui::BeginTable("SettingsLayout", 2, ImGuiTableFlags_SizingStretchSame)) {
+                    ImGui::TableNextColumn();
+                    
+                    // --- Left Column: Behavior & Polling ---
+                    ImGui::BeginChild("BehaviorGroup", ImVec2(0, 220 * dpiScale), true);
+                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), ICON_CHIP " Application Behavior");
+                    ImGui::Separator();
+                    ImGui::Spacing();
+                    {
+                        bool startMin = g_Config->StartMinimized != 0;
+                        if (ImGui::Checkbox("Start Minimized to Tray", &startMin)) g_Config->StartMinimized = startMin;
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Automatically hide the window on startup.");
+                        
+                        bool minToTray = g_Config->MinimizeToSysTray != 0;
+                        if (ImGui::Checkbox("Minimize to Tray", &minToTray)) g_Config->MinimizeToSysTray = minToTray;
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Hide to system tray instead of taskbar when minimized.");
+                        
+                        bool minOnClose = g_Config->MinimizeOnClose != 0;
+                        if (ImGui::Checkbox("Close Button Minimizes", &minOnClose)) g_Config->MinimizeOnClose = minOnClose;
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Clicking the 'X' button will hide the window instead of exiting.");
+                    }
+                    ImGui::EndChild();
 
-                ImGui::Spacing();
-                ImGui::TextColored(ImVec4(0, 1, 0, 1), "Hardware Polling");
-                ImGui::Separator();
-                int cycle = configManager->Cycle;
-                ImGui::PushItemWidth(200 * dpiScale);
-                if (ImGui::InputInt("Sensor Cycle (s)", &cycle)) {
-                    if (cycle < 1) cycle = 1;
-                    if (cycle > 60) cycle = 60;
-                    configManager->Cycle = cycle;
-                }
-                ImGui::PopItemWidth();
-                ImGui::Text("Fan speed is always polled every 1s.");
+                    ImGui::BeginChild("PollingGroup", ImVec2(0, 120 * dpiScale), true);
+                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), ICON_FAN " Hardware Polling");
+                    ImGui::Separator();
+                    ImGui::Spacing();
+                    {
+                        int cycle = g_Config->Cycle;
+                        ImGui::PushItemWidth(-1);
+                        if (ImGui::InputInt("##Cycle", &cycle)) {
+                            if (cycle < 1) cycle = 1;
+                            if (cycle > 60) cycle = 60;
+                            g_Config->Cycle = cycle;
+                        }
+                        ImGui::PopItemWidth();
+                        ImGui::TextDisabled("Sensor Refresh: %ds", cycle);
+                        ImGui::TextDisabled("Fan RPM Refresh: 1s (Fixed)");
+                        ImGui::TextDisabled("Control Frequency: 100ms (10Hz)");
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("The PID/Step logic runs at 10Hz for ultra-smooth fan transitions.");
+                    }
+                    ImGui::EndChild();
 
-                ImGui::Spacing();
-                if (ImGui::Button("Save Settings to INI", ImVec2(200 * dpiScale, 40 * dpiScale))) {
-                    // Sync UI state back to configManager before saving
+                    ImGui::TableNextColumn();
+
+                    // --- Right Column: PID Parameters ---
+                    ImGui::BeginChild("PIDGroup", ImVec2(0, 350 * dpiScale), true);
+                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), ICON_CPU " PID Controller (Advanced)");
+                    ImGui::Separator();
+                    ImGui::Spacing();
                     {
                         std::lock_guard<std::mutex> lock(g_UIState.Mutex);
-                        configManager->ActiveMode = g_UIState.Mode;
-                        configManager->ManFanSpeed = g_UIState.ManualLevel;
-                        configManager->ControlAlgorithm = (int)g_UIState.Algorithm;
-                        configManager->PID_Target = g_UIState.PID.targetTemp;
-                        configManager->PID_Kp = g_UIState.PID.Kp;
-                        configManager->PID_Ki = g_UIState.PID.Ki;
-                        configManager->PID_Kd = g_UIState.PID.Kd;
+                        float itemWidth = -120 * dpiScale;
+                        
+                        ImGui::Text("Target Temp:"); ImGui::SameLine(120 * dpiScale);
+                        ImGui::PushItemWidth(itemWidth);
+                        ImGui::InputFloat("##Target", &g_UIState.PID.targetTemp, 1.0f, 5.0f, "%.1f°C");
+                        ImGui::PopItemWidth();
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("The temperature the PID controller tries to maintain.");
+
+                        ImGui::Text("Kp (Prop):"); ImGui::SameLine(120 * dpiScale);
+                        ImGui::PushItemWidth(itemWidth);
+                        ImGui::InputFloat("##Kp", &g_UIState.PID.Kp, 0.01f, 0.1f, "%.3f");
+                        ImGui::PopItemWidth();
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Proportional gain: Higher values mean faster response but more oscillation.");
+
+                        ImGui::Text("Ki (Int):"); ImGui::SameLine(120 * dpiScale);
+                        ImGui::PushItemWidth(itemWidth);
+                        ImGui::InputFloat("##Ki", &g_UIState.PID.Ki, 0.001f, 0.01f, "%.4f");
+                        ImGui::PopItemWidth();
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Integral gain: Eliminates steady-state error but can cause overshoot.");
+
+                        ImGui::Text("Kd (Deriv):"); ImGui::SameLine(120 * dpiScale);
+                        ImGui::PushItemWidth(itemWidth);
+                        ImGui::InputFloat("##Kd", &g_UIState.PID.Kd, 0.01f, 0.1f, "%.3f");
+                        ImGui::PopItemWidth();
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Derivative gain: Dampens the response and reduces overshoot.");
+                        
+                        ImGui::Spacing();
+                        ImGui::Separator();
+                        if (ImGui::Button("Reset PID to Defaults", ImVec2(-1, 30 * dpiScale))) {
+                            g_UIState.PID.targetTemp = 60.0f;
+                            g_UIState.PID.Kp = 0.5f;
+                            g_UIState.PID.Ki = 0.01f;
+                            g_UIState.PID.Kd = 0.1f;
+                        }
                     }
-                    if (configManager->SaveConfig("TPFanCtrl2.ini")) {
-                        g_AppLog.AddLog("[Config] Settings saved to TPFanCtrl2.ini");
+                    ImGui::EndChild();
+
+                    ImGui::EndTable();
+                }
+
+                // --- Bottom Section: Sensor Management ---
+                ImGui::BeginChild("SensorGroup", ImVec2(0, 200 * dpiScale), true);
+                ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), ICON_GPU " Sensor Management");
+                ImGui::Separator();
+                ImGui::TextDisabled("Uncheck sensors that provide invalid readings (e.g., 0 or 128).");
+                ImGui::Spacing();
+                {
+                    std::lock_guard<std::mutex> lock(g_UIState.Mutex);
+                    if (ImGui::BeginTable("SensorsIgnore", 4, ImGuiTableFlags_NoSavedSettings)) {
+                        for (const auto& s : g_UIState.Sensors) {
+                            ImGui::TableNextColumn();
+                            bool ignored = g_Config->IgnoreSensors.find(s.name) != std::string::npos;
+                            if (ImGui::Checkbox(s.name.c_str(), &ignored)) {
+                                if (ignored) {
+                                    if (g_Config->IgnoreSensors.find(s.name) == std::string::npos)
+                                        g_Config->IgnoreSensors += s.name + " ";
+                                } else {
+                                    size_t pos = g_Config->IgnoreSensors.find(s.name);
+                                    if (pos != std::string::npos)
+                                        g_Config->IgnoreSensors.erase(pos, s.name.length() + 1);
+                                }
+                            }
+                        }
+                        ImGui::EndTable();
+                    }
+                }
+                ImGui::EndChild();
+
+                ImGui::Spacing();
+                ImGui::Separator();
+                ImGui::Spacing();
+                
+                if (ImGui::Button(ICON_CHIP " Save All Settings to INI", ImVec2(-1, 50 * dpiScale))) {
+                    {
+                        std::lock_guard<std::mutex> lock(g_UIState.Mutex);
+                        g_Config->ActiveMode = g_UIState.Mode;
+                        g_Config->ManFanSpeed = g_UIState.ManualLevel;
+                        g_Config->ControlAlgorithm = (int)g_UIState.Algorithm;
+                        g_Config->PID_Target = g_UIState.PID.targetTemp;
+                        g_Config->PID_Kp = g_UIState.PID.Kp;
+                        g_Config->PID_Ki = g_UIState.PID.Ki;
+                        g_Config->PID_Kd = g_UIState.PID.Kd;
+                    }
+                    if (g_Config->SaveConfig("TPFanCtrl2.ini")) {
+                        g_AppLog.AddLog("[Config] All settings saved successfully.");
                     } else {
-                        g_AppLog.AddLog("[Config] ERROR: Failed to save settings!");
+                        g_AppLog.AddLog("[Config] ERROR: Failed to save to TPFanCtrl2.ini");
                     }
                 }
                 
@@ -1011,13 +1113,18 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         break;
     case WM_SYSCOMMAND:
         if ((wParam & 0xFFF0) == SC_MINIMIZE) {
+            if (g_Config && g_Config->MinimizeToSysTray) {
+                ShowWindow(hWnd, SW_HIDE);
+                return 0;
+            }
+        }
+        break;
+    case WM_CLOSE:
+        if (g_Config && g_Config->MinimizeOnClose) {
             ShowWindow(hWnd, SW_HIDE);
             return 0;
         }
         break;
-    case WM_CLOSE:
-        ShowWindow(hWnd, SW_HIDE);
-        return 0;
     case WM_DESTROY:
         RemoveTrayIcon(hWnd);
         ::PostQuitMessage(0);
