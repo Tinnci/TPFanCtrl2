@@ -181,6 +181,8 @@ static const std::unordered_map<std::string, StringParser>& GetMenuLabelParsers(
 
 ConfigManager::ConfigManager() {
     SensorOffsets.resize(16, {0, -1, -1});
+    SensorWeights.resize(16, 1.0f);
+    SensorNames.resize(16, "");
 }
 
 bool ConfigManager::LoadConfig(const std::string& filename) {
@@ -307,6 +309,24 @@ void ConfigManager::ParseSpecialKeys(const std::string& key, const std::string& 
                      &SensorOffsets[idx].offset, 
                      &SensorOffsets[idx].hystMin, 
                      &SensorOffsets[idx].hystMax);
+        }
+        return;
+    }
+
+    // Sensor weight configurations
+    if (key.find("SensorWeight") == 0) {
+        int idx = std::stoi(key.substr(12)) - 1;
+        if (idx >= 0 && idx < 16) {
+            SensorWeights[idx] = std::stof(value);
+        }
+        return;
+    }
+
+    // Sensor name configurations
+    if (key.find("SensorName") == 0) {
+        int idx = std::stoi(key.substr(10)) - 1;
+        if (idx >= 0 && idx < 16) {
+            SensorNames[idx] = Trim(value);
         }
         return;
     }

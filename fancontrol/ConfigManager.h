@@ -58,6 +58,8 @@ public:
     std::vector<SmartLevel> SmartLevels2;
     std::vector<int> IconLevels = {50, 55, 60};
     std::vector<SensorOffset> SensorOffsets;
+    std::vector<float> SensorWeights;
+    std::vector<std::string> SensorNames;
     std::string IgnoreSensors = "";
 
     // Hotkeys

@@ -15,6 +15,7 @@ public:
     const std::vector<SensorData>& GetSensors() const { return m_sensors; }
     void SetOffset(int index, int offset, int hystMin, int hystMax);
     void SetSensorName(int index, const std::string& name);
+    void SetSensorWeight(int index, float weight);
 
 private:
     std::shared_ptr<ECManager> m_ecManager;

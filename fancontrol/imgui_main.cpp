@@ -105,6 +105,9 @@ struct UIState {
     int Mode = 2; // 0: BIOS, 1: Manual, 2: Smart
     int SelectedSettingsTab = 0; // 0: General, 1: Hardware, 2: PID, 3: Sensors
     
+    std::vector<float> SensorWeights;
+    std::vector<std::string> SensorNames;
+
     AutotuneContext Autotune;
     
     std::mutex Mutex;
@@ -602,6 +605,13 @@ int main(int argc, char** argv) {
         g_UIState.PID.Kp = g_Config->PID_Kp;
         g_UIState.PID.Ki = g_Config->PID_Ki;
         g_UIState.PID.Kd = g_Config->PID_Kd;
+
+        g_UIState.SensorWeights.resize(16);
+        g_UIState.SensorNames.resize(16);
+        for (int i = 0; i < 16; i++) {
+            g_UIState.SensorWeights[i] = g_Config->SensorWeights[i];
+            g_UIState.SensorNames[i] = g_Config->SensorNames[i];
+        }
     }
 
     // Initialize Hardware Driver (TVicPort)
@@ -1085,6 +1095,11 @@ int main(int argc, char** argv) {
                             g_Config->PID_Kp = g_UIState.PID.Kp;
                             g_Config->PID_Ki = g_UIState.PID.Ki;
                             g_Config->PID_Kd = g_UIState.PID.Kd;
+
+                            for (int i = 0; i < 16; i++) {
+                                g_Config->SensorWeights[i] = g_UIState.SensorWeights[i];
+                                g_Config->SensorNames[i] = g_UIState.SensorNames[i];
+                            }
                         }
                         if (g_Config->SaveConfig("TPFanCtrl2.ini")) {
                             g_AppLog.AddLog("[Config] Config saved successfully.");

@@ -22,6 +22,12 @@ void SensorManager::SetSensorName(int index, const std::string& name) {
     }
 }
 
+void SensorManager::SetSensorWeight(int index, float weight) {
+    if (index >= 0 && index < MAX_SENSORS) {
+        m_sensors[index].weight = weight;
+    }
+}
+
 bool SensorManager::UpdateSensors(bool showBiasedTemps, bool noExtSensor, bool useTWR) {
     std::lock_guard<std::recursive_timed_mutex> lock(m_ecManager->GetMutex());
     if (useTWR) {

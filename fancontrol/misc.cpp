@@ -31,8 +31,14 @@ FANCONTROL::ReadConfig(const char* configfile)
 	// Sync to SensorManager
 	for (int i = 0; i < 16; i++) {
 		m_sensorManager->SetOffset(i, m_configManager->SensorOffsets[i].offset, m_configManager->SensorOffsets[i].hystMin, m_configManager->SensorOffsets[i].hystMax);
+		m_sensorManager->SetSensorWeight(i, m_configManager->SensorWeights[i]);
+		
 		if (i < 12) {
-			m_sensorManager->SetSensorName(i, this->gSensorNames[i]);
+			if (!m_configManager->SensorNames[i].empty()) {
+				m_sensorManager->SetSensorName(i, m_configManager->SensorNames[i]);
+			} else {
+				m_sensorManager->SetSensorName(i, this->gSensorNames[i]);
+			}
 		}
 	}
 
