@@ -16,7 +16,6 @@
 #include "imgui_impl_win32.h"
 #include "imgui_impl_vulkan.h"
 #include "imgui_freetype.h"
-#include "implot.h"
 
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
@@ -73,18 +72,72 @@ static ImGui_ImplVulkanH_Window g_MainWindowData;
 static uint32_t                 g_MinImageCount = 2;
 static VmaAllocator             g_VmaAllocator = VK_NULL_HANDLE;
 
-// --- Plot Getters ---
-static ImPlotPoint DequeGetter(int idx, void* data) {
-    auto* deque = (std::deque<float>*)data;
-    return ImPlotPoint((double)idx, (double)(*deque)[idx]);
+// --- Custom Lightweight Plot ---
+void DrawSimplePlot(const char* label, const std::map<std::string, std::deque<float>>& history, float height) {
+    ImVec2 canvas_p0 = ImGui::GetCursorScreenPos();      // Upper-left
+    ImVec2 canvas_sz = ImGui::GetContentRegionAvail();   // Size of available space
+    if (canvas_sz.x < 50.0f) canvas_sz.x = 50.0f;
+    if (height > 0) canvas_sz.y = height;
+    ImVec2 canvas_p1 = ImVec2(canvas_p0.x + canvas_sz.x, canvas_p0.y + canvas_sz.y);
+
+    // Draw background
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    draw_list->AddRectFilled(canvas_p0, canvas_p1, IM_COL32(30, 30, 30, 255));
+    draw_list->AddRect(canvas_p0, canvas_p1, IM_COL32(100, 100, 100, 255));
+
+    // Grid Lines (30, 50, 70, 90 degrees)
+    float temps[] = { 30.0f, 50.0f, 70.0f, 90.0f };
+    for (float t : temps) {
+        float y = canvas_p1.y - (t / 100.0f) * canvas_sz.y;
+        draw_list->AddLine(ImVec2(canvas_p0.x, y), ImVec2(canvas_p1.x, y), IM_COL32(60, 60, 60, 255));
+        char buf[16]; snprintf(buf, 16, "%d", (int)t);
+        draw_list->AddText(ImVec2(canvas_p0.x + 5, y - 15), IM_COL32(150, 150, 150, 255), buf);
+    }
+
+    // Plot Lines
+    int colorIdx = 0;
+    ImU32 colors[] = {
+        IM_COL32(0, 255, 255, 255),   // Cyan
+        IM_COL32(255, 165, 0, 255),   // Orange
+        IM_COL32(124, 252, 0, 255),   // LawnGreen
+        IM_COL32(255, 105, 180, 255), // HotPink
+        IM_COL32(173, 216, 230, 255)  // LightBlue
+    };
+
+    float legendX = canvas_p0.x + 40;
+    for (auto const& [name, data] : history) {
+        if (data.size() < 2) continue;
+
+        ImU32 color = colors[colorIdx % 5];
+        float stepX = canvas_sz.x / 300.0f; 
+        
+        for (size_t i = 0; i < data.size() - 1; i++) {
+            ImVec2 p1 = ImVec2(canvas_p1.x - (data.size() - i) * stepX, 
+                               canvas_p1.y - (data[i] / 100.0f) * canvas_sz.y);
+            ImVec2 p2 = ImVec2(canvas_p1.x - (data.size() - (i + 1)) * stepX, 
+                               canvas_p1.y - (data[i+1] / 100.0f) * canvas_sz.y);
+            
+            if (p1.x < canvas_p0.x) continue;
+            draw_list->AddLine(p1, p2, color, 2.0f);
+        }
+        
+        // Draw Legend in the plot area
+        draw_list->AddText(ImVec2(legendX, canvas_p0.y + 5), color, name.c_str());
+        legendX += ImGui::CalcTextSize(name.c_str()).x + 15;
+        colorIdx++;
+    }
+
+    ImGui::Dummy(canvas_sz); // Advance cursor
 }
 
 // --- Logging System ---
+static std::mutex g_LogMutex;
 enum LogLevel { LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERROR };
-static LogLevel g_MinLogLevel = LOG_DEBUG;
+static LogLevel g_MinLogLevel = LOG_INFO;
 
 void Log(LogLevel level, const char* fmt, ...) {
     if (level < g_MinLogLevel) return;
+    std::lock_guard<std::mutex> lock(g_LogMutex);
     const char* prefix = "[INFO] ";
     if (level == LOG_DEBUG) prefix = "[DEBUG] ";
     if (level == LOG_WARN)  prefix = "[WARN]  ";
@@ -96,17 +149,14 @@ void Log(LogLevel level, const char* fmt, ...) {
     vsnprintf(buf, 1024, fmt, args);
     va_end(args);
 
-    // Get timestamp
     char timeBuf[32];
     time_t now = time(nullptr);
     struct tm tm_info;
     localtime_s(&tm_info, &now);
     strftime(timeBuf, sizeof(timeBuf), "%H:%M:%S", &tm_info);
 
-    // Print to console
     printf("[%s] %s%s\n", timeBuf, prefix, buf);
 
-    // Also write to file for elevated process diagnostics
     FILE* f = fopen("TPFanCtrl2_debug.log", "a");
     if (f) {
         fprintf(f, "[%s] %s%s\n", timeBuf, prefix, buf);
@@ -395,7 +445,6 @@ int main(int argc, char** argv) {
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImPlot::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     
     Log(LOG_INFO, "Loading fonts...");
@@ -456,6 +505,7 @@ int main(int argc, char** argv) {
 
     bool done = false;
     Log(LOG_INFO, "Entering main loop...");
+    int frameCount = 0;
     while (!done) {
         MSG msg;
         while (::PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE)) {
@@ -467,6 +517,8 @@ int main(int argc, char** argv) {
             }
         }
         if (done) break;
+
+        frameCount++;
 
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplWin32_NewFrame();
@@ -497,7 +549,10 @@ int main(int argc, char** argv) {
                 std::lock_guard<std::mutex> lock(g_UIState.Mutex);
                 for (const auto& s : g_UIState.Sensors) {
                     if (s.rawTemp > 0 && s.rawTemp < 128) {
-                        float currentTemp = g_UIState.SmoothTemps[s.name].Current;
+                        float currentTemp = (float)s.rawTemp;
+                        auto it = g_UIState.SmoothTemps.find(s.name);
+                        if (it != g_UIState.SmoothTemps.end()) currentTemp = it->second.Current;
+                        
                         float progress = currentTemp / 100.0f;
                         
                         // Dynamic color based on temperature
@@ -542,17 +597,9 @@ int main(int argc, char** argv) {
 
             ImGui::BeginChild("History", ImVec2(0, 0), true);
             ImGui::Text("%s Temperature History", ICON_CHIP);
-            if (ImPlot::BeginPlot("##TempPlot", ImVec2(-1, -1), ImPlotFlags_NoMouseText)) {
-                ImPlot::SetupAxes(nullptr, "°C", ImPlotAxisFlags_NoTickLabels, ImPlotAxisFlags_AutoFit);
-                ImPlot::SetupAxisLimits(ImAxis_Y1, 30, 90, ImGuiCond_Once);
-                
+            {
                 std::lock_guard<std::mutex> lock(g_UIState.Mutex);
-                for (auto& pair : g_UIState.TempHistory) {
-                    if (pair.second.size() > 1) {
-                        ImPlot::PlotLineG(pair.first.c_str(), DequeGetter, (void*)&pair.second, (int)pair.second.size());
-                    }
-                }
-                ImPlot::EndPlot();
+                DrawSimplePlot("TempPlot", g_UIState.TempHistory, 0);
             }
             ImGui::EndChild();
 
@@ -597,11 +644,9 @@ int main(int argc, char** argv) {
         }
         ImGui::End();
 
-        Log(LOG_DEBUG, "Render...");
         ImGui::Render();
         ImDrawData* draw_data = ImGui::GetDrawData();
         
-        Log(LOG_DEBUG, "AcquireNextImage...");
         ImGui_ImplVulkanH_Window* wd = &g_MainWindowData;
         VkSemaphore image_acquired_semaphore  = wd->FrameSemaphores[wd->SemaphoreIndex].ImageAcquiredSemaphore;
         VkSemaphore render_complete_semaphore = wd->FrameSemaphores[wd->SemaphoreIndex].RenderCompleteSemaphore;
@@ -632,7 +677,6 @@ int main(int argc, char** argv) {
         rp_info.pClearValues = &clear_value;
         vkCmdBeginRenderPass(fd->CommandBuffer, &rp_info, VK_SUBPASS_CONTENTS_INLINE);
 
-        Log(LOG_DEBUG, "RenderDrawData...");
         ImGui_ImplVulkan_RenderDrawData(draw_data, fd->CommandBuffer);
 
         vkCmdEndRenderPass(fd->CommandBuffer);
