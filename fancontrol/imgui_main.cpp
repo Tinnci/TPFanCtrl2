@@ -61,12 +61,12 @@ struct SmoothValue {
 
 // Icons (Segoe MDL2 Assets / Segoe Fluent Icons - Built-in on Windows 10/11)
 // Using u8 prefix to ensure UTF-8 encoding
-#define ICON_CPU   (const char*)u8"\uE9D2" // Speed High (Dashboard style)
-#define ICON_GPU   (const char*)u8"\uE967" // Video (GPU fallback)
-#define ICON_FAN   (const char*)u8"\uE706" // Settings/Gear (Fan fallback)
-#define ICON_CHIP  (const char*)u8"\uE950" // RAM / Memory
-#define ICON_CHART (const char*)u8"\uE9D9" // Activity Feed (Line chart)
-#define ICON_LOG   (const char*)u8"\uE81C" // List (Document list)
+#define ICON_CPU   (const char*)u8"\uE9D2" // Speed High (仪表盘，代指处理器频率)
+#define ICON_GPU   (const char*)u8"\uE967" // Video (视频，代指显卡)
+#define ICON_FAN   (const char*)u8"\uE713" // Settings (齿轮，作为风扇/转速的通用代指)
+#define ICON_CHIP  (const char*)u8"\uE950" // Memory (内存条/芯片)
+#define ICON_CHART (const char*)u8"\uE9D9" // Activity Feed (动态折线图)
+#define ICON_LOG   (const char*)u8"\uE81C" // List (列表/日志)
 
 struct UIState {
     std::vector<SensorData> Sensors;
