@@ -1,3 +1,12 @@
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef UNICODE
+#define UNICODE
+#endif
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0A00 // Windows 10
+#endif
 #include <windows.h>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_win32.h>
@@ -20,6 +29,10 @@
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
 #include <shellapi.h>
+
+#ifndef WM_DPICHANGED
+#define WM_DPICHANGED 0x02E0
+#endif
 
 // Project includes
 #include "ConfigManager.h"
@@ -354,6 +367,17 @@ void RemoveTrayIcon(HWND hWnd) {
 }
 
 int main(int argc, char** argv) {
+    // Enable DPI Awareness (Dynamic loading for compatibility)
+    typedef BOOL(WINAPI* PFN_SetProcessDpiAwarenessContext)(HANDLE);
+    HMODULE hUser32 = GetModuleHandleA("user32.dll");
+    if (hUser32) {
+        PFN_SetProcessDpiAwarenessContext pSetDpi = (PFN_SetProcessDpiAwarenessContext)GetProcAddress(hUser32, "SetProcessDpiAwarenessContext");
+        if (pSetDpi) {
+            // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 is ((HANDLE)-4)
+            pSetDpi((HANDLE)-4);
+        }
+    }
+
     // Clear old log file for a fresh session
     remove("TPFanCtrl2_debug.log");
     Log(LOG_INFO, "--- TPFanCtrl2 Session Started ---");
@@ -431,6 +455,17 @@ int main(int argc, char** argv) {
     ::RegisterClassExW(&wc);
     HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"TPFanCtrl2 - Vulkan Modernized", WS_OVERLAPPEDWINDOW, 100, 100, 1024, 768, nullptr, nullptr, wc.hInstance, nullptr);
 
+    // Get DPI Scale
+    float dpiScale = 1.0f;
+    typedef UINT(WINAPI* PFN_GetDpiForWindow)(HWND);
+    if (hUser32) {
+        PFN_GetDpiForWindow pGetDpi = (PFN_GetDpiForWindow)GetProcAddress(hUser32, "GetDpiForWindow");
+        if (pGetDpi) {
+            dpiScale = (float)pGetDpi(hwnd) / 96.0f;
+        }
+    }
+    Log(LOG_INFO, "DPI Scale detected: %.2f", dpiScale);
+
     BOOL dark = TRUE;
     DwmSetWindowAttribute(hwnd, 20, &dark, sizeof(dark));
     int backdrop = 2;
@@ -457,7 +492,7 @@ int main(int argc, char** argv) {
     // 1. Optimize Font Rendering with FreeType
     ImFontConfig font_cfg;
     font_cfg.FontLoaderFlags |= ImGuiFreeTypeBuilderFlags_LightHinting;
-    if (!io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segoeui.ttf", 18.0f, &font_cfg)) {
+    if (!io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segoeui.ttf", 18.0f * dpiScale, &font_cfg)) {
         Log(LOG_WARN, "Failed to load segoeui.ttf");
     }
     
@@ -466,15 +501,16 @@ int main(int argc, char** argv) {
     ImFontConfig icon_cfg;
     icon_cfg.MergeMode = true;
     icon_cfg.PixelSnapH = true;
-    if (!io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segmdl2.ttf", 16.0f, &icon_cfg, icon_ranges)) {
+    if (!io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segmdl2.ttf", 16.0f * dpiScale, &icon_cfg, icon_ranges)) {
         Log(LOG_WARN, "Failed to load segmdl2.ttf");
     }
     
     ImGui::StyleColorsDark();
     auto& style = ImGui::GetStyle();
-    style.WindowRounding = 8.0f;
-    style.FrameRounding = 4.0f;
-    style.ItemSpacing = ImVec2(10, 8);
+    style.ScaleAllSizes(dpiScale); // Scale UI elements (padding, spacing, etc.)
+    style.WindowRounding = 8.0f * dpiScale;
+    style.FrameRounding = 4.0f * dpiScale;
+    style.ItemSpacing = ImVec2(10 * dpiScale, 8 * dpiScale);
     style.Colors[ImGuiCol_WindowBg] = ImVec4(0.1f, 0.1f, 0.1f, 0.7f);
     style.Colors[ImGuiCol_PlotHistogram] = ImVec4(0.0f, 0.6f, 0.9f, 1.0f);
 
@@ -784,6 +820,15 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         RemoveTrayIcon(hWnd);
         ::PostQuitMessage(0);
         return 0;
+    case WM_DPICHANGED:
+        if (lParam != NULL) {
+            const RECT* prcNewWindow = (RECT*)lParam;
+            SetWindowPos(hWnd, NULL, prcNewWindow->left, prcNewWindow->top,
+                prcNewWindow->right - prcNewWindow->left,
+                prcNewWindow->bottom - prcNewWindow->top,
+                SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+        break;
     }
     return ::DefWindowProcW(hWnd, msg, wParam, lParam);
 }
