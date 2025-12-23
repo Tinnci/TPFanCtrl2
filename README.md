@@ -77,6 +77,63 @@ xmake run logic_test
 
 ---
 
+## 🔬 Technical Stack Analysis
+
+TPFanCtrl2 is a modernization project that combines state-of-the-art development practices with legacy hardware interfaces. This section provides a detailed breakdown.
+
+### ✅ What's Modern (2025 Standards)
+
+#### Programming Language
+- **C++20 Standard**: Using the latest stable C++ standard with features like `std::jthread`, `std::stop_token`, `std::format`, and more.
+- **Strict Compiler Options**: `/W4` warning level and `/utf-8` encoding for cross-platform compatibility.
+
+#### Build System & Dependencies
+- **xmake**: A modern, Lua-based build system with built-in package management, replacing legacy Visual Studio solutions or complex CMake configurations.
+- **Declarative Dependencies**: Third-party libraries (`imgui`, `spdlog`, `gtest`) are automatically managed via `add_requires`.
+
+#### UI & Graphics
+- **ImGui + Vulkan 1.2**: Hardware-accelerated immediate-mode GUI, providing smooth 60fps rendering with minimal CPU overhead.
+- **DPI Awareness**: Full support for high-DPI displays (4K+) with dynamic scaling.
+
+#### Engineering Practices
+- **CI/CD Pipeline**: GitHub Actions for automated builds and testing.
+- **Unit Testing**: Google Test integration with architecture-separated test targets (`logic_test`).
+- **Modern Logging**: `spdlog` for high-performance, structured logging.
+
+### ⚠️ Known Limitations (Legacy Constraints)
+
+Despite the modern upper layers, the project has inherent limitations due to hardware access requirements:
+
+| Limitation | Reason | Impact |
+|------------|--------|--------|
+| **x86 (32-bit) Only** | TVicPort driver is 32-bit only | Cannot build native x64 binaries |
+| **TVicPort Dependency** | Required for direct EC (Embedded Controller) port I/O access | May conflict with Windows Core Isolation (HVCI) on modern systems |
+| **Administrator Required** | Low-level hardware access needs elevated privileges | Must run as Administrator |
+| **Windows Only** | Uses Win32 APIs and Windows-specific drivers | No Linux/macOS support |
+
+#### Why These Limitations Exist
+
+The Embedded Controller (EC) in ThinkPads is accessed via low-level I/O ports (`0x66`, `0x62`). On modern Windows (10/11), direct port access from userspace is blocked for security. The TVicPort driver provides a kernel-mode bridge to allow this access.
+
+**Modern alternatives** (like WMI interfaces or custom KMDF drivers) would require:
+1. Lenovo to provide official WMI interfaces (not available for fan control)
+2. Significant development effort to create a signed, WHQL-certified driver
+
+### 🏆 Summary
+
+| Aspect | Status |
+|--------|--------|
+| C++20 Language Standard | ✅ State of the Art |
+| xmake Build System | ✅ Modern |
+| ImGui + Vulkan Rendering | ✅ High Performance |
+| CI/CD + Unit Tests | ✅ Industry Standard |
+| Architecture (x86 limitation) | ⚠️ Legacy Constraint |
+| Driver Interface (TVicPort) | ⚠️ Legacy Constraint |
+
+**TPFanCtrl2 serves as an excellent reference for modernizing legacy system utilities while maintaining compatibility with hardware constraints.**
+
+---
+
 ## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit Pull Requests.
