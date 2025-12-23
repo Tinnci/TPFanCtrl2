@@ -3,11 +3,11 @@ set_project("TPFanCtrl2")
 
 -- Dynamic versioning from Git tags (Xmake 3.0 compatible)
 set_version("2.2.0", {build = function ()
-    import("core.base.os")
-    return try { function() 
-        local v = os.iorun("git describe --tags --always"):trim() 
-        return v:gsub("^v", "")
-    end }
+    local os = import("core.base.os")
+    local ok, v = pcall(function() 
+        return os.iorun("git describe --tags --always"):trim():gsub("^v", "")
+    end)
+    return ok and v or nil
 end})
 
 -- Add dependencies
