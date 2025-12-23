@@ -98,6 +98,14 @@ void I18nManager::LoadTranslations() {
     en["LBL_SMART_STEP"] = "SMART (STEP)";
     en["LBL_SMART_PID"] = "SMART (PID)";
     en["LBL_RPM"] = "RPM";
+    en["LBL_SENSOR_ORIG"] = "Original";
+    en["LBL_SENSOR_NAME"] = "Custom Name";
+    en["LBL_SENSOR_WEIGHT"] = "Weight";
+    en["LBL_SENSOR_IGNORE"] = "Ignore";
+    en["LBL_SENSOR_TEMP"] = "Temp";
+    en["LBL_PRESETS"] = "Presets";
+    en["BTN_PRESET_SILENT"] = "Silent Mode";
+    en["BTN_PRESET_PERF"] = "Performance Mode";
     en["LBL_CELSIUS"] = "\xC2\xB0\x43";
     en["SETTING_PID_PREVIEW"] = "Step Response Preview";
     en["DESC_PID_PREVIEW"] = "Simulates fan response when temperature spikes to 70C. Smooth curves = stable, oscillating = needs tuning.";
@@ -167,4 +175,12 @@ void I18nManager::LoadTranslations() {
     zh["DESC_PID_PREVIEW"] = "\xE6\xA8\xA1\xE6\x8B\x9F\xE6\xB8\xA9\xE5\xBA\xA6\xE7\xAA\x81\xE5\x8D\x87\xE5\x88\xB0 70\xC2\xB0" "C \xE6\x97\xB6\xE9\xA3\x8E\xE6\x89\x87\xE7\x9A\x84\xE5\x93\x8D\xE5\xBA\x94\xE3\x80\x82\xE5\xB9\xB3\xE6\xBB\x91\xE6\x9B\xB2\xE7\xBA\xBF = \xE7\xA8\xB3\xE5\xAE\x9A\xEF\xBC\x8C\xE6\x8C\xAF\xE8\x8D\xA1 = \xE9\x9C\x80\xE8\xB0\x83\xE4\xBC\x98\xE3\x80\x82";
     zh["LBL_FAN_OFF"] = "\xE9\xA3\x8E\xE6\x89\x87\xE5\x85\xB3\xE9\x97\xAD";
     zh["LBL_FAN_MAX"] = "\xE5\x85\xA8\xE9\x80\x9F";
+    zh["LBL_SENSOR_ORIG"] = "\xE5\x8E\x9F\xE5\xA7\x8B\xE5\x90\x8D\xE7\xA7\xB0";
+    zh["LBL_SENSOR_NAME"] = "\xE8\x87\xAA\xE5\xAE\x9A\xE4\xB9\x89\xE5\x90\x8D\xE7\xA7\xB0";
+    zh["LBL_SENSOR_WEIGHT"] = "\xE6\x9D\x83\xE9\x87\x8D";
+    zh["LBL_SENSOR_IGNORE"] = "\xE5\xBF\xBD\xE7\x95\xA5";
+    zh["LBL_SENSOR_TEMP"] = "\xE6\xB8\xA9\xE5\xBA\xA6";
+    zh["LBL_PRESETS"] = "\xE9\xA2\x84\xE8\xAE\xBE\xE6\xA8\xA1\xE5\xBC\x8F";
+    zh["BTN_PRESET_SILENT"] = "\xE9\x9D\x99\xE9\x9F\xB3\xE6\xA8\xA1\xE5\xBC\x8F";
+    zh["BTN_PRESET_PERF"] = "\xE6\x80\xA7\xE8\x83\xBD\xE6\xA8\xA1\xE5\xBC\x8F";
 }

@@ -23,6 +23,10 @@
   - **PID Control**: 10Hz closed-loop PID algorithm for precise temperature management.
   - **Smart Mode**: Classic step-based fan curve with hysteresis support.
   - **Dual Fan Support**: Independent or synchronized control for high-end ThinkPad models (P-series, etc.).
+- **Robust Sensor Fusion**:
+  - **Weighted Max Strategy**: Assign different weights to sensors (e.g., make CPU more "important" than ambient).
+  - **Moving Average Smoothing**: 5-sample window to prevent fan jitter from sensor spikes.
+  - **Safety Net**: Automatic fallback to BIOS control if temperatures exceed 90°C or sensors fail.
 - **DPI Aware**: Fully responsive UI and dynamic tray icons that scale perfectly on 4K+ displays.
 - **Internationalization (I18n)**: Built-in support for multiple languages (English, Chinese, etc.).
 - **Dynamic Tray Icon**: Real-time temperature and fan speed rendering directly in the system tray using Segoe UI.

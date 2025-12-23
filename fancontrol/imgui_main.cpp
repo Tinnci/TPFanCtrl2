@@ -447,7 +447,13 @@ void HardwareWorker(std::stop_token stopToken,
         // 3. Control Logic (Every 100ms for maximum responsiveness)
         {
             std::lock_guard<std::mutex> lock(g_UIState.Mutex);
-            if (g_UIState.Autotune.Stage != AutotuneStep::Idle && g_UIState.Autotune.Stage != AutotuneStep::Success && g_UIState.Autotune.Stage != AutotuneStep::Failed) {
+
+            // --- CRITICAL SAFETY NET ---
+            if (maxTemp >= 90 && maxTemp < 128) {
+                // If temperature is dangerously high, force BIOS control
+                fans->SetFanLevels(0x80, 0x80);
+            }
+            else if (g_UIState.Autotune.Stage != AutotuneStep::Idle && g_UIState.Autotune.Stage != AutotuneStep::Success && g_UIState.Autotune.Stage != AutotuneStep::Failed) {
                 // PID Autotune Logic (Relay Method)
                 float currentTemp = (float)maxTemp;
                 float target = g_UIState.PID.targetTemp;
@@ -507,14 +513,14 @@ void HardwareWorker(std::stop_token stopToken,
                 if (currentTemp < g_UIState.Autotune.CurrentMin) g_UIState.Autotune.CurrentMin = currentTemp;
                 g_UIState.Autotune.LastTemp = currentTemp;
 
+            } else if (g_UIState.Mode == 0) { // BIOS
+                fans->SetFanLevels(0x80, 0x80);
             } else if (g_UIState.Mode == 1) { // Manual
                 fans->SetFanLevel(g_UIState.ManualLevel);
             } else if (g_UIState.Mode == 2) { // Smart
                 if (g_UIState.Algorithm == ControlAlgorithm::Step) {
-                    // Step control still uses the 1s-based logic internally or we just call it
                     fans->UpdateSmartControl(maxTemp, config->SmartLevels1);
                 } else {
-                    // PID Control (using 0.1s dt for high-frequency updates)
                     fans->UpdatePIDControl((float)maxTemp, g_UIState.PID, 0.1f);
                 }
             }
@@ -1028,6 +1034,27 @@ int main(int argc, char** argv) {
                             }
                             ImGui::PopItemWidth();
                         }
+
+                        // Presets
+                        ImGui::Spacing();
+                        ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "%s", _TR("LBL_PRESETS"));
+                        if (ImGui::Button(_TR("BTN_PRESET_SILENT"), ImVec2(ImGui::GetContentRegionAvail().x / 2.1f, 30 * dpiScale))) {
+                            g_UIState.Mode = 2; // Smart
+                            g_UIState.Algorithm = ControlAlgorithm::PID;
+                            g_UIState.PID.targetTemp = 70.0f;
+                            g_UIState.PID.Kp = 0.3f;
+                            g_UIState.PID.Ki = 0.005f;
+                            g_UIState.PID.Kd = 0.05f;
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::Button(_TR("BTN_PRESET_PERF"), ImVec2(ImGui::GetContentRegionAvail().x, 30 * dpiScale))) {
+                            g_UIState.Mode = 2; // Smart
+                            g_UIState.Algorithm = ControlAlgorithm::PID;
+                            g_UIState.PID.targetTemp = 55.0f;
+                            g_UIState.PID.Kp = 0.8f;
+                            g_UIState.PID.Ki = 0.02f;
+                            g_UIState.PID.Kd = 0.2f;
+                        }
                     }
                     
                     ImGui::SetCursorPosY(ImGui::GetWindowHeight() - 55 * dpiScale);
@@ -1310,15 +1337,55 @@ int main(int argc, char** argv) {
                     ImGui::Spacing();
                     {
                         std::lock_guard<std::mutex> lock(g_UIState.Mutex);
-                        if (ImGui::BeginTable("SensorsIgnore", 3, ImGuiTableFlags_NoSavedSettings)) {
-                            for (const auto& s : g_UIState.Sensors) {
+                        if (ImGui::BeginTable("SensorsTable", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable)) {
+                            ImGui::TableSetupColumn("ID", ImGuiTableColumnFlags_WidthFixed, 30 * dpiScale);
+                            ImGui::TableSetupColumn(_TR("LBL_SENSOR_ORIG"), ImGuiTableColumnFlags_WidthFixed, 80 * dpiScale);
+                            ImGui::TableSetupColumn(_TR("LBL_SENSOR_NAME"), ImGuiTableColumnFlags_WidthStretch);
+                            ImGui::TableSetupColumn(_TR("LBL_SENSOR_WEIGHT"), ImGuiTableColumnFlags_WidthFixed, 80 * dpiScale);
+                            ImGui::TableSetupColumn(_TR("LBL_SENSOR_IGNORE"), ImGuiTableColumnFlags_WidthFixed, 60 * dpiScale);
+                            ImGui::TableSetupColumn(_TR("LBL_SENSOR_TEMP"), ImGuiTableColumnFlags_WidthFixed, 60 * dpiScale);
+                            ImGui::TableHeadersRow();
+
+                            for (int i = 0; i < (int)g_UIState.Sensors.size(); i++) {
+                                const auto& s = g_UIState.Sensors[i];
+                                ImGui::TableNextRow();
+                                
+                                // ID
                                 ImGui::TableNextColumn();
-                                
+                                ImGui::Text("%d", i);
+
+                                // Original Name
+                                ImGui::TableNextColumn();
+                                ImGui::Text("%s", s.name.c_str());
+
+                                // Custom Name
+                                ImGui::TableNextColumn();
+                                char nameBuf[64];
+                                if (i < (int)g_UIState.SensorNames.size()) {
+                                    strcpy_s(nameBuf, g_UIState.SensorNames[i].c_str());
+                                } else {
+                                    nameBuf[0] = '\0';
+                                }
+                                ImGui::PushID(i);
+                                ImGui::PushItemWidth(-FLT_MIN);
+                                if (ImGui::InputText("##Name", nameBuf, sizeof(nameBuf))) {
+                                    if (i < (int)g_UIState.SensorNames.size())
+                                        g_UIState.SensorNames[i] = nameBuf;
+                                }
+                                ImGui::PopItemWidth();
+
+                                // Weight
+                                ImGui::TableNextColumn();
+                                ImGui::PushItemWidth(-FLT_MIN);
+                                if (i < (int)g_UIState.SensorWeights.size()) {
+                                    ImGui::InputFloat("##Weight", &g_UIState.SensorWeights[i], 0.1f, 0.5f, "%.1f");
+                                }
+                                ImGui::PopItemWidth();
+
+                                // Ignore
+                                ImGui::TableNextColumn();
                                 bool ignored = g_Config->IgnoreSensors.find(s.name) != std::string::npos;
-                                
-                                if (!s.isAvailable) ImGui::BeginDisabled();
-                                
-                                if (ImGui::Checkbox(s.name.c_str(), &ignored)) {
+                                if (ImGui::Checkbox("##Ignore", &ignored)) {
                                     if (ignored) {
                                         if (g_Config->IgnoreSensors.find(s.name) == std::string::npos)
                                             g_Config->IgnoreSensors += s.name + " ";
@@ -1328,12 +1395,16 @@ int main(int argc, char** argv) {
                                             g_Config->IgnoreSensors.erase(pos, s.name.length() + 1);
                                     }
                                 }
-                                
-                                if (!s.isAvailable) ImGui::EndDisabled();
-                                
-                                if (ImGui::IsItemHovered() && !s.isAvailable) {
-                                    ImGui::SetTooltip(_TR("TIP_SENSOR_UNAVAILABLE"), s.addr);
+
+                                // Current Temp
+                                ImGui::TableNextColumn();
+                                if (s.isAvailable) {
+                                    ImGui::Text("%d\xC2\xB0\x43", s.rawTemp);
+                                } else {
+                                    ImGui::TextDisabled("N/A");
                                 }
+                                
+                                ImGui::PopID();
                             }
                             ImGui::EndTable();
                         }
