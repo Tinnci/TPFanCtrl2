@@ -79,5 +79,7 @@ public:
 
 private:
     void ParseLine(const std::string& line);
-    void ParseHotkey(const std::string& line, const std::string& prefix, Hotkey& hk);
+    void ParseSpecialKeys(const std::string& key, const std::string& value);
+    void ParseHotkeyByName(const std::string& key, const std::string& value);
+    void ParseHotkey(const std::string& value, const std::string& prefix, Hotkey& hk);
 };
