@@ -105,6 +105,18 @@ static std::shared_ptr<ConfigManager> g_Config;
 
 void UpdateTrayIcon(HWND hWnd, int temp, int fan) {
     if (!hWnd) return;
+
+    // Calculate DPI scale for tray icon
+    float dpiScale = 1.0f;
+    HMODULE hUser32 = GetModuleHandleA("user32.dll");
+    if (hUser32) {
+        typedef UINT(WINAPI* PFN_GetDpiForWindow)(HWND);
+        PFN_GetDpiForWindow pGetDpi = (PFN_GetDpiForWindow)GetProcAddress(hUser32, "GetDpiForWindow");
+        if (pGetDpi) {
+            dpiScale = (float)pGetDpi(hWnd) / 96.0f;
+        }
+    }
+
     char line1[16], line2[16];
     sprintf_s(line1, "%d", temp);
     
@@ -118,7 +130,7 @@ void UpdateTrayIcon(HWND hWnd, int temp, int fan) {
     else if (temp >= 50) color = 23; // green
     else color = 11;                 // blue
 
-    CDynamicIcon dynIcon(line1, line2, color, 0);
+    CDynamicIcon dynIcon(line1, line2, color, 0, dpiScale);
     HICON hIcon = dynIcon.GetHIcon();
     if (!hIcon) return;
 

@@ -6,7 +6,7 @@
 class CDynamicIcon {
 public:
 
-	CDynamicIcon(const char line1[3], const char line2[3], const int iFarbeIconA, const int iFontIconA);
+	CDynamicIcon(const char line1[3], const char line2[3], const int iFarbeIconA, const int iFontIconA, float scale = 1.0f);
 	~CDynamicIcon();
 
 	HICON GetHIcon();
@@ -21,11 +21,11 @@ private:
 	HBRUSH   hOldBrush;
 	HRGN     rgn;
 	HICON    icon_;
-	static const int iconWidth_ = 16;
-	static const int iconHeight_ = 16;
+	int      iconWidth_;
+	int      iconHeight_;
 
 private:
-	__inline static HFONT CreateFont(const HDC hDC);
+	HFONT CreateFont(const HDC hDC);
 	//default und copy verbergen
 	__inline CDynamicIcon() {};
 	__inline CDynamicIcon(const CDynamicIcon&) {};

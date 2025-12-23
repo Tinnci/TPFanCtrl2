@@ -3,16 +3,16 @@
 #include <string.h>
 
 
-CDynamicIcon::CDynamicIcon(const char *line1, const char *line2, const int iFarbeIconA, const int iFontIconA) {
+CDynamicIcon::CDynamicIcon(const char *line1, const char *line2, const int iFarbeIconA, const int iFontIconA, float scale) {
+    iconWidth_ = (int)(16 * scale);
+    iconHeight_ = (int)(16 * scale);
+
     //3 chars per line
     char _line1[4], _line2[4];
     strncpy_s(_line1, sizeof(_line1), line1, 3);
     strncpy_s(_line2, sizeof(_line2), line2, 3);
     _line1[3] = 0;
     _line2[3] = 0;
-
-
-    //TODO: implement errorhandling
 
     HDC hDC = GetDC(0);
 
@@ -31,7 +31,7 @@ CDynamicIcon::CDynamicIcon(const char *line1, const char *line2, const int iFarb
     SelectObject(memDC2_, hOldBrush);
     DeleteObject(hBrush);
 
-    // draw circle on both bitmaps
+    // draw background on both bitmaps
     rgn = CreateRectRgn(0, 0, iconWidth_, iconHeight_);
 
     switch (iFarbeIconA) {
@@ -82,23 +82,21 @@ CDynamicIcon::CDynamicIcon(const char *line1, const char *line2, const int iFarb
     hfnt = this->CreateFont(memDC1_);
 
     if (hOldFont = (HFONT) SelectObject(memDC1_, hfnt)) {
-        //SetBkColor(memDC1_,RGB(255,0,0));
         SetBkMode(memDC1_, TRANSPARENT);
-        //TODO: Textcolors
-        //default textcolor: RGB(32,16,176)
+        SetTextColor(memDC1_, RGB(0, 0, 0)); // Black text for better contrast on light backgrounds
 
         RECT r;
-        r.top = -2; //org -1
+        r.top = (int)(-2 * scale);
         r.left = 0;
-        r.bottom = 9; //org 10
-        r.right = 15;
-        DrawTextEx(memDC1_, (LPSTR) _line1, strlen(_line1), &r, DT_CENTER, NULL);
+        r.bottom = (int)(9 * scale);
+        r.right = iconWidth_;
+        DrawTextEx(memDC1_, (LPSTR) _line1, (int)strlen(_line1), &r, DT_CENTER, NULL);
 
-        r.top = 5;  //org 6 neu ?
+        r.top = (int)(6 * scale);
         r.left = 0;
-        r.bottom = 16; // org 15
-        r.right = 15;
-        DrawTextEx(memDC1_, (LPSTR) _line2, strlen(_line2), &r, DT_CENTER, NULL);
+        r.bottom = (int)(16 * scale);
+        r.right = iconWidth_;
+        DrawTextEx(memDC1_, (LPSTR) _line2, (int)strlen(_line2), &r, DT_CENTER, NULL);
 
         SelectObject(memDC1_, hOldFont);
     }
@@ -133,37 +131,17 @@ HICON CDynamicIcon::GetHIcon() {
 
 HFONT CDynamicIcon::CreateFont(const HDC hDC) {
     LOGFONT lf;
-
-//#define DEV_FIND_FONT
-#ifdef DEV_FIND_FONT //fontdialog for developper
-    CHOOSEFONT cf; 
-    cf.lStructSize = sizeof(CHOOSEFONT); 
-    cf.hwndOwner = (HWND)NULL; 
-    cf.hDC = hDC;//(HDC)NULL; 
-    cf.lpLogFont = &lf; 
-    cf.iPointSize = 0; 
-    cf.Flags = CF_SCREENFONTS; 
-    cf.rgbColors = RGB(0,0,0); 
-    cf.lCustData = 0L; 
-    cf.lpfnHook = (LPCFHOOKPROC)NULL; 
-    cf.lpTemplateName = (LPSTR)NULL; 
-    cf.hInstance = (HINSTANCE) NULL; 
-    cf.lpszStyle = (LPSTR)NULL; 
-    cf.nFontType = SCREEN_FONTTYPE; 
-    cf.nSizeMin = 0; 
-    cf.nSizeMax = 0; 
-    ChooseFont(&cf);
-#endif //fontdialog for developper
-
     SecureZeroMemory(&lf, sizeof(LOGFONT));
-    // int iitest = GetDeviceCaps(hDC, LOGPIXELSY);
-    lf.lfHeight = -9; //-MulDiv(6, GetDeviceCaps(hDC, LOGPIXELSY), 64); // 64 neu
-    lf.lfWeight = 400;
-    lf.lfOutPrecision = 1;
-    lf.lfClipPrecision = 2;
-    lf.lfQuality = 1;
-    lf.lfPitchAndFamily = 34;
-    strcpy_s(lf.lfFaceName, sizeof(lf.lfFaceName), "Small Fonts");
+    
+    // Scale font height. Original was -9 for 16px icon.
+    float scale = (float)iconWidth_ / 16.0f;
+    lf.lfHeight = (int)(-10 * scale); 
+    lf.lfWeight = FW_BOLD;
+    lf.lfOutPrecision = OUT_TT_ONLY_PRECIS;
+    lf.lfClipPrecision = CLIP_DEFAULT_PRECIS;
+    lf.lfQuality = CLEARTYPE_QUALITY;
+    lf.lfPitchAndFamily = DEFAULT_PITCH | FF_SWISS;
+    strcpy_s(lf.lfFaceName, sizeof(lf.lfFaceName), "Segoe UI");
 
     return CreateFontIndirect(&lf);
 };

@@ -165,26 +165,6 @@ END
 // remains consistent on all systems.
 1                       ICON                    "app.ico"
 
-21                      ICON                    "ico21.ico"
-
-22                      ICON                    "ico22.ico"
-
-23                      ICON                    "ico23.ico"
-
-24                      ICON                    "ico24.ico"
-
-25                      ICON                    "ico25.ico"
-
-10                      ICON                    "bw.ico"
-
-11                      ICON                    "blue.ico"
-
-12                      ICON                    "yellow.ico"
-
-13                      ICON                    "orange.ico"
-
-14                      ICON                    "red.ico"
-
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -320,16 +300,6 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 // Icon with lowest ID value placed first to ensure application icon
 // remains consistent on all systems.
 1                       ICON                    "app.ico"
-
-10                      ICON                    "bw.ico"
-
-11                      ICON                    "blue.ico"
-
-12                      ICON                    "yellow.ico"
-
-13                      ICON                    "orange.ico"
-
-14                      ICON                    "red.ico"
 
 #endif    // English (United States) resources
 /////////////////////////////////////////////////////////////////////////////
