@@ -51,6 +51,22 @@
 #define ID_TRAY_EXIT 1003
 
 // --- Animation Helper ---
+enum class AutotuneStep { Idle, WaitingForHeat, Oscillating, Success, Failed };
+
+struct AutotuneContext {
+    AutotuneStep Stage = AutotuneStep::Idle;
+    int CyclesCount = 0;
+    float Peaks[10];
+    float Troughs[10];
+    float PeakTimes[10];
+    float TroughTimes[10];
+    float LastTemp = 0.0f;
+    bool Rising = true;
+    float CurrentMax = -1.0f;
+    float CurrentMin = 200.0f;
+    std::string Status;
+};
+
 struct SmoothValue {
     float Current = 0.0f;
     float Target = 0.0f;
@@ -82,6 +98,8 @@ struct UIState {
     int ManualLevel = 0;
     int Mode = 2; // 0: BIOS, 1: Manual, 2: Smart
     int SelectedSettingsTab = 0; // 0: General, 1: Hardware, 2: PID, 3: Sensors
+    
+    AutotuneContext Autotune;
     
     std::mutex Mutex;
 } g_UIState;
@@ -411,7 +429,67 @@ void HardwareWorker(std::shared_ptr<ConfigManager> config,
         // 3. Control Logic (Every 100ms for maximum responsiveness)
         {
             std::lock_guard<std::mutex> lock(g_UIState.Mutex);
-            if (g_UIState.Mode == 1) { // Manual
+            if (g_UIState.Autotune.Stage != AutotuneStep::Idle && g_UIState.Autotune.Stage != AutotuneStep::Success && g_UIState.Autotune.Stage != AutotuneStep::Failed) {
+                // PID Autotune Logic (Relay Method)
+                float currentTemp = (float)maxTemp;
+                float target = g_UIState.PID.targetTemp;
+                
+                // Relay control
+                if (currentTemp > target) {
+                    fans->SetFanLevel(7); // Max
+                } else {
+                    if (currentTemp < target - 2.0f)
+                        fans->SetFanLevel(0); // Off
+                }
+                
+                // Detection of peaks and troughs
+                if (g_UIState.Autotune.LastTemp > 0) {
+                    if (g_UIState.Autotune.Rising && currentTemp < g_UIState.Autotune.LastTemp - 0.1f) {
+                        // Peak found
+                        if (g_UIState.Autotune.CyclesCount < 10) {
+                            g_UIState.Autotune.Peaks[g_UIState.Autotune.CyclesCount] = g_UIState.Autotune.CurrentMax;
+                            g_UIState.Autotune.PeakTimes[g_UIState.Autotune.CyclesCount] = (float)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count() / 1000.0f;
+                        }
+                        g_UIState.Autotune.Rising = false;
+                        g_UIState.Autotune.CurrentMin = currentTemp;
+                    } else if (!g_UIState.Autotune.Rising && currentTemp > g_UIState.Autotune.LastTemp + 0.1f) {
+                        // Trough found
+                        if (g_UIState.Autotune.CyclesCount < 10) {
+                            g_UIState.Autotune.Troughs[g_UIState.Autotune.CyclesCount] = g_UIState.Autotune.CurrentMin;
+                            g_UIState.Autotune.TroughTimes[g_UIState.Autotune.CyclesCount] = (float)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count() / 1000.0f;
+                            g_UIState.Autotune.CyclesCount++;
+                        }
+                        g_UIState.Autotune.Rising = true;
+                        g_UIState.Autotune.CurrentMax = currentTemp;
+                        
+                        if (g_UIState.Autotune.CyclesCount >= 4) {
+                            // Calculate Z-N Parameters
+                            float sumA = 0, sumP = 0;
+                            for (int i = 1; i < 4; i++) {
+                                sumA += (g_UIState.Autotune.Peaks[i] - g_UIState.Autotune.Troughs[i]);
+                                sumP += (g_UIState.Autotune.PeakTimes[i] - g_UIState.Autotune.PeakTimes[i-1]);
+                            }
+                            float A = sumA / 3.0f;
+                            float P = sumP / 3.0f;
+                            float Ku = (4.0f * 100.0f) / (3.14159f * A);
+                            
+                            // No-overshoot parameters (conservative)
+                            g_UIState.PID.Kp = 0.2f * Ku;
+                            float Ti = 0.5f * P;
+                            float Td = 0.33f * P;
+                            g_UIState.PID.Ki = g_UIState.PID.Kp / Ti;
+                            g_UIState.PID.Kd = g_UIState.PID.Kp * Td;
+                            
+                            g_UIState.Autotune.Stage = AutotuneStep::Success;
+                        }
+                    }
+                }
+                
+                if (currentTemp > g_UIState.Autotune.CurrentMax) g_UIState.Autotune.CurrentMax = currentTemp;
+                if (currentTemp < g_UIState.Autotune.CurrentMin) g_UIState.Autotune.CurrentMin = currentTemp;
+                g_UIState.Autotune.LastTemp = currentTemp;
+
+            } else if (g_UIState.Mode == 1) { // Manual
                 fans->SetFanLevel(g_UIState.ManualLevel);
             } else if (g_UIState.Mode == 2) { // Smart
                 if (g_UIState.Algorithm == ControlAlgorithm::Step) {
@@ -1091,11 +1169,35 @@ int main(int argc, char** argv) {
                         
                         ImGui::Spacing();
                         ImGui::Separator();
-                        if (ImGui::Button(_TR("BTN_RESET_PID"), ImVec2(200 * dpiScale, 35 * dpiScale))) {
+                        if (ImGui::Button(_TR("BTN_RESET_PID"), ImVec2( itemWidth, 35 * dpiScale))) {
                             g_UIState.PID.targetTemp = 60.0f;
                             g_UIState.PID.Kp = 0.5f;
                             g_UIState.PID.Ki = 0.01f;
                             g_UIState.PID.Kd = 0.1f;
+                        }
+
+                        ImGui::SameLine();
+                        if (g_UIState.Autotune.Stage == AutotuneStep::Idle) {
+                            if (ImGui::Button(_TR("BTN_AUTOTUNE"), ImVec2(itemWidth, 35 * dpiScale))) {
+                                g_UIState.Autotune.Stage = AutotuneStep::WaitingForHeat;
+                                g_UIState.Autotune.CyclesCount = 0;
+                                g_UIState.Autotune.Rising = true;
+                                g_UIState.Autotune.LastTemp = 0;
+                                g_UIState.Autotune.Status = "Warming up...";
+                            }
+                        } else {
+                            if (ImGui::Button(_TR("BTN_STOP_AUTOTUNE"), ImVec2(itemWidth, 35 * dpiScale))) {
+                                g_UIState.Autotune.Stage = AutotuneStep::Idle;
+                            }
+                        }
+
+                        if (g_UIState.Autotune.Stage != AutotuneStep::Idle) {
+                            ImGui::Spacing();
+                            ImGui::TextColored(ImVec4(1, 1, 0, 1), "Autotune Status: %s", 
+                                g_UIState.Autotune.Stage == AutotuneStep::WaitingForHeat ? _TR("AT_STATUS_WARMUP") :
+                                g_UIState.Autotune.Stage == AutotuneStep::Oscillating ? _TR("AT_STATUS_TUNING") :
+                                g_UIState.Autotune.Stage == AutotuneStep::Success ? _TR("AT_STATUS_SUCCESS") : _TR("AT_STATUS_FAILED"));
+                            ImGui::ProgressBar((float)g_UIState.Autotune.CyclesCount / 4.0f, ImVec2(-1, 20 * dpiScale));
                         }
                     }
                     ImGui::EndChild();
