@@ -35,7 +35,7 @@ target("TPFanCtrl2")
     add_ldflags("/SUBSYSTEM:CONSOLE", {force = true})
     
     -- Precompiled Header (Disable in CodeQL environment to avoid PCH issues)
-    if not os.getenv("CODEQL_ACTION_INIT_HAS_RUN") then
+    if os.getenv("XMAKE_PCH") ~= "false" and not os.getenv("CODEQL_ACTION_INIT_HAS_RUN") then
         set_pcxxheader("fancontrol/_prec.h")
     end
     
