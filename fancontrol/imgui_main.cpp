@@ -57,6 +57,7 @@ struct UIState {
     std::map<std::string, std::deque<float>> TempHistory;
     int Fan1Speed = 0;
     int Fan2Speed = 0;
+    time_t LastUpdate = 0;
     std::mutex Mutex;
 } g_UIState;
 
@@ -72,9 +73,15 @@ static ImGui_ImplVulkanH_Window g_MainWindowData;
 static uint32_t                 g_MinImageCount = 2;
 static VmaAllocator             g_VmaAllocator = VK_NULL_HANDLE;
 
+// --- Plot Getters ---
+static ImPlotPoint DequeGetter(int idx, void* data) {
+    auto* deque = (std::deque<float>*)data;
+    return ImPlotPoint((double)idx, (double)(*deque)[idx]);
+}
+
 // --- Logging System ---
 enum LogLevel { LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERROR };
-static LogLevel g_MinLogLevel = LOG_INFO;
+static LogLevel g_MinLogLevel = LOG_DEBUG;
 
 void Log(LogLevel level, const char* fmt, ...) {
     if (level < g_MinLogLevel) return;
@@ -210,46 +217,62 @@ void HardwareWorker(std::shared_ptr<ConfigManager> config,
                     std::shared_ptr<SensorManager> sensors, 
                     std::shared_ptr<FanController> fans,
                     bool* running) {
+    int tempCycleCounter = 0;
     while (*running) {
-        // 1. Update Hardware
-        if (!sensors->UpdateSensors(config->ShowBiasedTemps, config->NoExtSensor, config->UseTWR)) {
-            Log(LOG_WARN, "Failed to update sensors from EC.");
-        }
-        
-        int maxIdx = 0;
-        int maxTemp = sensors->GetMaxTemp(maxIdx);
-        
-        static int logCounter = 0;
-        if (logCounter++ % 6 == 0) { // Log every 30s (assuming 5s cycle)
-            auto allSensors = sensors->GetSensors();
-            std::string sensorLog = "";
-            for (const auto& s : allSensors) {
-                if (s.rawTemp > 0 && s.rawTemp < 128) {
-                    sensorLog += s.name + ":" + std::to_string(s.rawTemp) + " ";
-                }
-            }
-            Log(LOG_INFO, "Hardware Status: MaxTemp=%d (%s), Fan1=%d, Fan2=%d. All: %s", 
-                maxTemp, (maxIdx >= 0 && maxIdx < (int)allSensors.size()) ? allSensors[maxIdx].name.c_str() : "N/A", 
-                g_UIState.Fan1Speed, g_UIState.Fan2Speed, sensorLog.c_str());
-        }
-
-        fans->UpdateSmartControl(maxTemp, config->SmartLevels1);
-
-        // 2. Sync to UI State
+        // 1. High-frequency Polling (Fan Speeds - every 1s)
+        int f1 = 0, f2 = 0;
+        fans->GetFanSpeeds(f1, f2);
         {
             std::lock_guard<std::mutex> lock(g_UIState.Mutex);
-            g_UIState.Sensors = sensors->GetSensors();
-            for (const auto& s : g_UIState.Sensors) {
-                g_UIState.SmoothTemps[s.name].Target = (float)s.rawTemp;
-                auto& history = g_UIState.TempHistory[s.name];
-                history.push_back((float)s.rawTemp);
-                if (history.size() > 100) history.pop_front();
-            }
-            fans->GetFanSpeeds(g_UIState.Fan1Speed, g_UIState.Fan2Speed);
+            g_UIState.Fan1Speed = f1;
+            g_UIState.Fan2Speed = f2;
         }
 
-        // 3. Throttle (Hardware doesn't need 60FPS)
-        std::this_thread::sleep_for(std::chrono::milliseconds(config->Cycle * 1000));
+        // 2. Low-frequency Polling (Sensors & Control Logic - every 'Cycle' seconds)
+        if (tempCycleCounter <= 0) {
+            if (!sensors->UpdateSensors(config->ShowBiasedTemps, config->NoExtSensor, config->UseTWR)) {
+                Log(LOG_WARN, "Failed to update sensors from EC.");
+            }
+            
+            int maxIdx = 0;
+            int maxTemp = sensors->GetMaxTemp(maxIdx);
+            
+            static int logCounter = 0;
+            if (logCounter++ % 6 == 0) { // Log every ~30s
+                auto allSensors = sensors->GetSensors();
+                std::string sensorLog = "";
+                for (const auto& s : allSensors) {
+                    if (s.rawTemp > 0 && s.rawTemp < 128) {
+                        sensorLog += s.name + ":" + std::to_string(s.rawTemp) + " ";
+                    }
+                }
+                Log(LOG_INFO, "Hardware Status: MaxTemp=%d (%s), Fan1=%d, Fan2=%d. All: %s", 
+                    maxTemp, (maxIdx >= 0 && maxIdx < (int)allSensors.size()) ? allSensors[maxIdx].name.c_str() : "N/A", 
+                    f1, f2, sensorLog.c_str());
+            }
+
+            fans->UpdateSmartControl(maxTemp, config->SmartLevels1);
+
+            // Sync to UI State
+            {
+                std::lock_guard<std::mutex> lock(g_UIState.Mutex);
+                g_UIState.Sensors = sensors->GetSensors();
+                g_UIState.LastUpdate = time(nullptr);
+                for (const auto& s : g_UIState.Sensors) {
+                    g_UIState.SmoothTemps[s.name].Target = (float)s.rawTemp;
+                    auto& history = g_UIState.TempHistory[s.name];
+                    history.push_back((float)s.rawTemp);
+                    if (history.size() > 300) history.pop_front();
+                }
+            }
+            tempCycleCounter = config->Cycle > 0 ? config->Cycle : 1;
+        }
+
+        // 3. Sleep 1s (granularly)
+        for (int i = 0; i < 10 && *running; i++) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+        tempCycleCounter--;
     }
 }
 
@@ -445,12 +468,10 @@ int main(int argc, char** argv) {
         }
         if (done) break;
 
-        Log(LOG_DEBUG, "NewFrame...");
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
 
-        Log(LOG_DEBUG, "Update Animations...");
         float dt = ImGui::GetIO().DeltaTime;
         {
             std::lock_guard<std::mutex> lock(g_UIState.Mutex);
@@ -459,7 +480,6 @@ int main(int argc, char** argv) {
             }
         }
 
-        Log(LOG_DEBUG, "Dashboard...");
         ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
         ImGui::Begin("Dashboard", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoBackground);
@@ -521,22 +541,19 @@ int main(int argc, char** argv) {
             ImGui::EndChild();
 
             ImGui::BeginChild("History", ImVec2(0, 0), true);
-            ImGui::Text("Temperature History");
-            /*
-            if (ImPlot::BeginPlot("##TempPlot", ImVec2(-1, -1))) {
-                ImPlot::SetupAxes("Time", "Celsius", ImPlotAxisFlags_NoTickLabels, 0);
-                ImPlot::SetupAxisLimits(ImAxis_Y1, 30, 100, ImGuiCond_Once);
+            ImGui::Text("%s Temperature History", ICON_CHIP);
+            if (ImPlot::BeginPlot("##TempPlot", ImVec2(-1, -1), ImPlotFlags_NoMouseText)) {
+                ImPlot::SetupAxes(nullptr, "°C", ImPlotAxisFlags_NoTickLabels, ImPlotAxisFlags_AutoFit);
+                ImPlot::SetupAxisLimits(ImAxis_Y1, 30, 90, ImGuiCond_Once);
                 
                 std::lock_guard<std::mutex> lock(g_UIState.Mutex);
                 for (auto& pair : g_UIState.TempHistory) {
                     if (pair.second.size() > 1) {
-                        std::vector<float> data(pair.second.begin(), pair.second.end());
-                        ImPlot::PlotLine(pair.first.c_str(), data.data(), (int)data.size());
+                        ImPlot::PlotLineG(pair.first.c_str(), DequeGetter, (void*)&pair.second, (int)pair.second.size());
                     }
                 }
                 ImPlot::EndPlot();
             }
-            */
             ImGui::EndChild();
 
             ImGui::TableNextColumn();
@@ -554,6 +571,19 @@ int main(int argc, char** argv) {
             ImGui::Text("Hardware Backend Status");
             ImGui::Separator();
             ImGui::Text("Renderer: Vulkan 1.3");
+            
+            {
+                std::lock_guard<std::mutex> lock(g_UIState.Mutex);
+                if (g_UIState.LastUpdate > 0) {
+                    char timeBuf[32];
+                    struct tm tm_info;
+                    localtime_s(&tm_info, &g_UIState.LastUpdate);
+                    strftime(timeBuf, sizeof(timeBuf), "%H:%M:%S", &tm_info);
+                    ImGui::Text("Last Hardware Poll: %s", timeBuf);
+                } else {
+                    ImGui::Text("Last Hardware Poll: Never");
+                }
+            }
             
             /*
             VmaTotalStatistics stats;
