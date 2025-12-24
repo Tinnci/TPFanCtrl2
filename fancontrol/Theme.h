@@ -55,8 +55,9 @@ namespace Theme {
         constexpr float CardHeight = 90.0f;
         constexpr float SidebarWidth = 180.0f;
         constexpr float SensorsAreaHeight = 280.0f;
-        constexpr float ControlPanelHeight = 240.0f;
+        constexpr float ControlPanelHeight = 270.0f;  // Increased to prevent button overlap
         constexpr float ButtonHeight = 35.0f;
+        constexpr float SmallButtonHeight = 25.0f;    // For compact buttons like presets
         constexpr float LargeButtonHeight = 40.0f;
         constexpr float InputWidth = 200.0f;
     }

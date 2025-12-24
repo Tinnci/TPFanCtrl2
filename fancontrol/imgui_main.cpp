@@ -911,7 +911,8 @@ int main(int argc, char** argv) {
 
                     // --- Right: Control & Logs ---
                     // NoScrollbar: Fixed content, should not scroll
-                    ImGui::BeginChild("ControlPanel", ImVec2(0, 240 * dpiScale), true, 
+                    // Height increased to prevent button overlap
+                    ImGui::BeginChild("ControlPanel", ImVec2(0, 270 * dpiScale), true, 
                         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
                     ImGui::TextColored(Theme::Primary(), "%s %s", ICON_FAN, _TR("SECTION_CONTROL"));
                     ImGui::Separator();
@@ -953,10 +954,12 @@ int main(int argc, char** argv) {
                             ImGui::PopItemWidth();
                         }
 
-                        // Presets
+                        // Presets - more compact layout
                         ImGui::Spacing();
                         ImGui::TextColored(Theme::TextMuted(), "%s", _TR("LBL_PRESETS"));
-                        if (ImGui::Button(_TR("BTN_PRESET_SILENT"), ImVec2(ImGui::GetContentRegionAvail().x / 2.1f, 30 * dpiScale))) {
+                        float presetBtnHeight = 25 * dpiScale;
+                        float presetBtnWidth = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) / 2.0f;
+                        if (ImGui::Button(_TR("BTN_PRESET_SILENT"), ImVec2(presetBtnWidth, presetBtnHeight))) {
                             g_UIState.Mode = 2; // Smart
                             g_UIState.Algorithm = ControlAlgorithm::PID;
                             g_UIState.PID.targetTemp = 70.0f;
@@ -965,7 +968,7 @@ int main(int argc, char** argv) {
                             g_UIState.PID.Kd = 0.05f;
                         }
                         ImGui::SameLine();
-                        if (ImGui::Button(_TR("BTN_PRESET_PERF"), ImVec2(ImGui::GetContentRegionAvail().x, 30 * dpiScale))) {
+                        if (ImGui::Button(_TR("BTN_PRESET_PERF"), ImVec2(presetBtnWidth, presetBtnHeight))) {
                             g_UIState.Mode = 2; // Smart
                             g_UIState.Algorithm = ControlAlgorithm::PID;
                             g_UIState.PID.targetTemp = 55.0f;
@@ -975,8 +978,11 @@ int main(int argc, char** argv) {
                         }
                     }
                     
-                    ImGui::SetCursorPosY(ImGui::GetWindowHeight() - 55 * dpiScale);
-                    if (ImGui::Button(_TR("BTN_MINIMIZE"), ImVec2(-1, 40 * dpiScale))) {
+                    // Minimize button - positioned at bottom with safe margin
+                    float minBtnHeight = 35 * dpiScale;
+                    float bottomMargin = minBtnHeight + 15 * dpiScale;  // Button height + padding
+                    ImGui::SetCursorPosY(ImGui::GetWindowHeight() - bottomMargin);
+                    if (ImGui::Button(_TR("BTN_MINIMIZE"), ImVec2(-1, minBtnHeight))) {
                         ::ShowWindow(hwnd, SW_HIDE);
                     }
                     ImGui::EndChild();
