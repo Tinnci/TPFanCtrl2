@@ -866,8 +866,8 @@ int main(int argc, char** argv) {
                 ImGui::Columns(2, "MetricCards", false);
                 
                 auto drawMetricCard = [&](const char* icon, const char* label, const char* value, const char* subValue, ImVec4 color) {
-                    ImGui::BeginChild(label, ImVec2(0, 90 * dpiScale), true);
-                    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1), "%s %s", icon, label);
+                    ImGui::BeginChild(label, ImVec2(0, Theme::Layout::CardHeight * dpiScale), true);
+                    ImGui::TextColored(Theme::TextMuted(), "%s %s", icon, label);
                     ImGui::Spacing();
                     
                     ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]); // Use a slightly larger font if available, or just bold
@@ -876,7 +876,7 @@ int main(int argc, char** argv) {
 
                     if (subValue && subValue[0] != '\0') {
                         ImGui::SameLine();
-                        ImGui::TextColored(ImVec4(0.4f, 0.4f, 0.4f, 1), "(%s)", subValue);
+                        ImGui::TextColored(Theme::TextDark(), "(%s)", subValue);
                     }
                     ImGui::EndChild();
                 };
@@ -895,9 +895,7 @@ int main(int argc, char** argv) {
                     }
                 }
 
-                ImVec4 tempColor = ImVec4(0, 0.8f, 1, 1);
-                if (maxTemp > 65) tempColor = ImVec4(1, 0.6f, 0, 1);
-                if (maxTemp > 85) tempColor = ImVec4(1, 0.2f, 0.2f, 1);
+                ImVec4 tempColor = Theme::GetTempColor((float)maxTemp);
 
                 std::string tempVal = std::format("{}\u2103", maxTemp);
                 std::string fanVal = std::format("{} {}", f1, _TR("LBL_RPM"));
@@ -906,7 +904,7 @@ int main(int argc, char** argv) {
 
                 drawMetricCard(ICON_CPU, _TR("LBL_MAX_TEMP"), tempVal.c_str(), maxName.c_str(), tempColor);
                 ImGui::NextColumn();
-                drawMetricCard(ICON_FAN, _TR("LBL_FAN_SPEEDS"), fanVal.c_str(), (f2 > 0 ? fanSub.c_str() : nullptr), ImVec4(1, 1, 1, 1));
+                drawMetricCard(ICON_FAN, _TR("LBL_FAN_SPEEDS"), fanVal.c_str(), (f2 > 0 ? fanSub.c_str() : nullptr), Theme::TextWhite());
                 ImGui::Columns(1);
 
                 ImGui::Spacing();
@@ -918,7 +916,7 @@ int main(int argc, char** argv) {
                     // --- Left: Sensors Grid & History ---
                     ImGui::BeginChild("SensorsArea", ImVec2(0, 0), false);
                     
-                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), "%s %s", ICON_CHIP, _TR("SECTION_STATUS"));
+                    ImGui::TextColored(Theme::Primary(), "%s %s", ICON_CHIP, _TR("SECTION_STATUS"));
                     ImGui::Separator();
                     ImGui::Spacing();
 
@@ -933,7 +931,7 @@ int main(int argc, char** argv) {
 
                                 float currentTemp = g_UIState.SmoothTemps[s.name].Current;
                                 float progress = currentTemp / 100.0f;
-                                ImVec4 color = (currentTemp < 50 ? ImVec4(0, 0.7f, 0.9f, 1) : (currentTemp < 75 ? ImVec4(0.9f, 0.6f, 0, 1) : ImVec4(0.9f, 0.1f, 0.1f, 1)));
+                                ImVec4 color = Theme::GetTempColor(currentTemp);
 
                                 ImGui::BeginChild(s.name.c_str(), ImVec2(0, 65 * dpiScale), true);
                                 ImGui::Text("%s %s", (s.name.find("GPU") != std::string::npos ? ICON_GPU : ICON_CPU), s.name.c_str());
@@ -953,7 +951,7 @@ int main(int argc, char** argv) {
                     ImGui::EndChild();
 
                     ImGui::Spacing();
-                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), "%s %s", ICON_CHART, _TR("SECTION_HISTORY"));
+                    ImGui::TextColored(Theme::Primary(), "%s %s", ICON_CHART, _TR("SECTION_HISTORY"));
                     ImGui::Separator();
                     ImGui::Spacing();
                     {
@@ -966,18 +964,18 @@ int main(int argc, char** argv) {
 
                     // --- Right: Control & Logs ---
                     ImGui::BeginChild("ControlPanel", ImVec2(0, 240 * dpiScale), true);
-                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), "%s %s", ICON_FAN, _TR("SECTION_CONTROL"));
+                    ImGui::TextColored(Theme::Primary(), "%s %s", ICON_FAN, _TR("SECTION_CONTROL"));
                     ImGui::Separator();
                     ImGui::Spacing();
                     
                     auto drawSegmented = [&](const char* label, int id, int* current) {
                         bool active = (*current == id);
                         if (active) {
-                            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.89f, 0.12f, 0.16f, 0.8f));
-                            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.89f, 0.12f, 0.16f, 0.9f));
-                            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.89f, 0.12f, 0.16f, 1.0f));
+                            ImGui::PushStyleColor(ImGuiCol_Button, Theme::PrimaryTransparent(0.8f));
+                            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Theme::PrimaryTransparent(0.9f));
+                            ImGui::PushStyleColor(ImGuiCol_ButtonActive, Theme::Primary());
                         }
-                        if (ImGui::Button(label, ImVec2(ImGui::GetContentRegionAvail().x / 3.2f, 35 * dpiScale))) {
+                        if (ImGui::Button(label, ImVec2(ImGui::GetContentRegionAvail().x / 3.2f, Theme::Layout::ButtonHeight * dpiScale))) {
                             *current = id;
                         }
                         if (active) ImGui::PopStyleColor(3);
