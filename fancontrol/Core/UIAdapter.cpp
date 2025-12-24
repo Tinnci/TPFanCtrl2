@@ -104,14 +104,18 @@ void UIAdapter::SetPIDSettings(const PIDSettings& settings) {
 }
 
 void UIAdapter::SetAlgorithm(int algorithm) {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    m_state.Algorithm = algorithm;
+    int profile;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_state.Algorithm = algorithm;
+        profile = m_state.SmartProfile;
+    }
     
     if (algorithm == 1) {  // PID
         // ThermalManager would switch to PID mode
         m_manager->SetMode(ControlMode::PID, 0);
     } else {
-        m_manager->SetMode(ControlMode::Smart, m_state.SmartProfile);
+        m_manager->SetMode(ControlMode::Smart, profile);
     }
 }
 

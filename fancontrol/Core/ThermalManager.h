@@ -111,7 +111,7 @@ private:
     bool UpdateSensors();
     
     /// Apply control logic based on current mode
-    void ApplyControl();
+    void ApplyControl(float dt);
     
     /// Apply BIOS mode (release control)
     void ApplyBIOSMode();

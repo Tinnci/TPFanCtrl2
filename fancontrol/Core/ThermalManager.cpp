@@ -209,7 +209,7 @@ void ThermalManager::PerformCycle() {
     }
     
     // Apply control based on mode
-    ApplyControl();
+    ApplyControl(dt);
 }
 
 bool ThermalManager::UpdateSensors() {
@@ -344,7 +344,7 @@ bool ThermalManager::UpdateSensors() {
     return true;
 }
 
-void ThermalManager::ApplyControl() {
+void ThermalManager::ApplyControl(float dt) {
     ControlMode mode = m_mode.load();
     
     switch (mode) {
@@ -358,11 +358,7 @@ void ThermalManager::ApplyControl() {
             ApplyManualMode();
             break;
         case ControlMode::PID:
-            {
-                auto now = std::chrono::steady_clock::now();
-                float dt = std::chrono::duration<float>(now - m_lastCycleTime).count();
-                ApplyPIDMode(dt);
-            }
+            ApplyPIDMode(dt);
             break;
     }
 }

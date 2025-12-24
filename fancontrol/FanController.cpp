@@ -136,37 +136,57 @@ bool FanController::UpdateSmartControl(int maxTemp, const std::vector<SmartLevel
 }
 
 bool FanController::UpdatePIDControl(float currentTemp, const PIDSettings& settings, float dt) {
+    // Sanity check for dt to avoid spikes after pause/resume
+    if (dt <= 0.0f) dt = 1.0f;
+    if (dt > 5.0f) dt = 5.0f;
+
     float error = currentTemp - settings.targetTemp;
     
     // Proportional
     float P = settings.Kp * error;
     
-    // Integral (with anti-windup)
+    // Integral (with basic anti-windup)
     m_integral += error * dt;
-    if (m_integral > 10.0f) m_integral = 10.0f;
-    if (m_integral < -10.0f) m_integral = -10.0f;
     float I = settings.Ki * m_integral;
     
-    // Derivative
-    float D = settings.Kd * (error - m_lastError) / (dt > 0 ? dt : 1.0f);
+    // Derivative (on error)
+    float D = settings.Kd * (error - m_lastError) / dt;
     m_lastError = error;
     
     float output = P + I + D;
     
-    // Map output to fan levels (0-7)
-    // If output is positive, we need more cooling.
-    // Base level could be 1 or 2 if we are near target.
-    int targetLevel = 0;
-    if (output > 0) {
-        targetLevel = (int)(output + 1.0f); // Simple mapping
-    } else if (currentTemp > settings.targetTemp - 5.0f) {
-        targetLevel = 1; // Keep a low spin if we are close to target
+    // Anti-windup: clamp integral if output exceeds limits
+    if (output > settings.maxFan) {
+        if (error > 0) m_integral -= error * dt; // Stop integrating if we're already over max
+        output = settings.maxFan;
+    } else if (output < settings.minFan) {
+        if (error < 0) m_integral -= error * dt; // Stop integrating if we're already under min
+        output = settings.minFan;
     }
     
-    if (targetLevel < (int)settings.minFan) targetLevel = (int)settings.minFan;
-    if (targetLevel > (int)settings.maxFan) targetLevel = (int)settings.maxFan;
+    // Map output to fan levels (0-7) with hysteresis
+    // We use a threshold to avoid oscillating between two levels
+    int targetLevel = m_currentFanCtrl;
+    if (targetLevel < 0 || targetLevel > 127) targetLevel = 0; // Handle BIOS/Initial state
+
+    float currentLevelF = (float)targetLevel;
+    if (targetLevel >= 0x80) currentLevelF = settings.minFan; // If in BIOS mode, treat as min
+
+    float diff = output - currentLevelF;
+    const float hysteresis = 0.7f; // Only change if output is 0.7 away from current level
+
+    if (diff > hysteresis) {
+        targetLevel = (int)std::ceil(output);
+    } else if (diff < -hysteresis) {
+        targetLevel = (int)std::floor(output);
+    }
+    
+    // Ensure target is within bounds
+    targetLevel = std::clamp(targetLevel, (int)settings.minFan, (int)settings.maxFan);
     
     if (targetLevel != m_currentFanCtrl) {
+        spdlog::info("[PID] Temp={:.1f}, Error={:.1f}, P={:.2f}, I={:.2f}, D={:.2f}, Output={:.2f}, Level {}->{}", 
+                     currentTemp, error, P, I, D, output, m_currentFanCtrl, targetLevel);
         return SetFanLevel(targetLevel);
     }
     
