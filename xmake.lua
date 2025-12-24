@@ -75,7 +75,7 @@ target("TPFanCtrl2")
         add_vectorexts("sse2")
     end
 
--- Target: logic_test (Unit Tests)
+-- Target: logic_test (Unit Tests - Legacy)
 target("logic_test")
     set_kind("binary")
     set_plat("windows")
@@ -91,6 +91,30 @@ target("logic_test")
     add_files("fancontrol/FanController.cpp")
     add_files("fancontrol/ConfigManager.cpp")
     add_files("fancontrol/Core/*.cpp")  -- Core library
+    
+    -- Include directories
+    add_includedirs("fancontrol")
+    add_includedirs("fancontrol/Core")
+    
+    -- Output directory
+    set_targetdir("bin")
+
+-- Target: core_test (Unit Tests - Core Library)
+target("core_test")
+    set_kind("binary")
+    set_plat("windows")
+    add_packages("gtest", "spdlog")
+    
+    -- Console application
+    add_ldflags("/SUBSYSTEM:CONSOLE", {force = true})
+    
+    -- Source files
+    add_files("tests/core_test.cpp")
+    add_files("fancontrol/ECManager.cpp")
+    add_files("fancontrol/SensorManager.cpp")
+    add_files("fancontrol/FanController.cpp")
+    add_files("fancontrol/ConfigManager.cpp")
+    add_files("fancontrol/Core/*.cpp")
     
     -- Include directories
     add_includedirs("fancontrol")
