@@ -414,19 +414,15 @@ FANCONTROL::BaseDlgProc(HWND
 
 //-------------------------------------------------------------------------
 //  dialog window procedure as class method
+//  NOTE: Legacy global variables cleaned up. Only essential ones remain.
+//  Removed: fanspeed, fanctrl, IconFontSize, obuftd, obuftd2, templisttd, str_value, _piscreated
 //-------------------------------------------------------------------------
 #define WANTED_MEM_SIZE 65536*12
 BOOL dioicon(TRUE);
 char szBuffer[BUFFER_SIZE];
-char str_value[256];
 DWORD cbBytes;
 BOOL bResult(FALSE);
 BOOL lbResult(FALSE);
-int fanspeed;
-int fanctrl;
-int IconFontSize;
-// NOTE: _piscreated removed - now using class member m_pipesCreated
-char obuftd[256] = "", obuftd2[128] = "", templisttd[512];
 char obuf[256] = "", obuf2[128] = "", templist2[512];
 ULONG
 FANCONTROL::DlgProc(HWND
