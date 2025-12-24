@@ -53,6 +53,11 @@
 #include "AppInit.h"
 #include "ImGuiRenderer.h"
 
+// Core library (decoupled thermal management) - for future migration
+// Currently running in parallel with HardwareWorker for validation
+#include "Core/ThermalManager.h"
+#include "Core/UIAdapter.h"
+
 // --- Tray Constants ---
 #define WM_TRAYICON (WM_USER + 100)
 #define ID_TRAY_ICON 1001
