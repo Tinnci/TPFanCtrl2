@@ -49,11 +49,13 @@ target("TPFanCtrl2")
     
     -- Source files
     add_files("fancontrol/*.cpp")
+    add_files("fancontrol/Core/*.cpp")  -- Core library
     add_files("fancontrol/res/fancontrol.rc")
     add_files("fancontrol/res/app.manifest")
     
     -- Include directories
     add_includedirs("fancontrol")
+    add_includedirs("fancontrol/Core")
     
     -- Link libraries
     add_linkdirs("fancontrol")
@@ -88,9 +90,11 @@ target("logic_test")
     add_files("fancontrol/SensorManager.cpp")
     add_files("fancontrol/FanController.cpp")
     add_files("fancontrol/ConfigManager.cpp")
+    add_files("fancontrol/Core/*.cpp")  -- Core library
     
     -- Include directories
     add_includedirs("fancontrol")
+    add_includedirs("fancontrol/Core")
     
     -- Output directory
     set_targetdir("bin")

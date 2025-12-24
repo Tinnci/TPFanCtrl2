@@ -13,6 +13,7 @@ public:
     bool UpdateSensors(bool showBiasedTemps, bool noExtSensor, bool useTWR);
     int GetMaxTemp(int& maxIndex, const std::string& ignoreList) const;
     const std::vector<SensorData>& GetSensors() const { return m_sensors; }
+    const SensorData& GetSensor(int index) const { return m_sensors[index]; }
     void SetOffset(int index, int offset, int hystMin, int hystMax);
     void SetSensorName(int index, const std::string& name);
     void SetSensorWeight(int index, float weight);

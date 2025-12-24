@@ -31,6 +31,7 @@ public:
     
     bool GetFanSpeeds(int& fan1, int& fan2);
     int GetCurrentFanCtrl() const { return m_currentFanCtrl; }
+    int GetCurrentLevel() const { return m_currentFanCtrl; }  // Alias for Core compatibility
     void SetCurrentFanCtrl(int ctrl) { m_currentFanCtrl = ctrl; }
     void SetOnChangeCallback(std::function<void(int)> callback) { m_onChange = callback; }
     void SetWriteCallback(std::function<bool(int)> callback) { m_writeCallback = callback; }
