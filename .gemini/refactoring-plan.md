@@ -9,7 +9,7 @@
 
 ---
 
-## Phase 1: 止血 + 建立 Core 库边界 ✅ 进行中
+## Phase 1: 止血 + 建立 Core 库边界 ✅ 完成
 
 ### 目标
 - 创建 `Core/` 目录，定义清晰的边界接口
@@ -25,15 +25,19 @@
 | `Core/SensorConfig.h` | ✅ 已创建 | 传感器配置结构，数据驱动替代硬编码 |
 | `Core/ThermalManager.h` | ✅ 已创建 | 核心编排类头文件 |
 | `Core/ThermalManager.cpp` | ✅ 已创建 | 核心编排类实现，含 jthread 工作循环 |
+| `Core/UIAdapter.h` | ✅ 已创建 | UI 适配器头文件，桥接 Core 到 ImGui |
+| `Core/UIAdapter.cpp` | ✅ 已创建 | UI 适配器实现，含平滑动画和历史记录 |
 | `SensorManager.h` | ✅ 已更新 | 添加 `GetSensor()` 方法 |
 | `FanController.h` | ✅ 已更新 | 添加 `GetCurrentLevel()` 别名 |
+| `xmake.lua` | ✅ 已更新 | 添加 Core/ 目录编译配置 |
+| `imgui_main.cpp` | ✅ 已添加 includes | Core 库头文件已引入 |
 
-### 待完成
+### 下一步 (Phase 1.5: 迁移验证)
 
-- [ ] 更新 `xmake.lua` 添加 Core 目录编译
-- [ ] 修改 `imgui_main.cpp` 使用 `ThermalManager`
-- [ ] 编写单元测试验证 Core 库
-- [ ] 验证编译通过
+- [ ] 在 `main()` 中并行启动 ThermalManager（验证模式）
+- [ ] 比较 ThermalManager 输出与 HardwareWorker 输出
+- [ ] 确认事件系统工作正常
+- [ ] 逐步将 UI 代码从 `g_UIState` 迁移到 `UIAdapter`
 
 ---
 
