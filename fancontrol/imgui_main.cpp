@@ -138,6 +138,69 @@ static int                      g_SwapChainResizeHeight = 0;
 
 static std::shared_ptr<ConfigManager> g_Config;
 
+// --- Core Library Migration ---
+// ThermalManager and UIAdapter for the new architecture
+static std::shared_ptr<Core::ThermalManager> g_ThermalManager;
+static std::unique_ptr<Core::UIAdapter> g_UIAdapter;
+
+/// Build ThermalConfig from the legacy ConfigManager
+/// This is a bridge function for the migration period
+Core::ThermalConfig BuildThermalConfig(const std::shared_ptr<ConfigManager>& config) {
+    Core::ThermalConfig thermal;
+    
+    // Basic settings
+    thermal.cycleSeconds = config->Cycle;
+    thermal.iconCycleSeconds = config->IconCycle;
+    thermal.isDualFan = false;  // Detected automatically by FanController
+    thermal.useBiasedTemps = config->ShowBiasedTemps != 0;
+    thermal.noExtSensor = config->NoExtSensor != 0;
+    thermal.useFahrenheit = config->Fahrenheit != 0;
+    thermal.manualFanSpeed = config->ManFanSpeed;
+    thermal.manModeExitTemp = config->ManModeExit;
+    thermal.ignoreList = config->IgnoreSensors;
+    
+    // PID settings
+    thermal.pid.Kp = config->PID_Kp;
+    thermal.pid.Ki = config->PID_Ki;
+    thermal.pid.Kd = config->PID_Kd;
+    thermal.pid.targetTemp = config->PID_Target;
+    thermal.pid.minFan = 0;
+    thermal.pid.maxFan = 7;
+    
+    // Sensor configuration - use defaults and apply names/weights from config
+    thermal.sensors = Core::CreateDefaultSensorConfig();
+    for (size_t i = 0; i < config->SensorNames.size() && i < thermal.sensors.size(); i++) {
+        thermal.sensors[i].name = config->SensorNames[i];
+    }
+    for (size_t i = 0; i < config->SensorWeights.size() && i < thermal.sensors.size(); i++) {
+        thermal.sensors[i].weight = config->SensorWeights[i];
+    }
+    
+    // Smart profiles - convert SmartLevels1/2 to SmartLevelDefinition
+    // SmartLevels has fields: temp, fan, hystUp, hystDown
+    for (const auto& sl : config->SmartLevels1) {
+        if (sl.temp >= 0) {
+            thermal.smartProfiles[0].emplace_back(sl.temp, sl.fan, sl.hystUp, sl.hystDown);
+        }
+    }
+    for (const auto& sl : config->SmartLevels2) {
+        if (sl.temp >= 0) {
+            thermal.smartProfiles[1].emplace_back(sl.temp, sl.fan, sl.hystUp, sl.hystDown);
+        }
+    }
+    
+    // Icon levels
+    if (config->IconLevels.size() >= 3) {
+        thermal.iconLevels.thresholds = { 
+            config->IconLevels[0], 
+            config->IconLevels[1], 
+            config->IconLevels[2] 
+        };
+    }
+    
+    return thermal;
+}
+
 void UpdateTrayIcon(HWND hWnd, int temp, int fan) {
     if (!hWnd) return;
 
@@ -638,8 +701,37 @@ int main(int argc, char** argv) {
     ::RegisterClassExW(&wc);
     HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"TPFanCtrl2 - Vulkan Modernized", WS_OVERLAPPEDWINDOW, 100, 100, 1100, 850, nullptr, nullptr, wc.hInstance, nullptr);
 
-    // Start Hardware Thread with jthread
+    // Start Hardware Thread with jthread (LEGACY - will be replaced by ThermalManager)
     std::jthread hwThread(HardwareWorker, g_Config, sensorManager, fanController, hwnd);
+
+    // === Core Library Migration ===
+    // Initialize ThermalManager and UIAdapter for parallel validation
+    // The HardwareWorker above still controls fans; ThermalManager is read-only for now
+    spdlog::info("Initializing Core::ThermalManager for validation...");
+    try {
+        Core::ThermalConfig thermalConfig = BuildThermalConfig(g_Config);
+        
+        // Create ThermalManager with the same ECManager
+        g_ThermalManager = std::make_shared<Core::ThermalManager>(ecManager, thermalConfig);
+        
+        // Create UIAdapter to bridge ThermalManager to UI
+        g_UIAdapter = std::make_unique<Core::UIAdapter>(g_ThermalManager);
+        
+        // Set tray update callback (for future use when fully migrated)
+        g_UIAdapter->SetTrayUpdateCallback([hwnd](int temp, int fanSpeed) {
+            // Note: Currently HardwareWorker handles tray updates
+            // This will be used when we fully migrate
+            spdlog::debug("[UIAdapter] Tray update: {}°C, {} RPM", temp, fanSpeed);
+        });
+        
+        // NOTE: ThermalManager is NOT started yet to avoid conflicts with HardwareWorker
+        // Uncomment the following line to enable parallel validation (read-only):
+        // g_ThermalManager->Start();
+        
+        spdlog::info("Core::ThermalManager initialized successfully (standby mode).");
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to initialize Core::ThermalManager: {}", e.what());
+    }
 
     // Get DPI Scale and apply Windows 11 effects
     float dpiScale = AppInit::GetDpiScale(hwnd);
@@ -1402,6 +1494,14 @@ int main(int argc, char** argv) {
     spdlog::info("Exiting main loop. Starting cleanup...");
 
     // Cleanup
+
+    // Stop Core library components first
+    if (g_ThermalManager && g_ThermalManager->IsRunning()) {
+        spdlog::info("Stopping Core::ThermalManager...");
+        g_ThermalManager->Stop();
+    }
+    g_UIAdapter.reset();
+    g_ThermalManager.reset();
 
     spdlog::info("Shutting down ImGui backends...");
     ImGui_ImplVulkan_Shutdown();

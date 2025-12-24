@@ -34,10 +34,24 @@
 
 ### 下一步 (Phase 1.5: 迁移验证)
 
-- [ ] 在 `main()` 中并行启动 ThermalManager（验证模式）
-- [ ] 比较 ThermalManager 输出与 HardwareWorker 输出
-- [ ] 确认事件系统工作正常
-- [ ] 逐步将 UI 代码从 `g_UIState` 迁移到 `UIAdapter`
+**测试状态**: ✅ 单元测试已通过 (2025-12-24)
+- `ThermalManagerTest`: 5 个测试用例
+- `UIAdapterTest`: 6 个测试用例  
+- `EventDispatcherTest`: 3 个测试用例
+
+**迁移任务**:
+- [x] 编写 Core 库单元测试 (14 tests passing)
+- [x] 在 `main()` 中创建 ThermalManager 和 UIAdapter 实例 (standby mode)
+- [ ] 用 UISnapshot 替换 g_UIState 的读取
+- [ ] 用 UIAdapter 方法替换 g_UIState 的写入
+- [ ] 移除 HardwareWorker 函数
+- [ ] 验证功能完整性
+
+**当前状态** (2025-12-24 12:41):
+- `ThermalManager` 和 `UIAdapter` 已初始化但处于待机模式
+- `HardwareWorker` 仍然控制风扇
+- 添加了 `BuildThermalConfig()` 函数将 `ConfigManager` 转换为 `ThermalConfig`
+- 程序退出时正确清理 Core 组件
 
 ---
 
