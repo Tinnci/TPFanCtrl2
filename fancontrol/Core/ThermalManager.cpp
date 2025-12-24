@@ -292,8 +292,10 @@ bool ThermalManager::UpdateSensors() {
     int availableCount = 0;
     for (const auto& r : readings) if (r.isAvailable) availableCount++;
 
+    FanState previousFanState;
     {
         std::lock_guard<std::mutex> lock(m_stateMutex);
+        previousFanState = m_state.fanState;
         m_state.timestamp = std::chrono::steady_clock::now();
         m_state.sensors = readings;
         m_state.maxTemp = maxTemp;
@@ -306,6 +308,15 @@ bool ThermalManager::UpdateSensors() {
         m_state.smartProfileIndex = m_smartProfile.load();
         m_state.isOperational = true;
     }
+
+    FanStateChangeEvent fanEvent{
+        .timestamp = std::chrono::steady_clock::now(),
+        .fan1Speed = fan1,
+        .fan2Speed = fan2,
+        .currentLevel = currentLevel,
+        .previousLevel = previousFanState.currentLevel
+    };
+    m_dispatcher.Dispatch(fanEvent);
 
     if (!m_state.isOperational || availableCount == 0) {
         static int warnCounter = 0;
