@@ -37,6 +37,10 @@ inline void InitLogging(const char* logFileName = "TPFanCtrl2_debug.log") {
         spdlog::sinks_init_list{ console_sink, file_sink, msvc_sink });
     spdlog::set_default_logger(logger);
     spdlog::set_level(spdlog::level::debug);
+    
+    // Auto-flush on all log levels to ensure we catch crash logs
+    logger->flush_on(spdlog::level::debug);
+    
     spdlog::set_pattern("[%H:%M:%S] [%^%l%$] %v");
     
     spdlog::info("--- TPFanCtrl2 Session Started ---");

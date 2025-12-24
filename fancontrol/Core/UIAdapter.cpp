@@ -2,6 +2,7 @@
 #include "UIAdapter.h"
 #include <algorithm>
 #include <chrono>
+#include "../LogManager.h"
 
 namespace Core {
 
@@ -242,14 +243,24 @@ void UIAdapter::HandleError(const ErrorEvent& e) {
     std::lock_guard<std::mutex> lock(m_mutex);
     m_state.LastError = e.message;
     
+    Log::Level level = (e.severity == ErrorSeverity::Critical) ? Log::Level::Error : Log::Level::Warn;
+    Log::UILogBuffer::Get().Add(level, "[{}] {}", e.source, e.message);
+
     if (e.severity == ErrorSeverity::Critical) {
         m_state.IsOperational = false;
     }
 }
 
-void UIAdapter::HandleLog(const LogEvent& /*e*/) {
-    // Log events are handled by the global logging system
-    // We could forward them to a UI log buffer here if needed
+void UIAdapter::HandleLog(const LogEvent& e) {
+    Log::Level level;
+    switch (e.level) {
+        case LogLevel::Debug:   level = Log::Level::Debug; break;
+        case LogLevel::Info:    level = Log::Level::Info; break;
+        case LogLevel::Warning: level = Log::Level::Warn; break;
+        case LogLevel::Error:   level = Log::Level::Error; break;
+        default:                level = Log::Level::Info; break;
+    }
+    Log::UILogBuffer::Get().Add(level, "{}", e.message);
 }
 
 void UIAdapter::UpdateAutotuneLogic(float currentTemp) {

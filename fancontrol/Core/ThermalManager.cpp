@@ -14,6 +14,7 @@ ThermalManager::ThermalManager(
 {
     // Create sensor manager with the EC manager
     m_sensorManager = std::make_unique<SensorManager>(m_ecManager);
+    Log(LogLevel::Info, "Internal SensorManager created.");
     
     // Create fan controller
     m_fanController = std::make_unique<FanController>(m_ecManager);
@@ -194,8 +195,8 @@ void ThermalManager::PerformCycle() {
     
     // Update sensors
     if (!UpdateSensors()) {
-        ReportError(ErrorSeverity::Warning, "ThermalManager", 
-                    "Failed to update sensor readings", 0);
+        ReportError(ErrorSeverity::Error, "ThermalManager", 
+                    "Critical: Failed to communicate with EC! Sensor readings stopped.", 0xFF01);
         return;
     }
     
@@ -247,6 +248,9 @@ bool ThermalManager::UpdateSensors() {
     m_fanController->GetFanSpeeds(fan1, fan2);
     
     // Update state
+    int availableCount = 0;
+    for (const auto& r : readings) if (r.isAvailable) availableCount++;
+
     {
         std::lock_guard<std::mutex> lock(m_stateMutex);
         m_state.timestamp = std::chrono::steady_clock::now();
@@ -259,6 +263,13 @@ bool ThermalManager::UpdateSensors() {
         m_state.currentMode = m_mode.load();
         m_state.smartProfileIndex = m_smartProfile.load();
         m_state.isOperational = true;
+    }
+
+    if (!m_state.isOperational || availableCount == 0) {
+        static int warnCounter = 0;
+        if (warnCounter++ % 10 == 0) { // Throttled logging
+             Log(LogLevel::Warning, "No sensors detected as available.");
+        }
     }
     
     // Dispatch temperature update event

@@ -148,9 +148,21 @@ Core::ThermalConfig BuildThermalConfig(const std::shared_ptr<ConfigManager>& con
     
     // Sensor configuration - use defaults and apply names/weights from config
     thermal.sensors = Core::CreateDefaultSensorConfig();
-    for (size_t i = 0; i < config->SensorNames.size() && i < thermal.sensors.size(); i++) {
-        thermal.sensors[i].name = config->SensorNames[i];
+    
+    const char* defaultNames[] = {
+        "CPU", "APS", "PCM", "GPU", "BAT1", "X7D", 
+        "BAT2", "X7F", "BUS", "PCI", "PWR", "XC3"
+    };
+
+    for (size_t i = 0; i < thermal.sensors.size(); i++) {
+        // Use name from config if provided, otherwise use default ThinkPad name
+        if (i < config->SensorNames.size() && !config->SensorNames[i].empty()) {
+            thermal.sensors[i].name = config->SensorNames[i];
+        } else if (i < 12) {
+            thermal.sensors[i].name = defaultNames[i];
+        }
     }
+
     for (size_t i = 0; i < config->SensorWeights.size() && i < thermal.sensors.size(); i++) {
         thermal.sensors[i].weight = config->SensorWeights[i];
     }
@@ -523,9 +535,10 @@ int main(int argc, char** argv) {
         });
         
         // Start ThermalManager (takes over control from now on)
-        g_ThermalManager->Start();
+        // MOVED: Started after UI initialization to avoid race conditions
+        // g_ThermalManager->Start();
         
-        spdlog::info("Core::ThermalManager started successfully.");
+        spdlog::info("Core::ThermalManager initialized (waiting to start).");
     } catch (const std::exception& e) {
         spdlog::error("Failed to initialize Core::ThermalManager: {}", e.what());
     }
@@ -542,7 +555,11 @@ int main(int argc, char** argv) {
     surface_info.hinstance = hInstance;
     surface_info.hwnd = hwnd;
     VkSurfaceKHR surface;
-    vkCreateWin32SurfaceKHR(g_Instance, &surface_info, g_Allocator, &surface);
+    VkResult err = vkCreateWin32SurfaceKHR(g_Instance, &surface_info, g_Allocator, &surface);
+    if (err != VK_SUCCESS) {
+        spdlog::error("Failed to create Win32 Surface: {}", (int)err);
+        exit(1);
+    }
 
     RECT rect; GetClientRect(hwnd, &rect);
     SetupVulkanWindow(&g_MainWindowData, surface, rect.right - rect.left, rect.bottom - rect.top);
@@ -622,6 +639,7 @@ int main(int argc, char** argv) {
     init_info.ImageCount = g_MainWindowData.ImageCount;
     init_info.PipelineInfoMain.RenderPass = g_MainWindowData.RenderPass;
     init_info.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+    
     if (!ImGui_ImplVulkan_Init(&init_info)) {
         spdlog::error("ImGui_ImplVulkan_Init failed");
         exit(1);
@@ -633,6 +651,12 @@ int main(int argc, char** argv) {
     } else {
         spdlog::info("Showing window...");
         ::ShowWindow(hwnd, SW_SHOWDEFAULT);
+    }
+    
+    // Start ThermalManager NOW, after UI is fully ready
+    if (g_ThermalManager) {
+        spdlog::info("Starting ThermalManager background thread...");
+        g_ThermalManager->Start();
     }
 
     bool done = false;
@@ -756,7 +780,17 @@ int main(int argc, char** argv) {
                         {
                             for (const auto& s : uiSnapshot.Sensors) {
                                 if (!s.isAvailable) continue;
-                                if (g_Config->IgnoreSensors.find(s.name) != std::string::npos) continue;
+                                
+                                // Precise ignore check
+                                if (!s.name.empty()) {
+                                    std::string searchName = " " + s.name + " ";
+                                    std::string searchList = " " + g_Config->IgnoreSensors + " ";
+                                    if (searchList.find(searchName) != std::string::npos) continue;
+                                } else {
+                                    // Normally sensors should have names now, but if not, 
+                                    // don't hide them unless the ignore list specifically contains an empty entry?
+                                    // Safer to show them.
+                                }
 
                                 float currentTemp = uiSnapshot.SmoothTemps.at(s.name).Current;
                                 float progress = currentTemp / 100.0f;
