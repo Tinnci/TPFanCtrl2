@@ -131,6 +131,9 @@ private:
     /// Report an error through the event system
     void ReportError(ErrorSeverity severity, const std::string& source, 
                      const std::string& message, int code = 0);
+
+    /// Evaluate whether the measured RPM matches the commanded level
+    void EvaluateFanFeedback(int currentLevel, int fan1Rpm);
     
     // --- State ---
     
@@ -164,6 +167,11 @@ private:
     float m_pidIntegral{0.0f};
     float m_pidLastError{0.0f};
     std::chrono::steady_clock::time_point m_lastCycleTime;
+
+    // Fan response tracking
+    int m_fanNoSpinCounter{0};
+    static constexpr int kFanMinOperationalRpm = 300;
+    static constexpr int kFanSpinRetryThreshold = 3;
 };
 
 } // namespace Core

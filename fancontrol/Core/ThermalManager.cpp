@@ -251,9 +251,15 @@ bool ThermalManager::UpdateSensors() {
 
         // Match criteria (legacy only matched FanCtrl)
         if (level1 == level2) {
-            // Success! Now get the rest of the data
-            m_fanController->GetFanSpeeds(fan1, fan2);
             currentLevel = level2;
+
+            if (!m_fanController->GetFanSpeeds(fan1, fan2)) {
+                Log(LogLevel::Warning, "Fan tach read failed after sensor sync; retrying sample");
+                std::this_thread::sleep_for(std::chrono::milliseconds(sleepTicks));
+                continue;
+            }
+
+            EvaluateFanFeedback(currentLevel, fan1);
             
             std::string ignoreList;
             {
@@ -440,6 +446,32 @@ void ThermalManager::ApplyPIDMode(float dt) {
     };
     
     m_fanController->UpdatePIDControl(static_cast<float>(maxTemp), settings, dt);
+}
+
+void ThermalManager::EvaluateFanFeedback(int currentLevel, int fan1Rpm) {
+    if (currentLevel >= 0x80) {
+        m_fanNoSpinCounter = 0;
+        return;
+    }
+
+    if (fan1Rpm > kFanMinOperationalRpm) {
+        m_fanNoSpinCounter = 0;
+        return;
+    }
+
+    if (++m_fanNoSpinCounter < kFanSpinRetryThreshold) {
+        return;
+    }
+
+    m_fanNoSpinCounter = 0;
+    Log(LogLevel::Warning, std::format(
+        "Fan tachometer reports {} RPM at EC level 0x{:02X}; reapplying control command",
+        fan1Rpm, currentLevel));
+
+    if (!m_fanController->SetFanLevel(currentLevel)) {
+        Log(LogLevel::Error, std::format(
+            "Failed to reapply fan level 0x{:02X} after tach mismatch", currentLevel));
+    }
 }
 
 void ThermalManager::Log(LogLevel level, const std::string& message) {
