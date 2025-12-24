@@ -285,25 +285,22 @@ void DrawPIDRadarChart(const PIDSettings& pid, float dpiScale) {
 }
 
 // --- Logging System ---
-// Custom Log replaced by spdlog macros: spdlog::debug, spdlog::info, spdlog::warn, spdlog::error
+// Unified logging using LogManager.h and spdlog
+#include "LogManager.h"
 
-// --- Log System ---
+// Legacy compatibility alias for existing code
 struct AppLog {
-    std::deque<std::string> Items;
-    std::mutex Mutex;
-    
     template<typename... Args>
     void AddLog(std::format_string<Args...> fmt, Args&&... args) {
-        std::string buf = std::format(fmt, std::forward<Args>(args)...);
-
-        // Persist to spdlog
-        spdlog::info(buf);
-
-        std::lock_guard<std::mutex> lock(Mutex);
-        Items.push_back(buf);
-        if (Items.size() > 100) Items.pop_front();
+        Log::Info(fmt, std::forward<Args>(args)...);
+    }
+    
+    // Get items from the unified buffer
+    std::deque<std::string> GetItems() const {
+        return Log::UILogBuffer::Get().GetItems();
     }
 } g_AppLog;
+
 
 // --- Vulkan Helpers ---
 void SetupVulkan(const char** extensions, uint32_t extensions_count) {
@@ -986,11 +983,11 @@ int main(int argc, char** argv) {
                     ImGui::TextColored(Theme::Primary(), "%s %s", ICON_LOG, _TR("SECTION_LOGS"));
                     ImGui::Separator();
                     {
-                        std::lock_guard<std::mutex> lock(g_AppLog.Mutex);
+                        auto logItems = g_AppLog.GetItems();  // Thread-safe copy
                         ImGui::BeginChild("LogScroll");
-                        for (const auto& line : g_AppLog.Items) {
-                            if (line.find("[ERROR]") != std::string::npos) ImGui::TextColored(Theme::TempHot(), line.c_str());
-                            else if (line.find("[WARN]") != std::string::npos) ImGui::TextColored(Theme::TempWarm(), line.c_str());
+                        for (const auto& line : logItems) {
+                            if (line.find("[ERROR]") != std::string::npos) ImGui::TextColored(Theme::TempHot(), "%s", line.c_str());
+                            else if (line.find("[WARN]") != std::string::npos) ImGui::TextColored(Theme::TempWarm(), "%s", line.c_str());
                             else ImGui::TextUnformatted(line.c_str());
                         }
                         if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY()) ImGui::SetScrollHereY(1.0f);
