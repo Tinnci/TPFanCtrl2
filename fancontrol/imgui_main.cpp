@@ -50,6 +50,8 @@
 #include "DynamicIcon.h"
 #include "I18nManager.h"
 #include "Theme.h"
+#include "AppInit.h"
+#include "ImGuiRenderer.h"
 
 // --- Tray Constants ---
 #define WM_TRAYICON (WM_USER + 100)
@@ -562,39 +564,10 @@ void RemoveTrayIcon(HWND hWnd) {
 }
 
 int main(int argc, char** argv) {
-    // Enable DPI Awareness (Dynamic loading for compatibility)
-    typedef BOOL(WINAPI* PFN_SetProcessDpiAwarenessContext)(HANDLE);
-    HMODULE hUser32 = GetModuleHandleA("user32.dll");
-    if (hUser32) {
-        PFN_SetProcessDpiAwarenessContext pSetDpi = (PFN_SetProcessDpiAwarenessContext)GetProcAddress(hUser32, "SetProcessDpiAwarenessContext");
-        if (pSetDpi) {
-            // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 is ((HANDLE)-4)
-            pSetDpi((HANDLE)-4);
-        }
-    }
-
-    // Initialize spdlog
-    auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-    auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>("TPFanCtrl2_debug.log", true);
-    auto msvc_sink = std::make_shared<spdlog::sinks::msvc_sink_mt>();
-    
-    auto logger = std::make_shared<spdlog::logger>("multi_sink", spdlog::sinks_init_list{ console_sink, file_sink, msvc_sink });
-    spdlog::set_default_logger(logger);
-    spdlog::set_level(spdlog::level::debug);
-    spdlog::set_pattern("[%H:%M:%S] [%^%l%$] %v");
-
-    spdlog::info("--- TPFanCtrl2 Session Started ---");
-
-    // Check Privileges
-    BOOL isAdmin = FALSE;
-    PSID adminGroup = NULL;
-    SID_IDENTIFIER_AUTHORITY ntAuthority = SECURITY_NT_AUTHORITY;
-    if (AllocateAndInitializeSid(&ntAuthority, 2, SECURITY_BUILTIN_DOMAIN_RID,
-        DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, &adminGroup)) {
-        CheckTokenMembership(NULL, adminGroup, &isAdmin);
-        FreeSid(adminGroup);
-    }
-    spdlog::info("Running as Administrator: {}", isAdmin ? "YES" : "NO");
+    // === Initialization (using AppInit module) ===
+    AppInit::EnableDPIAwareness();
+    AppInit::InitLogging();
+    AppInit::IsRunningAsAdmin();  // Log admin status
 
     HINSTANCE hInstance = GetModuleHandle(NULL);
     // Logic Init
@@ -650,18 +623,7 @@ int main(int argc, char** argv) {
     auto sensorManager = std::make_shared<SensorManager>(ecManager);
     
     // Initialize Sensor Names (matching original TPFanControl)
-    sensorManager->SetSensorName(0, "CPU");
-    sensorManager->SetSensorName(1, "APS");
-    sensorManager->SetSensorName(2, "PCM");
-    sensorManager->SetSensorName(3, "GPU");
-    sensorManager->SetSensorName(4, "BAT1");
-    sensorManager->SetSensorName(5, "X7D");
-    sensorManager->SetSensorName(6, "BAT2");
-    sensorManager->SetSensorName(7, "X7F");
-    sensorManager->SetSensorName(8, "BUS");
-    sensorManager->SetSensorName(9, "PCI");
-    sensorManager->SetSensorName(10, "PWR");
-    sensorManager->SetSensorName(11, "XC3");
+    AppInit::InitDefaultSensorNames(sensorManager);
 
     auto fanController = std::make_shared<FanController>(ecManager);
 
@@ -677,21 +639,9 @@ int main(int argc, char** argv) {
     // Start Hardware Thread with jthread
     std::jthread hwThread(HardwareWorker, g_Config, sensorManager, fanController, hwnd);
 
-    // Get DPI Scale
-    float dpiScale = 1.0f;
-    typedef UINT(WINAPI* PFN_GetDpiForWindow)(HWND);
-    if (hUser32) {
-        PFN_GetDpiForWindow pGetDpi = (PFN_GetDpiForWindow)GetProcAddress(hUser32, "GetDpiForWindow");
-        if (pGetDpi) {
-            dpiScale = (float)pGetDpi(hwnd) / 96.0f;
-        }
-    }
-    spdlog::info("DPI Scale detected: {:.2f}", dpiScale);
-
-    BOOL dark = TRUE;
-    DwmSetWindowAttribute(hwnd, 20, &dark, sizeof(dark));
-    int backdrop = 2;
-    DwmSetWindowAttribute(hwnd, 38, &backdrop, sizeof(backdrop));
+    // Get DPI Scale and apply Windows 11 effects
+    float dpiScale = AppInit::GetDpiScale(hwnd);
+    AppInit::ApplyWindows11Effect(hwnd);
 
     const char* extensions[] = { "VK_KHR_surface", "VK_KHR_win32_surface" };
     SetupVulkan(extensions, 2);
