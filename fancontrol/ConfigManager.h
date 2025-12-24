@@ -3,12 +3,18 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <nlohmann/json.hpp>
 #include "CommonTypes.h"
 
 class ConfigManager {
 public:
     ConfigManager();
     bool LoadConfig(const std::string& filename);
+    bool SaveConfig(const std::string& filename);
+
+    // JSON conversion
+    void from_json(const nlohmann::json& j);
+    void to_json(nlohmann::json& j) const;
 
     // Configuration Variables
     int ActiveMode = 0;
@@ -78,11 +84,5 @@ public:
     Hotkey HK_TG_MS = {0, 0};
     Hotkey HK_TG_12 = {0, 0};
 
-    bool SaveConfig(const std::string& filename);
-
 private:
-    void ParseLine(const std::string& line);
-    void ParseSpecialKeys(const std::string& key, const std::string& value);
-    void ParseHotkeyByName(const std::string& key, const std::string& value);
-    void ParseHotkey(const std::string& value, const std::string& prefix, Hotkey& hk);
 };

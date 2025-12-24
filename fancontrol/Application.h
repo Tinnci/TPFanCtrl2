@@ -11,6 +11,9 @@
 
 namespace App {
 
+// Helper to convert ConfigManager to ThermalConfig
+Core::ThermalConfig BuildThermalConfig(const std::shared_ptr<ConfigManager>& config);
+
 /// Application context to encapsulate global state and lifecycle management
 class Application {
 public:

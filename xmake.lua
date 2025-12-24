@@ -10,6 +10,7 @@ add_requires("imgui master", {configs = {win32 = true, vulkan = true, freetype =
 add_requires("vulkan-loader")
 add_requires("freetype")
 add_requires("vulkan-memory-allocator")
+add_requires("nlohmann_json")
 
 -- Set x86 architecture as default (due to TVicPort driver limitations)
 set_arch("x86")
@@ -32,7 +33,7 @@ target("TPFanCtrl2")
     set_kind("binary")
     set_plat("windows")
 
-    add_packages("imgui", "vulkan-loader", "freetype", "vulkan-memory-allocator", "spdlog")
+    add_packages("imgui", "vulkan-loader", "freetype", "vulkan-memory-allocator", "spdlog", "nlohmann_json")
     
     -- Set subsystem to Windows to hide console (use CONSOLE for debugging if needed)
     set_kind("binary")
@@ -79,7 +80,7 @@ target("TPFanCtrl2")
 target("logic_test")
     set_kind("binary")
     set_plat("windows")
-    add_packages("gtest", "spdlog")
+    add_packages("gtest", "spdlog", "nlohmann_json")
     
     -- Console application
     add_ldflags("/SUBSYSTEM:CONSOLE", {force = true})
@@ -103,7 +104,7 @@ target("logic_test")
 target("core_test")
     set_kind("binary")
     set_plat("windows")
-    add_packages("gtest", "spdlog")
+    add_packages("gtest", "spdlog", "nlohmann_json")
     
     -- Console application
     add_ldflags("/SUBSYSTEM:CONSOLE", {force = true})

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <nlohmann/json.hpp>
 
 // EC Offsets and Values
 constexpr auto TP_ECOFFSET_FAN = 0x2F;
@@ -16,12 +17,16 @@ struct SmartLevel {
     int fan;
     int hystUp;
     int hystDown;
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(SmartLevel, temp, fan, hystUp, hystDown)
 };
 
 struct SensorOffset {
     int offset;
     int hystMin;
     int hystMax;
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(SensorOffset, offset, hystMin, hystMax)
 };
 
 struct SensorData {
