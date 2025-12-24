@@ -1006,7 +1006,7 @@ int main(int argc, char** argv) {
 
                         // Presets
                         ImGui::Spacing();
-                        ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "%s", _TR("LBL_PRESETS"));
+                        ImGui::TextColored(Theme::TextMuted(), "%s", _TR("LBL_PRESETS"));
                         if (ImGui::Button(_TR("BTN_PRESET_SILENT"), ImVec2(ImGui::GetContentRegionAvail().x / 2.1f, 30 * dpiScale))) {
                             g_UIState.Mode = 2; // Smart
                             g_UIState.Algorithm = ControlAlgorithm::PID;
@@ -1033,14 +1033,14 @@ int main(int argc, char** argv) {
                     ImGui::EndChild();
 
                     ImGui::BeginChild("LogsPanel", ImVec2(0, 0), true);
-                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), "%s %s", ICON_LOG, _TR("SECTION_LOGS"));
+                    ImGui::TextColored(Theme::Primary(), "%s %s", ICON_LOG, _TR("SECTION_LOGS"));
                     ImGui::Separator();
                     {
                         std::lock_guard<std::mutex> lock(g_AppLog.Mutex);
                         ImGui::BeginChild("LogScroll");
                         for (const auto& line : g_AppLog.Items) {
-                            if (line.find("[ERROR]") != std::string::npos) ImGui::TextColored(ImVec4(1, 0.2f, 0.2f, 1), line.c_str());
-                            else if (line.find("[WARN]") != std::string::npos) ImGui::TextColored(ImVec4(1, 0.8f, 0, 1), line.c_str());
+                            if (line.find("[ERROR]") != std::string::npos) ImGui::TextColored(Theme::TempHot(), line.c_str());
+                            else if (line.find("[WARN]") != std::string::npos) ImGui::TextColored(Theme::TempWarm(), line.c_str());
                             else ImGui::TextUnformatted(line.c_str());
                         }
                         if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY()) ImGui::SetScrollHereY(1.0f);
@@ -1059,8 +1059,8 @@ int main(int argc, char** argv) {
                 
                 auto drawSidebarItem = [&](int id, const char* icon, const char* labelKey) {
                     bool selected = (g_UIState.SelectedSettingsTab == id);
-                    if (selected) ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.89f, 0.12f, 0.16f, 0.2f));
-                    if (selected) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.89f, 0.12f, 0.16f, 1.0f));
+                    if (selected) ImGui::PushStyleColor(ImGuiCol_Header, Theme::PrimaryTransparent(0.2f));
+                    if (selected) ImGui::PushStyleColor(ImGuiCol_Text, Theme::Primary());
                     
                     char buf[128];
                     sprintf_s(buf, "%s  %s", icon, _TR(labelKey));
@@ -1115,11 +1115,11 @@ int main(int argc, char** argv) {
 
                 if (g_UIState.SelectedSettingsTab == 0) {
                     // --- General Settings ---
-                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), "%s", _TR("SIDEBAR_GENERAL"));
+                    ImGui::TextColored(Theme::Primary(), "%s", _TR("SIDEBAR_GENERAL"));
                     ImGui::Separator();
                     ImGui::Spacing();
 
-                    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "%s", _TR("SETTING_BEHAVIOR"));
+                    ImGui::TextColored(Theme::TextMuted(), "%s", _TR("SETTING_BEHAVIOR"));
                     ImGui::Spacing();
                     {
                         bool startMin = g_Config->StartMinimized != 0;
@@ -1149,7 +1149,7 @@ int main(int argc, char** argv) {
                     ImGui::Separator();
                     ImGui::Spacing();
 
-                    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "%s", _TR("SETTING_POLLING"));
+                    ImGui::TextColored(Theme::TextMuted(), "%s", _TR("SETTING_POLLING"));
                     ImGui::Spacing();
                     {
                         int cycle = g_Config->Cycle;
@@ -1168,11 +1168,11 @@ int main(int argc, char** argv) {
                 }
                 else if (g_UIState.SelectedSettingsTab == 1) {
                     // --- PID Tuning ---
-                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), "%s", _TR("SIDEBAR_PID"));
+                    ImGui::TextColored(Theme::Primary(), "%s", _TR("SIDEBAR_PID"));
                     ImGui::Separator();
                     ImGui::Spacing();
 
-                    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "%s", _TR("SETTING_PID"));
+                    ImGui::TextColored(Theme::TextMuted(), "%s", _TR("SETTING_PID"));
                     ImGui::Spacing();
                     {
                         std::lock_guard<std::mutex> lock(g_UIState.Mutex);
@@ -1203,7 +1203,7 @@ int main(int argc, char** argv) {
                         // Radar Chart Visualization
                         ImGui::SameLine(ImGui::GetWindowWidth() - 250 * dpiScale);
                         ImGui::BeginGroup();
-                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.6f, 0.6f, 0.6f, 1.0f));
+                        ImGui::PushStyleColor(ImGuiCol_Text, Theme::TextMuted());
                         ImGui::Text("%s", _TR("LBL_PID_VISUAL"));
                         ImGui::PopStyleColor();
                         DrawPIDRadarChart(g_UIState.PID, dpiScale);
@@ -1247,7 +1247,7 @@ int main(int argc, char** argv) {
                     ImGui::Spacing();
                     ImGui::Separator();
                     ImGui::Spacing();
-                    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "%s", _TR("SETTING_PID_PREVIEW"));
+                    ImGui::TextColored(Theme::TextMuted(), "%s", _TR("SETTING_PID_PREVIEW"));
                     ImGui::TextDisabled("%s", _TR("DESC_PID_PREVIEW"));
                     ImGui::Spacing();
                     
@@ -1296,11 +1296,11 @@ int main(int argc, char** argv) {
                 }
                 else if (g_UIState.SelectedSettingsTab == 2) {
                     // --- Sensors ---
-                    ImGui::TextColored(ImVec4(0.89f, 0.12f, 0.16f, 1.0f), "%s", _TR("SIDEBAR_SENSORS"));
+                    ImGui::TextColored(Theme::Primary(), "%s", _TR("SIDEBAR_SENSORS"));
                     ImGui::Separator();
                     ImGui::Spacing();
 
-                    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "%s", _TR("SETTING_SENSORS"));
+                    ImGui::TextColored(Theme::TextMuted(), "%s", _TR("SETTING_SENSORS"));
                     ImGui::Spacing();
                     ImGui::TextDisabled("%s", _TR("DESC_SENSORS"));
                     ImGui::Spacing();
