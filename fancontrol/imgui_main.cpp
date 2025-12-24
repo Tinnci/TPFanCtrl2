@@ -910,7 +910,9 @@ int main(int argc, char** argv) {
                     ImGui::TableNextColumn();
 
                     // --- Right: Control & Logs ---
-                    ImGui::BeginChild("ControlPanel", ImVec2(0, 240 * dpiScale), true);
+                    // NoScrollbar: Fixed content, should not scroll
+                    ImGui::BeginChild("ControlPanel", ImVec2(0, 240 * dpiScale), true, 
+                        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
                     ImGui::TextColored(Theme::Primary(), "%s %s", ICON_FAN, _TR("SECTION_CONTROL"));
                     ImGui::Separator();
                     ImGui::Spacing();
@@ -1001,8 +1003,9 @@ int main(int argc, char** argv) {
             }
 
             if (ImGui::BeginTabItem(_TR("TAB_SETTINGS"))) {
-                // --- Sidebar ---
-                ImGui::BeginChild("SettingsSidebar", ImVec2(180 * dpiScale, 0), true);
+                // --- Sidebar (No scrolling - fixed menu items) ---
+                ImGui::BeginChild("SettingsSidebar", ImVec2(180 * dpiScale, 0), true,
+                    ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
                 
                 auto drawSidebarItem = [&](int id, const char* icon, const char* labelKey) {
                     bool selected = (g_UIState.SelectedSettingsTab == id);

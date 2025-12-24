@@ -74,6 +74,15 @@ namespace Theme {
         constexpr float WindowPaddingY = 15.0f;
     }
     
+    // Window Flags for scroll policy (see .gemini/ui-design-spec.md)
+    namespace WindowFlags {
+        // For fixed content panels that should NEVER scroll
+        constexpr ImGuiWindowFlags NoScroll = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
+        
+        // For scrollable content areas (logs, lists)
+        constexpr ImGuiWindowFlags Scrollable = ImGuiWindowFlags_None;
+    }
+    
     // Apply full theme to ImGui style
     inline void ApplyTheme(ImGuiStyle& style, float dpiScale) {
         style.ScaleAllSizes(dpiScale);
