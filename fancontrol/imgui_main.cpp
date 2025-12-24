@@ -911,7 +911,8 @@ int main(int argc, char** argv) {
 
                     // --- Right: Control & Logs ---
                     // NoScrollbar: Fixed content, should not scroll
-                    ImGui::BeginChild("ControlPanel", ImVec2(0, 220 * dpiScale), true, 
+                    // Height increased to prevent button overlap
+                    ImGui::BeginChild("ControlPanel", ImVec2(0, 270 * dpiScale), true, 
                         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
                     ImGui::TextColored(Theme::Primary(), "%s %s", ICON_FAN, _TR("SECTION_CONTROL"));
                     ImGui::Separator();
