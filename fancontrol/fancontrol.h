@@ -92,14 +92,12 @@ protected:
 	int iFontIconB;
 	char gSensorNames[17][4];
 	HANDLE hThread;
-	HANDLE hPipe0;
-	HANDLE hPipe1;
-	HANDLE hPipe2;
-	HANDLE hPipe3;
-	HANDLE hPipe4;
-	HANDLE hPipe5;
-	HANDLE hPipe6;
-	HANDLE hPipe7;
+	
+	// Named Pipe handles (consolidated from individual hPipe0-7)
+	static constexpr int PIPE_COUNT = 8;
+	HANDLE hPipes[PIPE_COUNT] = {};
+	bool m_pipesCreated = false;
+	
 	HANDLE hLock;
 	HANDLE hLockS;
 	BOOL Closing;

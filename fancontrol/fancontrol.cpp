@@ -425,7 +425,7 @@ BOOL lbResult(FALSE);
 int fanspeed;
 int fanctrl;
 int IconFontSize;
-BOOL _piscreated(FALSE);
+// NOTE: _piscreated removed - now using class member m_pipesCreated
 char obuftd[256] = "", obuftd2[128] = "", templisttd[512];
 char obuf[256] = "", obuf2[128] = "", templist2[512];
 ULONG
@@ -605,239 +605,67 @@ FANCONTROL::DlgProc(HWND
 			break;
 
 		case 3: // update vista icon
-		//*************************************************************************************
-		//begin named pipe client session
-		//
-			if (bResult == FALSE && lbResult == TRUE)
-			{
-				_piscreated = FALSE;
+		//--- Named Pipe Session (Refactored) ---
+		{
+			// Close pipes if previous write failed but was previously successful
+			if (bResult == FALSE && lbResult == TRUE) {
+				m_pipesCreated = false;
 				lbResult = FALSE;
 				bResult = FALSE;
-				CloseHandle(hPipe0);
-				CloseHandle(hPipe1);
-				CloseHandle(hPipe2);
-				CloseHandle(hPipe3);
-				CloseHandle(hPipe4);
-				CloseHandle(hPipe5);
-				CloseHandle(hPipe6);
-				CloseHandle(hPipe7);
+				for (int i = 0; i < PIPE_COUNT; i++) {
+					if (hPipes[i] != INVALID_HANDLE_VALUE && hPipes[i] != nullptr) {
+						CloseHandle(hPipes[i]);
+						hPipes[i] = nullptr;
+					}
+				}
 			}
 
-			if (_piscreated == FALSE)
-			{
-				hPipe0 = CreateNamedPipe
-				(
-					g_szPipeName,             // pipe name
-					PIPE_ACCESS_OUTBOUND,     // write access
-					PIPE_TYPE_MESSAGE |       // message type pipe
-					PIPE_READMODE_MESSAGE |   // message-read mode
-					PIPE_NOWAIT,              // blocking mode
-					PIPE_UNLIMITED_INSTANCES, // max. instances
-					BUFFER_SIZE,              // output buffer size
-					BUFFER_SIZE,              // input buffer size
-					NMPWAIT_USE_DEFAULT_WAIT, // client time-out
-					NULL);                    // default security attribute
-				hPipe1 = CreateNamedPipe
-				(
-					g_szPipeName,             // pipe name
-					PIPE_ACCESS_OUTBOUND,     // write access
-					PIPE_TYPE_MESSAGE |       // message type pipe
-					PIPE_READMODE_MESSAGE |   // message-read mode
-					PIPE_NOWAIT,              // blocking mode
-					PIPE_UNLIMITED_INSTANCES, // max. instances
-					BUFFER_SIZE,              // output buffer size
-					BUFFER_SIZE,              // input buffer size
-					NMPWAIT_USE_DEFAULT_WAIT, // client time-out
-					NULL);                    // default security attribute
-				hPipe2 = CreateNamedPipe
-				(
-					g_szPipeName,             // pipe name
-					PIPE_ACCESS_OUTBOUND,     // write access
-					PIPE_TYPE_MESSAGE |       // message type pipe
-					PIPE_READMODE_MESSAGE |   // message-read mode
-					PIPE_NOWAIT,              // blocking mode
-					PIPE_UNLIMITED_INSTANCES, // max. instances
-					BUFFER_SIZE,              // output buffer size
-					BUFFER_SIZE,              // input buffer size
-					NMPWAIT_USE_DEFAULT_WAIT, // client time-out
-					NULL);                    // default security attribute
-				hPipe3 = CreateNamedPipe
-				(
-					g_szPipeName,             // pipe name
-					PIPE_ACCESS_OUTBOUND,     // write access
-					PIPE_TYPE_MESSAGE |       // message type pipe
-					PIPE_READMODE_MESSAGE |   // message-read mode
-					PIPE_NOWAIT,              // blocking mode
-					PIPE_UNLIMITED_INSTANCES, // max. instances
-					BUFFER_SIZE,              // output buffer size
-					BUFFER_SIZE,              // input buffer size
-					NMPWAIT_USE_DEFAULT_WAIT, // client time-out
-					NULL);                    // default security attribute
-				hPipe4 = CreateNamedPipe
-				(
-					g_szPipeName,             // pipe name
-					PIPE_ACCESS_OUTBOUND,     // write access
-					PIPE_TYPE_MESSAGE |       // message type pipe
-					PIPE_READMODE_MESSAGE |   // message-read mode
-					PIPE_NOWAIT,              // blocking mode
-					PIPE_UNLIMITED_INSTANCES, // max. instances
-					BUFFER_SIZE,              // output buffer size
-					BUFFER_SIZE,              // input buffer size
-					NMPWAIT_USE_DEFAULT_WAIT, // client time-out
-					NULL);                    // default security attribute
-				hPipe5 = CreateNamedPipe
-				(
-					g_szPipeName,             // pipe name
-					PIPE_ACCESS_OUTBOUND,     // write access
-					PIPE_TYPE_MESSAGE |       // message type pipe
-					PIPE_READMODE_MESSAGE |   // message-read mode
-					PIPE_NOWAIT,              // blocking mode
-					PIPE_UNLIMITED_INSTANCES, // max. instances
-					BUFFER_SIZE,              // output buffer size
-					BUFFER_SIZE,              // input buffer size
-					NMPWAIT_USE_DEFAULT_WAIT, // client time-out
-					NULL);                    // default security attribute
-				hPipe6 = CreateNamedPipe
-				(
-					g_szPipeName,             // pipe name
-					PIPE_ACCESS_OUTBOUND,     // write access
-					PIPE_TYPE_MESSAGE |       // message type pipe
-					PIPE_READMODE_MESSAGE |   // message-read mode
-					PIPE_NOWAIT,              // blocking mode
-					PIPE_UNLIMITED_INSTANCES, // max. instances
-					BUFFER_SIZE,              // output buffer size
-					BUFFER_SIZE,              // input buffer size
-					NMPWAIT_USE_DEFAULT_WAIT, // client time-out
-					NULL);                    // default security attribute
-				hPipe7 = CreateNamedPipe
-				(
-					g_szPipeName,             // pipe name
-					PIPE_ACCESS_OUTBOUND,     // write access
-					PIPE_TYPE_MESSAGE |       // message type pipe
-					PIPE_READMODE_MESSAGE |   // message-read mode
-					PIPE_NOWAIT,              // blocking mode
-					PIPE_UNLIMITED_INSTANCES, // max. instances
-					BUFFER_SIZE,              // output buffer size
-					BUFFER_SIZE,              // input buffer size
-					NMPWAIT_USE_DEFAULT_WAIT, // client time-out
-					NULL);                    // default security attribute
-
-				if (INVALID_HANDLE_VALUE == hPipe0) {
-					this->Trace("Creating Named Pipe client GUI was NOT successful.");
-					::PostMessage(this->hwndDialog, WM_COMMAND, 5020, 0);
+			// Create pipes if not already created
+			if (!m_pipesCreated) {
+				bool allPipesOk = true;
+				for (int i = 0; i < PIPE_COUNT; i++) {
+					hPipes[i] = CreateNamedPipe(
+						g_szPipeName,
+						PIPE_ACCESS_OUTBOUND,
+						PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_NOWAIT,
+						PIPE_UNLIMITED_INSTANCES,
+						BUFFER_SIZE,
+						BUFFER_SIZE,
+						NMPWAIT_USE_DEFAULT_WAIT,
+						NULL);
+					
+					if (hPipes[i] == INVALID_HANDLE_VALUE) {
+						this->Trace("Creating Named Pipe client GUI was NOT successful.");
+						::PostMessage(this->hwndDialog, WM_COMMAND, 5020, 0);
+						allPipesOk = false;
+					}
 				}
-				if (INVALID_HANDLE_VALUE == hPipe1) {
-					this->Trace("Creating Named Pipe client GUI was NOT successful.");
-					::PostMessage(this->hwndDialog, WM_COMMAND, 5020, 0);
-				}
-				if (INVALID_HANDLE_VALUE == hPipe2) {
-					this->Trace("Creating Named Pipe client GUI was NOT successful.");
-					::PostMessage(this->hwndDialog, WM_COMMAND, 5020, 0);
-				}
-				if (INVALID_HANDLE_VALUE == hPipe3) {
-					this->Trace("Creating Named Pipe client GUI was NOT successful.");
-					::PostMessage(this->hwndDialog, WM_COMMAND, 5020, 0);
-				}
-				if (INVALID_HANDLE_VALUE == hPipe4) {
-					this->Trace("Creating Named Pipe client GUI was NOT successful.");
-					::PostMessage(this->hwndDialog, WM_COMMAND, 5020, 0);
-				}
-				if (INVALID_HANDLE_VALUE == hPipe5) {
-					this->Trace("Creating Named Pipe client GUI was NOT successful.");
-					::PostMessage(this->hwndDialog, WM_COMMAND, 5020, 0);
-				}
-				if (INVALID_HANDLE_VALUE == hPipe6) {
-					this->Trace("Creating Named Pipe client GUI was NOT successful.");
-					::PostMessage(this->hwndDialog, WM_COMMAND, 5020, 0);
-				}
-				if (INVALID_HANDLE_VALUE == hPipe7) {
-					this->Trace("Creating Named Pipe client GUI was NOT successful.");
-					::PostMessage(this->hwndDialog, WM_COMMAND, 5020, 0);
-				}
-
-				_piscreated = TRUE;
+				m_pipesCreated = allPipesOk;
 			}
 
-			// fan speed
-			if (m_configManager->Fahrenheit) {
-				if (fan1speed > 0x1fff)
-					fan1speed = lastfan1speed;
-				std::string speedMsg = std::format("{} {} {} {} {} {} ",
-					this->CurrentMode, (this->MaxTemp * 9 / 5 + 32), this->gSensorNames[iMaxTemp],
-					iFarbeIconB, fan1speed, fanctrl2);
-				strcpy_s(szBuffer, speedMsg.c_str());
-			}
-			else {
-				if (fan1speed > 0x1fff)
-					fan1speed = lastfan1speed;
-				std::string speedMsg = std::format("{} {} {} {} {} {} ",
-					this->CurrentMode, (this->MaxTemp), this->gSensorNames[iMaxTemp],
-					iFarbeIconB, fan1speed, fanctrl2);
-				strcpy_s(szBuffer, speedMsg.c_str());
-			}
+			// Build status message
+			if (fan1speed > 0x1fff)
+				fan1speed = lastfan1speed;
+			
+			int displayTemp = m_configManager->Fahrenheit 
+				? (this->MaxTemp * 9 / 5 + 32) 
+				: this->MaxTemp;
+			
+			std::string speedMsg = std::format("{} {} {} {} {} {} ",
+				this->CurrentMode, displayTemp, this->gSensorNames[iMaxTemp],
+				iFarbeIconB, fan1speed, fanctrl2);
+			strcpy_s(szBuffer, speedMsg.c_str());
 
-			//send to client
+			// Write to all pipes
 			lbResult = bResult;
-			bResult = WriteFile
-			(
-				hPipe0,                // handle to pipe
-				szBuffer,             // buffer to write from
-				strlen(szBuffer) + 1,   // number of bytes to write, include the NULL
-				&cbBytes,             // number of bytes written
-				NULL);                // not overlapped I/O
-			bResult = WriteFile
-			(
-				hPipe1,                // handle to pipe
-				szBuffer,             // buffer to write from
-				strlen(szBuffer) + 1,   // number of bytes to write, include the NULL
-				&cbBytes,             // number of bytes written
-				NULL);                // not overlapped I/O
-			bResult = WriteFile
-			(
-				hPipe2,                // handle to pipe
-				szBuffer,             // buffer to write from
-				strlen(szBuffer) + 1,   // number of bytes to write, include the NULL
-				&cbBytes,             // number of bytes written
-				NULL);                // not overlapped I/O
-			bResult = WriteFile
-			(
-				hPipe3,                // handle to pipe
-				szBuffer,             // buffer to write from
-				strlen(szBuffer) + 1,   // number of bytes to write, include the NULL
-				&cbBytes,             // number of bytes written
-				NULL);                // not overlapped I/O
-			bResult = WriteFile
-			(
-				hPipe4,                // handle to pipe
-				szBuffer,             // buffer to write from
-				strlen(szBuffer) + 1,   // number of bytes to write, include the NULL
-				&cbBytes,             // number of bytes written
-				NULL);                // not overlapped I/O
-			bResult = WriteFile
-			(
-				hPipe5,                // handle to pipe
-				szBuffer,             // buffer to write from
-				strlen(szBuffer) + 1,   // number of bytes to write, include the NULL
-				&cbBytes,             // number of bytes written
-				NULL);                // not overlapped I/O
-			bResult = WriteFile
-			(
-				hPipe6,                // handle to pipe
-				szBuffer,             // buffer to write from
-				strlen(szBuffer) + 1,   // number of bytes to write, include the NULL
-				&cbBytes,             // number of bytes written
-				NULL);                // not overlapped I/O
-			bResult = WriteFile
-			(
-				hPipe7,                // handle to pipe
-				szBuffer,             // buffer to write from
-				strlen(szBuffer) + 1,   // number of bytes to write, include the NULL
-				&cbBytes,             // number of bytes written
-				NULL);                // not overlapped I/O
-
-//end named pipe client session
-//
-//*************************************************************************************
+			DWORD msgLen = (DWORD)(strlen(szBuffer) + 1);
+			for (int i = 0; i < PIPE_COUNT; i++) {
+				if (hPipes[i] != INVALID_HANDLE_VALUE && hPipes[i] != nullptr) {
+					bResult = WriteFile(hPipes[i], szBuffer, msgLen, &cbBytes, NULL);
+				}
+			}
+		}
+		//--- End Named Pipe Session ---
 			break;
 
 		case 4: // renew tempicon
