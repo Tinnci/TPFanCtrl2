@@ -125,6 +125,7 @@ static const std::unordered_map<std::string, IntParser>& GetIntParsers() {
         {"MinimizeToSysTray", MakeIntParser(&ConfigManager::MinimizeToSysTray)},
         {"MinimizeOnClose", MakeIntParser(&ConfigManager::MinimizeOnClose)},
         {"UseTWR",          MakeIntParser(&ConfigManager::UseTWR)},
+        {"DualFan",         MakeIntParser(&ConfigManager::DualFan)},
         {"ControlAlgorithm", MakeIntParser(&ConfigManager::ControlAlgorithm)},
     };
     return parsers;
@@ -405,6 +406,7 @@ bool ConfigManager::SaveConfig(const std::string& filename) {
     file << "ShowBiasedTemps=" << ShowBiasedTemps << "\n";
     file << "NoExtSensor=" << NoExtSensor << "\n";
     file << "UseTWR=" << UseTWR << "\n";
+    file << "DualFan=" << DualFan << "\n";
     file << "IgnoreSensors=" << IgnoreSensors << "\n";
     file << "Language=" << Language << "\n";
     

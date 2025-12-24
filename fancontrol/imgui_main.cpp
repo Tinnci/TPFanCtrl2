@@ -130,7 +130,8 @@ Core::ThermalConfig BuildThermalConfig(const std::shared_ptr<ConfigManager>& con
     // Basic settings
     thermal.cycleSeconds = config->Cycle;
     thermal.iconCycleSeconds = config->IconCycle;
-    thermal.isDualFan = false;  // Detected automatically by FanController
+    thermal.isDualFan = config->DualFan != 0;
+    thermal.fanSpeedAddr = config->FanSpeedLowByte;
     thermal.useBiasedTemps = config->ShowBiasedTemps != 0;
     thermal.noExtSensor = config->NoExtSensor != 0;
     thermal.useFahrenheit = config->Fahrenheit != 0;

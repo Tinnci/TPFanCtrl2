@@ -90,18 +90,12 @@ bool SensorManager::UpdateSensors(bool showBiasedTemps, bool noExtSensor, bool u
         return true;
     };
 
-    int failCount = 0;
-    // Read primary sensors (0-8) at addresses 0x78-0x7F
+    // Read primary sensors (0-7) at addresses 0x78-0x7F
     for (int i = 0; i < 8; i++) {
         m_sensors[i].addr = TP_ECOFFSET_TEMP0 + i;
         if (!readSensor(i)) {
-            failCount++;
+            return false; // Fail fast to trigger retry in ThermalManager
         }
-    }
-
-    // If all primary sensors failed, it's likely a communication issue
-    if (failCount == 8) {
-        return false;
     }
 
     // Read extended sensors (8-11) at addresses 0xC0-0xC3
@@ -117,12 +111,8 @@ bool SensorManager::UpdateSensors(bool showBiasedTemps, bool noExtSensor, bool u
         }
         
         if (!readSensor(idx)) {
-            // Log once for cada extended sensor? Maybe too much.
+            return false; // Fail fast to trigger retry in ThermalManager
         }
-    }
-
-    if (failCount > 0) {
-        // We could report partial failure here
     }
 
     return true;

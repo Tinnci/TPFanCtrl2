@@ -4,14 +4,19 @@
 FanController::FanController(std::shared_ptr<ECManager> ecManager)
     : m_ecManager(ecManager), m_currentFanCtrl(-1), m_lastSmartLevelIndex(-1) {}
 
+bool FanController::SetFanLevel(int level) {
+    return SetFanLevel(level, IsDualFanActive());
+}
+
 bool FanController::SetFanLevel(int level, bool isDualFan) {
     std::lock_guard<std::recursive_timed_mutex> lock(m_ecManager->GetMutex());
+    const bool dualWrites = isDualFan && m_dualFanOperational;
     bool ok = false;
     if (m_writeCallback) {
         ok = m_writeCallback(level);
     } else {
         for (int i = 0; i < 5; i++) {
-            if (isDualFan) {
+            if (dualWrites) {
                 // Set Fan 1
                 m_ecManager->WriteByte(TP_ECOFFSET_FAN_SWITCH, TP_ECVALUE_SELFAN1);
                 m_ecManager->WriteByte(TP_ECOFFSET_FAN, (char)level);
@@ -23,14 +28,14 @@ bool FanController::SetFanLevel(int level, bool isDualFan) {
                 ::Sleep(100);
 
                 // Verify Fan 2
-                char currentFan2;
+                char currentFan2 = 0;
                 bool fan2_ok = m_ecManager->ReadByte(TP_ECOFFSET_FAN, &currentFan2);
                 ::Sleep(100);
 
                 // Switch back to Fan 1 and Verify
                 m_ecManager->WriteByte(TP_ECOFFSET_FAN_SWITCH, TP_ECVALUE_SELFAN1);
                 ::Sleep(100);
-                char currentFan1;
+                char currentFan1 = 0;
                 bool fan1_ok = m_ecManager->ReadByte(TP_ECOFFSET_FAN, &currentFan1);
 
                 if (fan1_ok && fan2_ok && (unsigned char)currentFan1 == (unsigned char)level && (unsigned char)currentFan2 == (unsigned char)level) {
@@ -40,7 +45,7 @@ bool FanController::SetFanLevel(int level, bool isDualFan) {
             } else {
                 m_ecManager->WriteByte(TP_ECOFFSET_FAN, (char)level);
                 ::Sleep(100);
-                char currentFan;
+                char currentFan = 0;
                 if (m_ecManager->ReadByte(TP_ECOFFSET_FAN, &currentFan) && (unsigned char)currentFan == (unsigned char)level) {
                     ok = true;
                     break;
@@ -168,27 +173,74 @@ bool FanController::UpdatePIDControl(float currentTemp, const PIDSettings& setti
     return true;
 }
 
+bool FanController::RefreshCurrentLevel() {
+    char level = 0;
+    if (m_ecManager->ReadByte(TP_ECOFFSET_FAN, &level)) {
+        spdlog::debug("[FanCtrl] RefreshCurrentLevel EC=0x{:02X}", (unsigned char)level);
+        m_currentFanCtrl = (unsigned char)level;
+        return true;
+    }
+    spdlog::warn("[FanCtrl] RefreshCurrentLevel failed");
+    return false;
+}
+
 bool FanController::GetFanSpeeds(int& fan1, int& fan2) {
     std::lock_guard<std::recursive_timed_mutex> lock(m_ecManager->GetMutex());
 
-    // Helper lambda to read a single fan's speed
-    auto readFanSpeed = [this](char fanSelect) -> int {
+    fan1 = 0;
+    fan2 = 0;
+
+    auto readFanSpeed = [this](char fanSelect, int& rpmOut) -> bool {
         m_ecManager->WriteByte(TP_ECOFFSET_FAN_SWITCH, fanSelect);
-        char lo, hi;
-        if (!m_ecManager->ReadByte(TP_ECOFFSET_FANSPEED, &lo) || 
-            !m_ecManager->ReadByte(TP_ECOFFSET_FANSPEED + 1, &hi)) {
-            return -1;  // Error indicator
+        spdlog::debug("[FanCtrl] Select fan 0x{:02X}", (unsigned char)fanSelect);
+
+        char lo = 0;
+        char hi = 0;
+        if (!m_ecManager->ReadByte(m_fanSpeedAddr, &lo) ||
+            !m_ecManager->ReadByte(m_fanSpeedAddr + 1, &hi)) {
+            spdlog::warn("[FanCtrl] Fan 0x{:02X} speed read failed", (unsigned char)fanSelect);
+            rpmOut = 0;
+            return false;
         }
-        return ((unsigned char)hi << 8) | (unsigned char)lo;
+
+        rpmOut = ((unsigned char)hi << 8) | (unsigned char)lo;
+        spdlog::debug("[FanCtrl] Fan 0x{:02X} speed {} RPM", (unsigned char)fanSelect, rpmOut);
+        return true;
     };
 
-    int speed2 = readFanSpeed(TP_ECVALUE_SELFAN2);
-    if (speed2 < 0) return false;
-    fan2 = speed2;
+    const bool dualEnabled = IsDualFanActive();
+    bool fan2ReadSuccess = false;
+    if (dualEnabled) {
+        fan2ReadSuccess = readFanSpeed(TP_ECVALUE_SELFAN2, fan2);
+    }
 
-    int speed1 = readFanSpeed(TP_ECVALUE_SELFAN1);
-    if (speed1 < 0) return false;
-    fan1 = speed1;
+    if (!readFanSpeed(TP_ECVALUE_SELFAN1, fan1)) {
+        fan1 = 0;
+        fan2 = 0;
+        return false;
+    }
+
+    if (!dualEnabled) {
+        return true;
+    }
+
+    const bool manualCommand = m_currentFanCtrl >= 0 && m_currentFanCtrl < 0x80 && m_currentFanCtrl > 0;
+    const bool fan1Active = fan1 >= kFan1ActiveRpmThreshold;
+    const bool fan2Active = fan2 > 0;
+
+    if (!fan2ReadSuccess || (manualCommand && fan1Active && !fan2Active)) {
+        ++m_fan2ZeroCount;
+    } else if (fan2Active) {
+        m_fan2ZeroCount = 0;
+    }
+
+    if (m_dualFanOperational && m_fan2ZeroCount >= kFan2DisableThreshold) {
+        m_dualFanOperational = false;
+        m_fan2ZeroCount = 0;
+        spdlog::warn(
+            "[FanCtrl] Fan 2 inactive/unreadable for {} consecutive samples; switching to single-fan mode",
+            kFan2DisableThreshold);
+    }
 
     return true;
 }

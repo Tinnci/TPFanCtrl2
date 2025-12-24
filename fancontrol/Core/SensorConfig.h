@@ -82,6 +82,7 @@ struct ThermalConfig {
     
     // Hardware settings
     bool isDualFan;
+    int fanSpeedAddr;
     bool useBiasedTemps;
     bool noExtSensor;           // Don't read extended sensors (0xC0-0xC3)
     

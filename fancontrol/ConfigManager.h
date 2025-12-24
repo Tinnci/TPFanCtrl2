@@ -45,6 +45,7 @@ public:
     int MinimizeToSysTray = 1;
     int MinimizeOnClose = 1;
     int UseTWR = 0;
+    int DualFan = 0;
     std::string Language = "en";
 
     // PID Settings

@@ -18,6 +18,8 @@ ThermalManager::ThermalManager(
     
     // Create fan controller
     m_fanController = std::make_unique<FanController>(m_ecManager);
+    m_fanController->SetDualFanMode(m_config.isDualFan);
+    m_fanController->SetFanSpeedAddr(m_config.fanSpeedAddr);
     
     // Apply initial sensor configuration
     for (const auto& sensor : m_config.sensors) {
@@ -120,6 +122,12 @@ void ThermalManager::UpdateConfig(const ThermalConfig& config) {
         m_config = config;
     }
     
+    // Reapply hardware settings
+    if (m_fanController) {
+        m_fanController->SetDualFanMode(config.isDualFan);
+        m_fanController->SetFanSpeedAddr(config.fanSpeedAddr);
+    }
+
     // Reapply sensor configuration
     for (const auto& sensor : config.sensors) {
         m_sensorManager->SetOffset(sensor.index, sensor.offset, sensor.hystMin, sensor.hystMax);
@@ -212,40 +220,73 @@ bool ThermalManager::UpdateSensors() {
         noExtSensor = m_config.noExtSensor;
     }
     
-    // Read sensors
-    if (!m_sensorManager->UpdateSensors(useBiasedTemps, noExtSensor, false)) {
+    // Legacy-style double sampling and retry logic to ensure reliable EC communication
+    int numTries = 10;
+    int sleepTicks = 200;
+    
+    bool success = false;
+    int fan1 = 0, fan2 = 0;
+    int maxTemp = 0, maxIndex = 0;
+    std::vector<SensorReading> readings;
+    int currentLevel = 0;
+
+    for (int i = 0; i < numTries; i++) {
+        // Sample 1
+        if (!m_sensorManager->UpdateSensors(useBiasedTemps, noExtSensor, false) ||
+            !m_fanController->RefreshCurrentLevel()) {
+            Log(LogLevel::Warning, "Cycle sample1 failed: sensor or fan level read error");
+            std::this_thread::sleep_for(std::chrono::milliseconds(sleepTicks));
+            continue;
+        }
+        int level1 = m_fanController->GetCurrentLevel();
+
+        // Sample 2
+        if (!m_sensorManager->UpdateSensors(useBiasedTemps, noExtSensor, false) ||
+            !m_fanController->RefreshCurrentLevel()) {
+            Log(LogLevel::Warning, "Cycle sample2 failed: sensor or fan level read error");
+            std::this_thread::sleep_for(std::chrono::milliseconds(sleepTicks));
+            continue;
+        }
+        int level2 = m_fanController->GetCurrentLevel();
+
+        // Match criteria (legacy only matched FanCtrl)
+        if (level1 == level2) {
+            // Success! Now get the rest of the data
+            m_fanController->GetFanSpeeds(fan1, fan2);
+            currentLevel = level2;
+            
+            std::string ignoreList;
+            {
+                std::lock_guard<std::mutex> lock(m_configMutex);
+                ignoreList = m_config.ignoreList;
+            }
+            maxTemp = m_sensorManager->GetMaxTemp(maxIndex, ignoreList);
+            
+            readings.clear();
+            readings.reserve(SensorAddresses::TOTAL_COUNT);
+            for (int j = 0; j < SensorAddresses::TOTAL_COUNT; j++) {
+                const auto& sensor = m_sensorManager->GetSensor(j);
+                readings.push_back({
+                    .index = j,
+                    .address = sensor.addr,
+                    .name = sensor.name,
+                    .rawTemp = sensor.rawTemp,
+                    .biasedTemp = sensor.biasedTemp,
+                    .weight = sensor.weight,
+                    .isAvailable = sensor.isAvailable
+                });
+            }
+            success = true;
+            break;
+        }
+        
+        std::this_thread::sleep_for(std::chrono::milliseconds(sleepTicks));
+    }
+
+    if (!success) {
+        Log(LogLevel::Error, "UpdateSensors failed after retries");
         return false;
     }
-    
-    // Get max temperature
-    int maxIndex = 0;
-    std::string ignoreList;
-    {
-        std::lock_guard<std::mutex> lock(m_configMutex);
-        ignoreList = m_config.ignoreList;
-    }
-    int maxTemp = m_sensorManager->GetMaxTemp(maxIndex, ignoreList);
-    
-    // Build sensor readings
-    std::vector<SensorReading> readings;
-    readings.reserve(SensorAddresses::TOTAL_COUNT);
-    
-    for (int i = 0; i < SensorAddresses::TOTAL_COUNT; i++) {
-        const auto& sensor = m_sensorManager->GetSensor(i);
-        readings.push_back({
-            .index = i,
-            .address = sensor.addr,
-            .name = sensor.name,
-            .rawTemp = sensor.rawTemp,
-            .biasedTemp = sensor.biasedTemp,
-            .weight = sensor.weight,
-            .isAvailable = sensor.isAvailable
-        });
-    }
-    
-    // Get fan speeds
-    int fan1 = 0, fan2 = 0;
-    m_fanController->GetFanSpeeds(fan1, fan2);
     
     // Update state
     int availableCount = 0;
@@ -259,7 +300,8 @@ bool ThermalManager::UpdateSensors() {
         m_state.maxTempIndex = maxIndex;
         m_state.fanState.fan1Speed = fan1;
         m_state.fanState.fan2Speed = fan2;
-        m_state.fanState.currentLevel = m_fanController->GetCurrentLevel();
+        m_state.fanState.currentLevel = currentLevel;
+        m_state.fanState.isDualFan = m_fanController->IsDualFanActive();
         m_state.currentMode = m_mode.load();
         m_state.smartProfileIndex = m_smartProfile.load();
         m_state.isOperational = true;
@@ -311,12 +353,7 @@ void ThermalManager::ApplyControl() {
 void ThermalManager::ApplyBIOSMode() {
     // Set fan to BIOS control (0x80)
     if (m_fanController->GetCurrentLevel() != 0x80) {
-        bool isDualFan;
-        {
-            std::lock_guard<std::mutex> lock(m_configMutex);
-            isDualFan = m_config.isDualFan;
-        }
-        m_fanController->SetFanLevel(0x80, isDualFan);
+        m_fanController->SetFanLevel(0x80);
     }
 }
 
@@ -366,13 +403,7 @@ void ThermalManager::ApplyManualMode() {
         return;
     }
     
-    bool isDualFan;
-    {
-        std::lock_guard<std::mutex> lock(m_configMutex);
-        isDualFan = m_config.isDualFan;
-    }
-    
-    m_fanController->SetFanLevel(level, isDualFan);
+    m_fanController->SetFanLevel(level);
 }
 
 void ThermalManager::ApplyPIDMode(float dt) {

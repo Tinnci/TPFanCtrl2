@@ -22,8 +22,10 @@ public:
     std::recursive_timed_mutex& GetMutex() { return m_mutex; }
 
 private:
-    bool WaitForFlags(USHORT port, char flags, bool onoff = false, int timeout = 1000);
+    bool WaitForFlags(USHORT port, char flags, bool onoff = false, int timeout = 2000);
     void SwitchECType();
+    void ApplyECType(ECType type);
+    bool ProbeECType(ECType type, int timeoutMs = 100);
 
     std::shared_ptr<IIOProvider> m_io;
     int m_ctrlPort;

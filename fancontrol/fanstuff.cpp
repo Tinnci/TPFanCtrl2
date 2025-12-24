@@ -290,7 +290,7 @@ FANCONTROL::SetFan(const char* source, int fanctrl, bool final) {
 		if (!this->LockECAccess()) return false;
 
 		// Use modernized FanController
-		ok = m_fanController->SetFanLevel(fanctrl, true); // Assuming dual fan as per original code
+		ok = m_fanController->SetFanLevel(fanctrl);
 		
 		// Sync back the state
 		this->State.FanCtrl = m_fanController->GetCurrentFanCtrl();
