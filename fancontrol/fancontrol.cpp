@@ -439,91 +439,63 @@ FANCONTROL::DlgProc(HWND
 
 	switch (msg) {
 	case WM_HOTKEY:
+	{
+		// Helper lambda to set mode and trigger data refresh
+		auto SetModeAndRefresh = [this](int mode) {
+			this->ModeToDialog(mode);
+			::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0);
+		};
+
 		switch (mp1) {
-
-		case 1:
-			this->ModeToDialog(1);
-			::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0);
+		case 1: case 2: case 3:
+			// Direct mode selection (1=BIOS, 2=Smart, 3=Manual)
+			SetModeAndRefresh((int)mp1);
 			break;
 
-		case 2:
-			this->ModeToDialog(2);
-			::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0);
-			break;
-
-		case 3:
-			this->ModeToDialog(3);
-			::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0);
-			break;
-
-		case 4:
+		case 4: // Smart Mode 1
 			this->ModeToDialog(2);
 			if (this->IndSmartLevel == 1) {
 				this->Trace("Activation of Fan Control Profile 'Smart Mode 1'");
 			}
 			this->IndSmartLevel = 0;
-			::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0L);
+			::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0);
 			break;
 
-		case 5:
+		case 5: // Smart Mode 2
 			this->ModeToDialog(2);
 			if (this->IndSmartLevel == 0) {
 				this->Trace("Activation of Fan Control Profile 'Smart Mode 2'");
 			}
 			this->IndSmartLevel = 1;
-			::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0L);
+			::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0);
 			break;
 
-		case 6:
-			if (this->CurrentMode > 1) {
-				this->ModeToDialog(1);
-				::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0L);
-			}
-
-			if (this->CurrentMode == 1) {
-				this->ModeToDialog(2);
-				::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0L);
-			}
+		case 6: // Toggle BIOS <-> Smart
+			SetModeAndRefresh(this->CurrentMode > 1 ? 1 : 2);
 			break;
 
-		case 7:
-			if (this->CurrentMode > 1) {
-				this->ModeToDialog(1);
-				::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0L);
-			}
-			if (this->CurrentMode == 1) {
-				this->ModeToDialog(3);
-				::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0L);
-			}
+		case 7: // Toggle BIOS <-> Manual
+			SetModeAndRefresh(this->CurrentMode > 1 ? 1 : 3);
 			break;
 
-		case 8:
-			if (this->CurrentMode < 3) {
-				this->ModeToDialog(3);
-				::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0L);
-			}
-			if (this->CurrentMode == 3) {
-				this->ModeToDialog(2);
-				::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0L);
-			}
+		case 8: // Toggle Manual <-> Smart
+			SetModeAndRefresh(this->CurrentMode < 3 ? 3 : 2);
 			break;
 
-		case 9:
+		case 9: // Toggle Smart Mode 1 <-> 2
 			this->ModeToDialog(2);
-			switch (IndSmartLevel) {
-			case 0:
+			if (IndSmartLevel == 0) {
 				this->Trace("Activation of Fan Control Profile 'Smart Mode 2'");
 				this->IndSmartLevel = 1;
-				::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0L);
-				break;
-			case 1:
+			} else {
 				this->Trace("Activation of Fan Control Profile 'Smart Mode 1'");
 				this->IndSmartLevel = 0;
-				::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0L);
-				break;
 			}
+			::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0);
 			break;
 		}
+		break;
+	}
 
 	case WM_INITDIALOG:
 		// placing code here will NOT work!
