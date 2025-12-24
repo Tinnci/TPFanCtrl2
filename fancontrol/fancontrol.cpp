@@ -20,6 +20,7 @@
 #include "taskbartexticon.h"
 #include "sysinfoapi.h"
 #include "TVicPortProvider.h"
+#include "DlgProcHandlers.h"
 
 
 DEFINE_GUID(GUID_LIDSWITCH_STATE_CHANGE,
@@ -447,12 +448,14 @@ FANCONTROL::DlgProc(HWND
 		};
 
 		switch (mp1) {
-		case 1: case 2: case 3:
+		case DlgHandlers::HotkeyID::SetBIOS:
+		case DlgHandlers::HotkeyID::SetSmart:
+		case DlgHandlers::HotkeyID::SetManual:
 			// Direct mode selection (1=BIOS, 2=Smart, 3=Manual)
 			SetModeAndRefresh((int)mp1);
 			break;
 
-		case 4: // Smart Mode 1
+		case DlgHandlers::HotkeyID::SmartMode1:
 			this->ModeToDialog(2);
 			if (this->IndSmartLevel == 1) {
 				this->Trace("Activation of Fan Control Profile 'Smart Mode 1'");
@@ -461,7 +464,7 @@ FANCONTROL::DlgProc(HWND
 			::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0);
 			break;
 
-		case 5: // Smart Mode 2
+		case DlgHandlers::HotkeyID::SmartMode2:
 			this->ModeToDialog(2);
 			if (this->IndSmartLevel == 0) {
 				this->Trace("Activation of Fan Control Profile 'Smart Mode 2'");
@@ -470,19 +473,19 @@ FANCONTROL::DlgProc(HWND
 			::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0);
 			break;
 
-		case 6: // Toggle BIOS <-> Smart
+		case DlgHandlers::HotkeyID::ToggleBIOSSmart:
 			SetModeAndRefresh(this->CurrentMode > 1 ? 1 : 2);
 			break;
 
-		case 7: // Toggle BIOS <-> Manual
+		case DlgHandlers::HotkeyID::ToggleBIOSManual:
 			SetModeAndRefresh(this->CurrentMode > 1 ? 1 : 3);
 			break;
 
-		case 8: // Toggle Manual <-> Smart
+		case DlgHandlers::HotkeyID::ToggleManualSmart:
 			SetModeAndRefresh(this->CurrentMode < 3 ? 3 : 2);
 			break;
 
-		case 9: // Toggle Smart Mode 1 <-> 2
+		case DlgHandlers::HotkeyID::ToggleSmartModes:
 			this->ModeToDialog(2);
 			if (IndSmartLevel == 0) {
 				this->Trace("Activation of Fan Control Profile 'Smart Mode 2'");
@@ -506,7 +509,7 @@ FANCONTROL::DlgProc(HWND
 		switch (mp1)
 		{
 
-		case 1: // update fan state
+		case DlgHandlers::TimerID::UpdateFanState:
 			::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0);
 			if (m_configManager->Log2csv == 1)
 			{
@@ -514,7 +517,7 @@ FANCONTROL::DlgProc(HWND
 			}
 			break;
 
-		case 2: // update window title
+		case DlgHandlers::TimerID::UpdateWindowTitle:
 			if (this->CurrentMode == 3 && this->MaxTemp > m_configManager->ManModeExit) {
 				this->ModeToDialog(2);
 				::PostMessage(this->hwndDialog, WM__GETDATA, 0, 0);
@@ -540,18 +543,18 @@ FANCONTROL::DlgProc(HWND
 
 				if (this->CurrentModeFromDialog() == 1)
 				{
-					icon = 10;    // gray
+					icon = DlgHandlers::IconColor::Gray;
 				}
 				else
 				{
-					icon = 11;    // blue
+					icon = DlgHandlers::IconColor::Blue;
 					for (
 						size_t i = 0;
 						i < m_configManager->IconLevels.size(); i++)
 					{
 						if (this->MaxTemp >= m_configManager->IconLevels[i])
 						{
-							icon = 12 + (int)i;    // yellow, orange, red
+							icon = DlgHandlers::IconColor::Green + (int)i;
 						}
 					}
 				}
@@ -572,7 +575,7 @@ FANCONTROL::DlgProc(HWND
 			}
 			break;
 
-		case 3: // update vista icon
+		case DlgHandlers::TimerID::NamedPipeSession:
 		//--- Named Pipe Session (Refactored) ---
 		{
 			// Close pipes if previous write failed but was previously successful
@@ -636,7 +639,7 @@ FANCONTROL::DlgProc(HWND
 		//--- End Named Pipe Session ---
 			break;
 
-		case 4: // renew tempicon
+		case DlgHandlers::TimerID::RenewTempIcon:
 			if (m_configManager->ShowTempIcon && m_configManager->ReIcCycle) {
 				this->RemoveTextIcons();
 				this->ProcessTextIcons();
