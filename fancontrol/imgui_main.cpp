@@ -911,8 +911,7 @@ int main(int argc, char** argv) {
 
                     // --- Right: Control & Logs ---
                     // NoScrollbar: Fixed content, should not scroll
-                    // Height increased to prevent button overlap
-                    ImGui::BeginChild("ControlPanel", ImVec2(0, 270 * dpiScale), true, 
+                    ImGui::BeginChild("ControlPanel", ImVec2(0, 220 * dpiScale), true, 
                         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
                     ImGui::TextColored(Theme::Primary(), "%s %s", ICON_FAN, _TR("SECTION_CONTROL"));
                     ImGui::Separator();
@@ -977,14 +976,7 @@ int main(int argc, char** argv) {
                             g_UIState.PID.Kd = 0.2f;
                         }
                     }
-                    
-                    // Minimize button - positioned at bottom with safe margin
-                    float minBtnHeight = 35 * dpiScale;
-                    float bottomMargin = minBtnHeight + 15 * dpiScale;  // Button height + padding
-                    ImGui::SetCursorPosY(ImGui::GetWindowHeight() - bottomMargin);
-                    if (ImGui::Button(_TR("BTN_MINIMIZE"), ImVec2(-1, minBtnHeight))) {
-                        ::ShowWindow(hwnd, SW_HIDE);
-                    }
+                    // NOTE: Minimize button removed - use window close with "Minimize to tray on close" setting
                     ImGui::EndChild();
 
                     ImGui::BeginChild("LogsPanel", ImVec2(0, 0), true);
