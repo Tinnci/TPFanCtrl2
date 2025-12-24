@@ -98,28 +98,6 @@ struct SmoothValue {
 #define ICON_CHART (const char*)u8"\uE9D9" // Activity Feed (动态折线图)
 #define ICON_LOG   (const char*)u8"\uE81C" // List (列表/日志)
 
-struct UIState {
-    std::vector<SensorData> Sensors;
-    std::map<std::string, SmoothValue> SmoothTemps;
-    std::map<std::string, std::deque<float>> TempHistory;
-    int Fan1Speed = 0;
-    int Fan2Speed = 0;
-    time_t LastUpdate = 0;
-    
-    // Control Settings
-    ControlAlgorithm Algorithm = ControlAlgorithm::Step;
-    PIDSettings PID;
-    int ManualLevel = 0;
-    int Mode = 2; // 0: BIOS, 1: Manual, 2: Smart
-    int SelectedSettingsTab = 0; // 0: General, 1: Hardware, 2: PID, 3: Sensors
-    
-    std::vector<float> SensorWeights;
-    std::vector<std::string> SensorNames;
-
-    AutotuneContext Autotune;
-    
-    std::mutex Mutex;
-} g_UIState;
 
 // --- Vulkan Globals ---
 static VkAllocationCallbacks*   g_Allocator = nullptr;
@@ -137,6 +115,7 @@ static int                      g_SwapChainResizeWidth = 0;
 static int                      g_SwapChainResizeHeight = 0;
 
 static std::shared_ptr<ConfigManager> g_Config;
+static int g_SelectedSettingsTab = 0;
 
 // --- Core Library Migration ---
 // ThermalManager and UIAdapter for the new architecture
@@ -448,164 +427,7 @@ void SetupVulkanWindow(ImGui_ImplVulkanH_Window* wd, VkSurfaceKHR surface, int w
     ImGui_ImplVulkanH_CreateOrResizeWindow(g_Instance, g_PhysicalDevice, g_Device, wd, g_QueueFamily, g_Allocator, width, height, g_MinImageCount, 0);
 }
 
-// --- Hardware Worker Thread ---
-void HardwareWorker(std::stop_token stopToken,
-                    std::shared_ptr<ConfigManager> config, 
-                    std::shared_ptr<SensorManager> sensors, 
-                    std::shared_ptr<FanController> fans,
-                    HWND hWnd) {
-    int fanCounter = 0;
-    int sensorCounter = 0;
-    int trayCounter = 0;
-    int maxTemp = 0;
 
-    while (!stopToken.stop_requested()) {
-        // 1. Fan Speed Polling (Every 1s = 10 * 100ms)
-        if (fanCounter <= 0) {
-            int f1 = 0, f2 = 0;
-            fans->GetFanSpeeds(f1, f2);
-            {
-                std::lock_guard<std::mutex> lock(g_UIState.Mutex);
-                g_UIState.Fan1Speed = f1;
-                g_UIState.Fan2Speed = f2;
-            }
-            fanCounter = 10;
-        }
-
-        // 2. Sensor Polling (Every 'Cycle' seconds)
-        if (sensorCounter <= 0) {
-            if (!sensors->UpdateSensors(config->ShowBiasedTemps, config->NoExtSensor, config->UseTWR)) {
-                spdlog::warn("Failed to update sensors from EC.");
-            }
-            
-            int maxIdx = 0;
-            maxTemp = sensors->GetMaxTemp(maxIdx, config->IgnoreSensors);
-            
-            // Sync to UI State
-            {
-                std::lock_guard<std::mutex> lock(g_UIState.Mutex);
-                g_UIState.Sensors = sensors->GetSensors();
-                g_UIState.LastUpdate = time(nullptr);
-                for (const auto& s : g_UIState.Sensors) {
-                    // Update smooth animation target
-                    if (s.isAvailable && s.rawTemp > 0 && s.rawTemp < 128) {
-                        g_UIState.SmoothTemps[s.name].Target = (float)s.rawTemp;
-                    }
-
-                    // Update history - ALWAYS push a value to keep timelines synchronized
-                    // If sensor is not available, we don't push anything to avoid cluttering the map
-                    if (!s.isAvailable) continue;
-
-                    auto& history = g_UIState.TempHistory[s.name];
-                    
-                    float valToPush = (float)s.rawTemp;
-                    // If value is clearly invalid (0 or 128), use the last known value to avoid spikes
-                    if ((s.rawTemp <= 0 || s.rawTemp >= 128) && !history.empty()) {
-                        valToPush = history.back();
-                    }
-
-                    history.push_back(valToPush);
-                    if (history.size() > 300) history.pop_front();
-                }
-            }
-
-            sensorCounter = (config->Cycle > 0 ? config->Cycle : 1) * 10;
-        }
-
-        // 3. Control Logic (Every 100ms for maximum responsiveness)
-        {
-            std::lock_guard<std::mutex> lock(g_UIState.Mutex);
-
-            // --- CRITICAL SAFETY NET ---
-            if (maxTemp >= 90 && maxTemp < 128) {
-                // If temperature is dangerously high, force BIOS control
-                fans->SetFanLevels(0x80, 0x80);
-            }
-            else if (g_UIState.Autotune.Stage != AutotuneStep::Idle && g_UIState.Autotune.Stage != AutotuneStep::Success && g_UIState.Autotune.Stage != AutotuneStep::Failed) {
-                // PID Autotune Logic (Relay Method)
-                float currentTemp = (float)maxTemp;
-                float target = g_UIState.PID.targetTemp;
-                
-                // Relay control
-                if (currentTemp > target) {
-                    fans->SetFanLevel(7); // Max
-                } else {
-                    if (currentTemp < target - 2.0f)
-                        fans->SetFanLevel(0); // Off
-                }
-                
-                // Detection of peaks and troughs
-                if (g_UIState.Autotune.LastTemp > 0) {
-                    if (g_UIState.Autotune.Rising && currentTemp < g_UIState.Autotune.LastTemp - 0.1f) {
-                        // Peak found
-                        if (g_UIState.Autotune.CyclesCount < 10) {
-                            g_UIState.Autotune.Peaks[g_UIState.Autotune.CyclesCount] = g_UIState.Autotune.CurrentMax;
-                            g_UIState.Autotune.PeakTimes[g_UIState.Autotune.CyclesCount] = (float)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count() / 1000.0f;
-                        }
-                        g_UIState.Autotune.Rising = false;
-                        g_UIState.Autotune.CurrentMin = currentTemp;
-                    } else if (!g_UIState.Autotune.Rising && currentTemp > g_UIState.Autotune.LastTemp + 0.1f) {
-                        // Trough found
-                        if (g_UIState.Autotune.CyclesCount < 10) {
-                            g_UIState.Autotune.Troughs[g_UIState.Autotune.CyclesCount] = g_UIState.Autotune.CurrentMin;
-                            g_UIState.Autotune.TroughTimes[g_UIState.Autotune.CyclesCount] = (float)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count() / 1000.0f;
-                            g_UIState.Autotune.CyclesCount++;
-                        }
-                        g_UIState.Autotune.Rising = true;
-                        g_UIState.Autotune.CurrentMax = currentTemp;
-                        
-                        if (g_UIState.Autotune.CyclesCount >= 4) {
-                            // Calculate Z-N Parameters
-                            float sumA = 0, sumP = 0;
-                            for (int i = 1; i < 4; i++) {
-                                sumA += (g_UIState.Autotune.Peaks[i] - g_UIState.Autotune.Troughs[i]);
-                                sumP += (g_UIState.Autotune.PeakTimes[i] - g_UIState.Autotune.PeakTimes[i-1]);
-                            }
-                            float A = sumA / 3.0f;
-                            float P = sumP / 3.0f;
-                            float Ku = (4.0f * 100.0f) / (3.14159f * A);
-                            
-                            // No-overshoot parameters (conservative)
-                            g_UIState.PID.Kp = 0.2f * Ku;
-                            float Ti = 0.5f * P;
-                            float Td = 0.33f * P;
-                            g_UIState.PID.Ki = g_UIState.PID.Kp / Ti;
-                            g_UIState.PID.Kd = g_UIState.PID.Kp * Td;
-                            
-                            g_UIState.Autotune.Stage = AutotuneStep::Success;
-                        }
-                    }
-                }
-                
-                if (currentTemp > g_UIState.Autotune.CurrentMax) g_UIState.Autotune.CurrentMax = currentTemp;
-                if (currentTemp < g_UIState.Autotune.CurrentMin) g_UIState.Autotune.CurrentMin = currentTemp;
-                g_UIState.Autotune.LastTemp = currentTemp;
-
-            } else if (g_UIState.Mode == 0) { // BIOS
-                fans->SetFanLevels(0x80, 0x80);
-            } else if (g_UIState.Mode == 1) { // Manual
-                fans->SetFanLevel(g_UIState.ManualLevel);
-            } else if (g_UIState.Mode == 2) { // Smart
-                if (g_UIState.Algorithm == ControlAlgorithm::Step) {
-                    fans->UpdateSmartControl(maxTemp, config->SmartLevels1);
-                } else {
-                    fans->UpdatePIDControl((float)maxTemp, g_UIState.PID, 0.1f);
-                }
-            }
-        }
-
-        // 4. Tray Update (Every 1s)
-        if (trayCounter <= 0) {
-            UpdateTrayIcon(hWnd, maxTemp, g_UIState.Fan1Speed);
-            trayCounter = 10;
-        }
-        trayCounter--;
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        fanCounter--;
-        sensorCounter--;
-    }
-}
 
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -640,24 +462,6 @@ int main(int argc, char** argv) {
     g_Config->LoadConfig("TPFanCtrl2.ini");
     I18nManager::Get().SetLanguage(g_Config->Language);
 
-    // Sync UI State with Config
-    {
-        std::lock_guard<std::mutex> lock(g_UIState.Mutex);
-        g_UIState.Mode = g_Config->ActiveMode;
-        g_UIState.ManualLevel = g_Config->ManFanSpeed;
-        g_UIState.Algorithm = (ControlAlgorithm)g_Config->ControlAlgorithm;
-        g_UIState.PID.targetTemp = g_Config->PID_Target;
-        g_UIState.PID.Kp = g_Config->PID_Kp;
-        g_UIState.PID.Ki = g_Config->PID_Ki;
-        g_UIState.PID.Kd = g_Config->PID_Kd;
-
-        g_UIState.SensorWeights.resize(16);
-        g_UIState.SensorNames.resize(16);
-        for (int i = 0; i < 16; i++) {
-            g_UIState.SensorWeights[i] = g_Config->SensorWeights[i];
-            g_UIState.SensorNames[i] = g_Config->SensorNames[i];
-        }
-    }
 
     // Initialize Hardware Driver (TVicPort)
     spdlog::info("Initializing TVicPort driver...");
@@ -701,13 +505,9 @@ int main(int argc, char** argv) {
     ::RegisterClassExW(&wc);
     HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"TPFanCtrl2 - Vulkan Modernized", WS_OVERLAPPEDWINDOW, 100, 100, 1100, 850, nullptr, nullptr, wc.hInstance, nullptr);
 
-    // Start Hardware Thread with jthread (LEGACY - will be replaced by ThermalManager)
-    std::jthread hwThread(HardwareWorker, g_Config, sensorManager, fanController, hwnd);
-
     // === Core Library Migration ===
-    // Initialize ThermalManager and UIAdapter for parallel validation
-    // The HardwareWorker above still controls fans; ThermalManager is read-only for now
-    spdlog::info("Initializing Core::ThermalManager for validation...");
+    // Initialize ThermalManager and UIAdapter
+    spdlog::info("Initializing Core::ThermalManager...");
     try {
         Core::ThermalConfig thermalConfig = BuildThermalConfig(g_Config);
         
@@ -717,18 +517,15 @@ int main(int argc, char** argv) {
         // Create UIAdapter to bridge ThermalManager to UI
         g_UIAdapter = std::make_unique<Core::UIAdapter>(g_ThermalManager);
         
-        // Set tray update callback (for future use when fully migrated)
+        // Set tray update callback
         g_UIAdapter->SetTrayUpdateCallback([hwnd](int temp, int fanSpeed) {
-            // Note: Currently HardwareWorker handles tray updates
-            // This will be used when we fully migrate
-            spdlog::debug("[UIAdapter] Tray update: {}°C, {} RPM", temp, fanSpeed);
+            UpdateTrayIcon(hwnd, temp, fanSpeed);
         });
         
-        // NOTE: ThermalManager is NOT started yet to avoid conflicts with HardwareWorker
-        // Uncomment the following line to enable parallel validation (read-only):
-        // g_ThermalManager->Start();
+        // Start ThermalManager (takes over control from now on)
+        g_ThermalManager->Start();
         
-        spdlog::info("Core::ThermalManager initialized successfully (standby mode).");
+        spdlog::info("Core::ThermalManager started successfully.");
     } catch (const std::exception& e) {
         spdlog::error("Failed to initialize Core::ThermalManager: {}", e.what());
     }
@@ -890,12 +687,10 @@ int main(int argc, char** argv) {
         ImGui::NewFrame();
 
         float dt = ImGui::GetIO().DeltaTime;
-        {
-            std::lock_guard<std::mutex> lock(g_UIState.Mutex);
-            for (auto& pair : g_UIState.SmoothTemps) {
-                pair.second.Update(dt);
-            }
+        if (g_UIAdapter) {
+            g_UIAdapter->Update(dt);
         }
+        Core::UISnapshot uiSnapshot = g_UIAdapter ? g_UIAdapter->GetSnapshot() : Core::UISnapshot();
 
         ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
@@ -925,19 +720,10 @@ int main(int argc, char** argv) {
                     ImGui::EndChild();
                 };
 
-                int f1, f2, maxTemp = 0;
-                std::string maxName = "N/A";
-                {
-                    std::lock_guard<std::mutex> lock(g_UIState.Mutex);
-                    f1 = g_UIState.Fan1Speed;
-                    f2 = g_UIState.Fan2Speed;
-                    for (const auto& s : g_UIState.Sensors) {
-                        if (s.rawTemp > maxTemp && s.rawTemp < 128) {
-                            maxTemp = s.rawTemp;
-                            maxName = s.name;
-                        }
-                    }
-                }
+                int f1 = uiSnapshot.Fan1Speed;
+                int f2 = uiSnapshot.Fan2Speed;
+                int maxTemp = uiSnapshot.MaxTemp;
+                std::string maxName = uiSnapshot.MaxSensorName;
 
                 ImVec4 tempColor = Theme::GetTempColor((float)maxTemp);
 
@@ -968,12 +754,11 @@ int main(int argc, char** argv) {
                     if (ImGui::BeginChild("SensorsScroll", ImVec2(0, 280 * dpiScale), true)) {
                         ImGui::Columns(2, "SensorGrid", false);
                         {
-                            std::lock_guard<std::mutex> lock(g_UIState.Mutex);
-                            for (const auto& s : g_UIState.Sensors) {
+                            for (const auto& s : uiSnapshot.Sensors) {
                                 if (!s.isAvailable) continue;
                                 if (g_Config->IgnoreSensors.find(s.name) != std::string::npos) continue;
 
-                                float currentTemp = g_UIState.SmoothTemps[s.name].Current;
+                                float currentTemp = uiSnapshot.SmoothTemps.at(s.name).Current;
                                 float progress = currentTemp / 100.0f;
                                 ImVec4 color = Theme::GetTempColor(currentTemp);
 
@@ -999,8 +784,7 @@ int main(int argc, char** argv) {
                     ImGui::Separator();
                     ImGui::Spacing();
                     {
-                        std::lock_guard<std::mutex> lock(g_UIState.Mutex);
-                        DrawSimplePlot("TempPlot", g_UIState.TempHistory, 0, dpiScale);
+                        DrawSimplePlot("TempPlot", uiSnapshot.TempHistory, 0, dpiScale);
                     }
                     ImGui::EndChild();
 
@@ -1015,38 +799,40 @@ int main(int argc, char** argv) {
                     ImGui::Separator();
                     ImGui::Spacing();
                     
-                    auto drawSegmented = [&](const char* label, int id, int* current) {
-                        bool active = (*current == id);
+                    auto drawSegmented = [&](const char* label, int id, int current) {
+                        bool active = (current == id);
                         if (active) {
                             ImGui::PushStyleColor(ImGuiCol_Button, Theme::PrimaryTransparent(0.8f));
                             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Theme::PrimaryTransparent(0.9f));
                             ImGui::PushStyleColor(ImGuiCol_ButtonActive, Theme::Primary());
                         }
                         if (ImGui::Button(label, ImVec2(ImGui::GetContentRegionAvail().x / 3.2f, Theme::Layout::ButtonHeight * dpiScale))) {
-                            *current = id;
+                            if (g_UIAdapter) g_UIAdapter->SetMode(id);
                         }
                         if (active) ImGui::PopStyleColor(3);
                         ImGui::SameLine();
                     };
 
                     {
-                        std::lock_guard<std::mutex> lock(g_UIState.Mutex);
-                        drawSegmented(_TR("MODE_BIOS"), 0, &g_UIState.Mode);
-                        drawSegmented(_TR("MODE_MANUAL"), 1, &g_UIState.Mode);
-                        drawSegmented(_TR("MODE_SMART"), 2, &g_UIState.Mode);
+                        drawSegmented(_TR("MODE_BIOS"), 0, uiSnapshot.Mode);
+                        drawSegmented(_TR("MODE_MANUAL"), 1, uiSnapshot.Mode);
+                        drawSegmented(_TR("MODE_SMART"), 2, uiSnapshot.Mode);
                         ImGui::NewLine();
 
                         ImGui::Spacing();
-                        if (g_UIState.Mode == 1) {
+                        if (uiSnapshot.Mode == 1) {
                             ImGui::Text(_TR("LBL_MANUAL_LEVEL"));
-                            ImGui::SliderInt("##Level", &g_UIState.ManualLevel, 0, 7);
-                        } else if (g_UIState.Mode == 2) {
+                            int manualLevel = uiSnapshot.ManualLevel;
+                            if (ImGui::SliderInt("##Level", &manualLevel, 0, 7)) {
+                                if (g_UIAdapter) g_UIAdapter->SetManualLevel(manualLevel);
+                            }
+                        } else if (uiSnapshot.Mode == 2) {
                             ImGui::Text(_TR("LBL_ALGORITHM"));
                             const char* algoNames[] = { _TR("ALGO_STEP"), _TR("ALGO_PID") };
-                            int algoIdx = (int)g_UIState.Algorithm;
+                            int algoIdx = uiSnapshot.Algorithm;
                             ImGui::PushItemWidth(-1);
                             if (ImGui::Combo("##Algo", &algoIdx, algoNames, 2)) {
-                                g_UIState.Algorithm = (ControlAlgorithm)algoIdx;
+                                if (g_UIAdapter) g_UIAdapter->SetAlgorithm(algoIdx);
                             }
                             ImGui::PopItemWidth();
                         }
@@ -1057,21 +843,23 @@ int main(int argc, char** argv) {
                         float presetBtnHeight = 25 * dpiScale;
                         float presetBtnWidth = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) / 2.0f;
                         if (ImGui::Button(_TR("BTN_PRESET_SILENT"), ImVec2(presetBtnWidth, presetBtnHeight))) {
-                            g_UIState.Mode = 2; // Smart
-                            g_UIState.Algorithm = ControlAlgorithm::PID;
-                            g_UIState.PID.targetTemp = 70.0f;
-                            g_UIState.PID.Kp = 0.3f;
-                            g_UIState.PID.Ki = 0.005f;
-                            g_UIState.PID.Kd = 0.05f;
+                            if (g_UIAdapter) {
+                                g_UIAdapter->SetMode(2); // Smart
+                                g_UIAdapter->SetAlgorithm(1); // PID
+                                PIDSettings pid = uiSnapshot.PID;
+                                pid.targetTemp = 70.0f; pid.Kp = 0.3f; pid.Ki = 0.005f; pid.Kd = 0.05f;
+                                g_UIAdapter->SetPIDSettings(pid);
+                            }
                         }
                         ImGui::SameLine();
                         if (ImGui::Button(_TR("BTN_PRESET_PERF"), ImVec2(presetBtnWidth, presetBtnHeight))) {
-                            g_UIState.Mode = 2; // Smart
-                            g_UIState.Algorithm = ControlAlgorithm::PID;
-                            g_UIState.PID.targetTemp = 55.0f;
-                            g_UIState.PID.Kp = 0.8f;
-                            g_UIState.PID.Ki = 0.02f;
-                            g_UIState.PID.Kd = 0.2f;
+                            if (g_UIAdapter) {
+                                g_UIAdapter->SetMode(2); // Smart
+                                g_UIAdapter->SetAlgorithm(1); // PID
+                                PIDSettings pid = uiSnapshot.PID;
+                                pid.targetTemp = 55.0f; pid.Kp = 0.8f; pid.Ki = 0.02f; pid.Kd = 0.2f;
+                                g_UIAdapter->SetPIDSettings(pid);
+                            }
                         }
                     }
                     // NOTE: Minimize button removed - use window close with "Minimize to tray on close" setting
@@ -1104,14 +892,14 @@ int main(int argc, char** argv) {
                     ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
                 
                 auto drawSidebarItem = [&](int id, const char* icon, const char* labelKey) {
-                    bool selected = (g_UIState.SelectedSettingsTab == id);
+                    bool selected = (g_SelectedSettingsTab == id);
                     if (selected) ImGui::PushStyleColor(ImGuiCol_Header, Theme::PrimaryTransparent(0.2f));
                     if (selected) ImGui::PushStyleColor(ImGuiCol_Text, Theme::Primary());
                     
                     char buf[128];
                     sprintf_s(buf, "%s  %s", icon, _TR(labelKey));
                     if (ImGui::Selectable(buf, selected, 0, ImVec2(0, 40 * dpiScale))) {
-                        g_UIState.SelectedSettingsTab = id;
+                        g_SelectedSettingsTab = id;
                     }
                     
                     if (selected) ImGui::PopStyleColor(2);
@@ -1128,23 +916,26 @@ int main(int argc, char** argv) {
                     ImGui::SetCursorPosY(ImGui::GetWindowHeight() - 70 * dpiScale);
                     ImGui::Separator();
                     if (ImGui::Button(_TR("BTN_SAVE_ALL"), ImVec2(-1, 50 * dpiScale))) {
-                        {
-                            std::lock_guard<std::mutex> lock(g_UIState.Mutex);
-                            g_Config->ActiveMode = g_UIState.Mode;
-                            g_Config->ManFanSpeed = g_UIState.ManualLevel;
-                            g_Config->ControlAlgorithm = (int)g_UIState.Algorithm;
-                            g_Config->PID_Target = g_UIState.PID.targetTemp;
-                            g_Config->PID_Kp = g_UIState.PID.Kp;
-                            g_Config->PID_Ki = g_UIState.PID.Ki;
-                            g_Config->PID_Kd = g_UIState.PID.Kd;
+                        // Sync current UI state to g_Config
+                        g_Config->ActiveMode = uiSnapshot.Mode;
+                        g_Config->ManFanSpeed = uiSnapshot.ManualLevel;
+                        g_Config->ControlAlgorithm = uiSnapshot.Algorithm;
+                        g_Config->PID_Target = uiSnapshot.PID.targetTemp;
+                        g_Config->PID_Kp = uiSnapshot.PID.Kp;
+                        g_Config->PID_Ki = uiSnapshot.PID.Ki;
+                        g_Config->PID_Kd = uiSnapshot.PID.Kd;
 
-                            for (int i = 0; i < 16; i++) {
-                                g_Config->SensorWeights[i] = g_UIState.SensorWeights[i];
-                                g_Config->SensorNames[i] = g_UIState.SensorNames[i];
-                            }
+                        for (int i = 0; i < 16 && i < (int)g_Config->SensorWeights.size(); i++) {
+                            g_Config->SensorWeights[i] = uiSnapshot.SensorWeights[i];
+                            g_Config->SensorNames[i] = uiSnapshot.SensorNames[i];
                         }
+
                         if (g_Config->SaveConfig("TPFanCtrl2.ini")) {
                             g_AppLog.AddLog("[Config] Config saved successfully.");
+                            // Notify ThermalManager of new config
+                            if (g_ThermalManager) {
+                                g_ThermalManager->UpdateConfig(BuildThermalConfig(g_Config));
+                            }
                         } else {
                             g_AppLog.AddLog("[Config] Failed to save config.");
                         }
@@ -1159,7 +950,7 @@ int main(int argc, char** argv) {
                 ImGui::Indent(10 * dpiScale);
                 ImGui::Spacing();
 
-                if (g_UIState.SelectedSettingsTab == 0) {
+                if (g_SelectedSettingsTab == 0) {
                     // --- General Settings ---
                     ImGui::TextColored(Theme::Primary(), "%s", _TR("SIDEBAR_GENERAL"));
                     ImGui::Separator();
@@ -1212,7 +1003,7 @@ int main(int argc, char** argv) {
                         ImGui::TextDisabled("%s: 100ms (10Hz)", _TR("LBL_REFRESH_CTRL"));
                     }
                 }
-                else if (g_UIState.SelectedSettingsTab == 1) {
+                else if (g_SelectedSettingsTab == 1) {
                     // --- PID Tuning ---
                     ImGui::TextColored(Theme::Primary(), "%s", _TR("SIDEBAR_PID"));
                     ImGui::Separator();
@@ -1220,73 +1011,73 @@ int main(int argc, char** argv) {
 
                     ImGui::TextColored(Theme::TextMuted(), "%s", _TR("SETTING_PID"));
                     ImGui::Spacing();
-                    {
-                        std::lock_guard<std::mutex> lock(g_UIState.Mutex);
-                        float itemWidth = 200 * dpiScale;
-                        
-                        ImGui::BeginGroup();
-                        ImGui::Text("%s:", _TR("LBL_TARGET_TEMP")); ImGui::SameLine(150 * dpiScale);
-                        ImGui::PushItemWidth(itemWidth);
-                        ImGui::InputFloat("##Target", &g_UIState.PID.targetTemp, 1.0f, 5.0f, "%.1f\xC2\xB0\x43");
-                        ImGui::PopItemWidth();
+                    float itemWidth = 200 * dpiScale;
+                    PIDSettings pid = uiSnapshot.PID;
+                    
+                    ImGui::BeginGroup();
+                    ImGui::Text("%s:", _TR("LBL_TARGET_TEMP")); ImGui::SameLine(150 * dpiScale);
+                    ImGui::PushItemWidth(itemWidth);
+                    if (ImGui::InputFloat("##Target", &pid.targetTemp, 1.0f, 5.0f, "%.1f\xC2\xB0\x43")) {
+                        if (g_UIAdapter) g_UIAdapter->SetPIDSettings(pid);
+                    }
+                    ImGui::PopItemWidth();
 
-                        ImGui::Text("%s:", _TR("LBL_KP")); ImGui::SameLine(150 * dpiScale);
-                        ImGui::PushItemWidth(itemWidth);
-                        ImGui::InputFloat("##Kp", &g_UIState.PID.Kp, 0.01f, 0.1f, "%.3f");
-                        ImGui::PopItemWidth();
+                    ImGui::Text("%s:", _TR("LBL_KP")); ImGui::SameLine(150 * dpiScale);
+                    ImGui::PushItemWidth(itemWidth);
+                    if (ImGui::InputFloat("##Kp", &pid.Kp, 0.01f, 0.1f, "%.3f")) {
+                        if (g_UIAdapter) g_UIAdapter->SetPIDSettings(pid);
+                    }
+                    ImGui::PopItemWidth();
 
-                        ImGui::Text("%s:", _TR("LBL_KI")); ImGui::SameLine(150 * dpiScale);
-                        ImGui::PushItemWidth(itemWidth);
-                        ImGui::InputFloat("##Ki", &g_UIState.PID.Ki, 0.001f, 0.01f, "%.4f");
-                        ImGui::PopItemWidth();
+                    ImGui::Text("%s:", _TR("LBL_KI")); ImGui::SameLine(150 * dpiScale);
+                    ImGui::PushItemWidth(itemWidth);
+                    if (ImGui::InputFloat("##Ki", &pid.Ki, 0.001f, 0.01f, "%.4f")) {
+                        if (g_UIAdapter) g_UIAdapter->SetPIDSettings(pid);
+                    }
+                    ImGui::PopItemWidth();
 
-                        ImGui::Text("%s:", _TR("LBL_KD")); ImGui::SameLine(150 * dpiScale);
-                        ImGui::PushItemWidth(itemWidth);
-                        ImGui::InputFloat("##Kd", &g_UIState.PID.Kd, 0.01f, 0.1f, "%.3f");
-                        ImGui::PopItemWidth();
-                        ImGui::EndGroup();
+                    ImGui::Text("%s:", _TR("LBL_KD")); ImGui::SameLine(150 * dpiScale);
+                    ImGui::PushItemWidth(itemWidth);
+                    if (ImGui::InputFloat("##Kd", &pid.Kd, 0.01f, 0.1f, "%.3f")) {
+                        if (g_UIAdapter) g_UIAdapter->SetPIDSettings(pid);
+                    }
+                    ImGui::PopItemWidth();
+                    ImGui::EndGroup();
 
-                        // Radar Chart Visualization
-                        ImGui::SameLine(ImGui::GetWindowWidth() - 250 * dpiScale);
-                        ImGui::BeginGroup();
-                        ImGui::PushStyleColor(ImGuiCol_Text, Theme::TextMuted());
-                        ImGui::Text("%s", _TR("LBL_PID_VISUAL"));
-                        ImGui::PopStyleColor();
-                        DrawPIDRadarChart(g_UIState.PID, dpiScale);
-                        ImGui::EndGroup();
-                        
+                    // Radar Chart Visualization
+                    ImGui::SameLine(ImGui::GetWindowWidth() - 250 * dpiScale);
+                    ImGui::BeginGroup();
+                    ImGui::PushStyleColor(ImGuiCol_Text, Theme::TextMuted());
+                    ImGui::Text("%s", _TR("LBL_PID_VISUAL"));
+                    ImGui::PopStyleColor();
+                    DrawPIDRadarChart(pid, dpiScale);
+                    ImGui::EndGroup();
+                    
+                    ImGui::Spacing();
+                    ImGui::Separator();
+                    if (ImGui::Button(_TR("BTN_RESET_PID"), ImVec2( itemWidth, 35 * dpiScale))) {
+                        pid.targetTemp = 60.0f; pid.Kp = 0.5f; pid.Ki = 0.01f; pid.Kd = 0.1f;
+                        if (g_UIAdapter) g_UIAdapter->SetPIDSettings(pid);
+                    }
+
+                    ImGui::SameLine();
+                    if (uiSnapshot.Autotune.Stage == Core::AutotuneStep::Idle) {
+                        if (ImGui::Button(_TR("BTN_AUTOTUNE"), ImVec2(itemWidth, 35 * dpiScale))) {
+                            if (g_UIAdapter) g_UIAdapter->StartAutotune();
+                        }
+                    } else {
+                        if (ImGui::Button(_TR("BTN_STOP_AUTOTUNE"), ImVec2(itemWidth, 35 * dpiScale))) {
+                            if (g_UIAdapter) g_UIAdapter->CancelAutotune();
+                        }
+                    }
+
+                    if (uiSnapshot.Autotune.Stage != Core::AutotuneStep::Idle) {
                         ImGui::Spacing();
-                        ImGui::Separator();
-                        if (ImGui::Button(_TR("BTN_RESET_PID"), ImVec2( itemWidth, 35 * dpiScale))) {
-                            g_UIState.PID.targetTemp = 60.0f;
-                            g_UIState.PID.Kp = 0.5f;
-                            g_UIState.PID.Ki = 0.01f;
-                            g_UIState.PID.Kd = 0.1f;
-                        }
-
-                        ImGui::SameLine();
-                        if (g_UIState.Autotune.Stage == AutotuneStep::Idle) {
-                            if (ImGui::Button(_TR("BTN_AUTOTUNE"), ImVec2(itemWidth, 35 * dpiScale))) {
-                                g_UIState.Autotune.Stage = AutotuneStep::WaitingForHeat;
-                                g_UIState.Autotune.CyclesCount = 0;
-                                g_UIState.Autotune.Rising = true;
-                                g_UIState.Autotune.LastTemp = 0;
-                                g_UIState.Autotune.Status = "Warming up...";
-                            }
-                        } else {
-                            if (ImGui::Button(_TR("BTN_STOP_AUTOTUNE"), ImVec2(itemWidth, 35 * dpiScale))) {
-                                g_UIState.Autotune.Stage = AutotuneStep::Idle;
-                            }
-                        }
-
-                        if (g_UIState.Autotune.Stage != AutotuneStep::Idle) {
-                            ImGui::Spacing();
-                            ImGui::TextColored(ImVec4(1, 1, 0, 1), "Autotune Status: %s", 
-                                g_UIState.Autotune.Stage == AutotuneStep::WaitingForHeat ? _TR("AT_STATUS_WARMUP") :
-                                g_UIState.Autotune.Stage == AutotuneStep::Oscillating ? _TR("AT_STATUS_TUNING") :
-                                g_UIState.Autotune.Stage == AutotuneStep::Success ? _TR("AT_STATUS_SUCCESS") : _TR("AT_STATUS_FAILED"));
-                            ImGui::ProgressBar((float)g_UIState.Autotune.CyclesCount / 4.0f, ImVec2(-1, 20 * dpiScale));
-                        }
+                        ImGui::TextColored(ImVec4(1, 1, 0, 1), "Autotune Status: %s", 
+                            uiSnapshot.Autotune.Stage == Core::AutotuneStep::WaitingForHeat ? _TR("AT_STATUS_WARMUP") :
+                            uiSnapshot.Autotune.Stage == Core::AutotuneStep::Oscillating ? _TR("AT_STATUS_TUNING") :
+                            uiSnapshot.Autotune.Stage == Core::AutotuneStep::Success ? _TR("AT_STATUS_SUCCESS") : _TR("AT_STATUS_FAILED"));
+                        ImGui::ProgressBar((float)uiSnapshot.Autotune.CyclesCount / 4.0f, ImVec2(-1, 20 * dpiScale));
                     }
 
                     // --- PID Step Response Preview ---
@@ -1302,13 +1093,13 @@ int main(int argc, char** argv) {
                     static float lastKp = -1, lastKi = -1, lastKd = -1, lastTarget = -1;
                     
                     // Only recalculate if parameters changed
-                    if (lastKp != g_UIState.PID.Kp || lastKi != g_UIState.PID.Ki || 
-                        lastKd != g_UIState.PID.Kd || lastTarget != g_UIState.PID.targetTemp) {
+                    if (lastKp != pid.Kp || lastKi != pid.Ki || 
+                        lastKd != pid.Kd || lastTarget != pid.targetTemp) {
                         
-                        lastKp = g_UIState.PID.Kp;
-                        lastKi = g_UIState.PID.Ki;
-                        lastKd = g_UIState.PID.Kd;
-                        lastTarget = g_UIState.PID.targetTemp;
+                        lastKp = pid.Kp;
+                        lastKi = pid.Ki;
+                        lastKd = pid.Kd;
+                        lastTarget = pid.targetTemp;
                         
                         float simTemp = 70.0f;  // Simulated current temperature (spike)
                         float integral = 0.0f;
@@ -1340,7 +1131,7 @@ int main(int argc, char** argv) {
                     // Legend
                     ImGui::TextDisabled("0%% = %s, 100%% = %s", _TR("LBL_FAN_OFF"), _TR("LBL_FAN_MAX"));
                 }
-                else if (g_UIState.SelectedSettingsTab == 2) {
+                else if (g_SelectedSettingsTab == 2) {
                     // --- Sensors ---
                     ImGui::TextColored(Theme::Primary(), "%s", _TR("SIDEBAR_SENSORS"));
                     ImGui::Separator();
@@ -1351,7 +1142,6 @@ int main(int argc, char** argv) {
                     ImGui::TextDisabled("%s", _TR("DESC_SENSORS"));
                     ImGui::Spacing();
                     {
-                        std::lock_guard<std::mutex> lock(g_UIState.Mutex);
                         if (ImGui::BeginTable("SensorsTable", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable)) {
                             ImGui::TableSetupColumn("ID", ImGuiTableColumnFlags_WidthFixed, 30 * dpiScale);
                             ImGui::TableSetupColumn(_TR("LBL_SENSOR_ORIG"), ImGuiTableColumnFlags_WidthFixed, 80 * dpiScale);
@@ -1361,8 +1151,8 @@ int main(int argc, char** argv) {
                             ImGui::TableSetupColumn(_TR("LBL_SENSOR_TEMP"), ImGuiTableColumnFlags_WidthFixed, 60 * dpiScale);
                             ImGui::TableHeadersRow();
 
-                            for (int i = 0; i < (int)g_UIState.Sensors.size(); i++) {
-                                const auto& s = g_UIState.Sensors[i];
+                            for (int i = 0; i < (int)uiSnapshot.Sensors.size(); i++) {
+                                const auto& s = uiSnapshot.Sensors[i];
                                 ImGui::TableNextRow();
                                 
                                 // ID
@@ -1376,24 +1166,29 @@ int main(int argc, char** argv) {
                                 // Custom Name
                                 ImGui::TableNextColumn();
                                 char nameBuf[64];
-                                if (i < (int)g_UIState.SensorNames.size()) {
-                                    strcpy_s(nameBuf, g_UIState.SensorNames[i].c_str());
+                                if (i < (int)uiSnapshot.SensorNames.size()) {
+                                    strcpy_s(nameBuf, uiSnapshot.SensorNames[i].c_str());
                                 } else {
                                     nameBuf[0] = '\0';
                                 }
                                 ImGui::PushID(i);
                                 ImGui::PushItemWidth(-FLT_MIN);
                                 if (ImGui::InputText("##Name", nameBuf, sizeof(nameBuf))) {
-                                    if (i < (int)g_UIState.SensorNames.size())
-                                        g_UIState.SensorNames[i] = nameBuf;
+                                    // Normally we would push to UIAdapter, but names/weights are handled via Config Save for now
+                                    // To make it live, we should add methods to UIAdapter
+                                    if (i < (int)g_Config->SensorNames.size())
+                                        g_Config->SensorNames[i] = nameBuf;
                                 }
                                 ImGui::PopItemWidth();
 
                                 // Weight
                                 ImGui::TableNextColumn();
                                 ImGui::PushItemWidth(-FLT_MIN);
-                                if (i < (int)g_UIState.SensorWeights.size()) {
-                                    ImGui::InputFloat("##Weight", &g_UIState.SensorWeights[i], 0.1f, 0.5f, "%.1f");
+                                if (i < (int)g_Config->SensorWeights.size()) {
+                                    if (ImGui::InputFloat("##Weight", &g_Config->SensorWeights[i], 0.1f, 0.5f, "%.1f")) {
+                                        // Update thermal manager live
+                                        if (g_ThermalManager) g_ThermalManager->UpdateConfig(BuildThermalConfig(g_Config));
+                                    }
                                 }
                                 ImGui::PopItemWidth();
 

@@ -41,11 +41,11 @@
 
 **迁移任务**:
 - [x] 编写 Core 库单元测试 (14 tests passing)
-- [x] 在 `main()` 中创建 ThermalManager 和 UIAdapter 实例 (standby mode)
-- [ ] 用 UISnapshot 替换 g_UIState 的读取
-- [ ] 用 UIAdapter 方法替换 g_UIState 的写入
-- [ ] 移除 HardwareWorker 函数
-- [ ] 验证功能完整性
+- [x] 在 `main()` 中正式启用 ThermalManager 并移除旧线程
+- [x] 用 UISnapshot 替换 g_UIState 的读取
+- [x] 用 UIAdapter 方法替换 g_UIState 的写入
+- [x] 移除 HardwareWorker 函数和 g_UIState 全局变量
+- [x] 重新验证功能完整性
 
 **当前状态** (2025-12-24 12:41):
 - `ThermalManager` 和 `UIAdapter` 已初始化但处于待机模式
