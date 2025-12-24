@@ -49,6 +49,7 @@
 #include "TVicPort.h"
 #include "DynamicIcon.h"
 #include "I18nManager.h"
+#include "Theme.h"
 
 // --- Tray Constants ---
 #define WM_TRAYICON (WM_USER + 100)
@@ -756,41 +757,11 @@ int main(int argc, char** argv) {
         spdlog::error("CRITICAL: Could not load any icon font. Icons will appear as '?'");
     }
     
+    // Apply unified theme from Theme.h
     ImGui::StyleColorsDark();
     auto& style = ImGui::GetStyle();
-    style.ScaleAllSizes(dpiScale); // Scale UI elements (padding, spacing, etc.)
-    style.WindowRounding = 10.0f * dpiScale;
-    style.FrameRounding = 6.0f * dpiScale;
-    style.PopupRounding = 6.0f * dpiScale;
-    style.ScrollbarRounding = 12.0f * dpiScale;
-    style.GrabRounding = 6.0f * dpiScale;
-    style.ItemSpacing = ImVec2(12 * dpiScale, 10 * dpiScale);
-    style.WindowPadding = ImVec2(15 * dpiScale, 15 * dpiScale);
-    
-    // ThinkPad Modern Theme Colors
-    ImVec4 tpRed = ImVec4(0.89f, 0.12f, 0.16f, 1.0f);
-    ImVec4 tpRedHover = ImVec4(1.0f, 0.2f, 0.25f, 1.0f);
-    
-    style.Colors[ImGuiCol_WindowBg] = ImVec4(0.07f, 0.07f, 0.07f, 0.94f);
-    style.Colors[ImGuiCol_ChildBg] = ImVec4(0.12f, 0.12f, 0.12f, 0.5f);
-    style.Colors[ImGuiCol_Border] = ImVec4(0.2f, 0.2f, 0.2f, 0.5f);
-    style.Colors[ImGuiCol_FrameBg] = ImVec4(0.15f, 0.15f, 0.15f, 1.0f);
-    style.Colors[ImGuiCol_CheckMark] = tpRed;
-    style.Colors[ImGuiCol_SliderGrab] = tpRed;
-    style.Colors[ImGuiCol_SliderGrabActive] = tpRedHover;
-    style.Colors[ImGuiCol_Button] = ImVec4(0.2f, 0.2f, 0.2f, 1.0f);
-    style.Colors[ImGuiCol_ButtonHovered] = tpRed;
-    style.Colors[ImGuiCol_ButtonActive] = tpRedHover;
-    style.Colors[ImGuiCol_Header] = ImVec4(tpRed.x, tpRed.y, tpRed.z, 0.3f);
-    style.Colors[ImGuiCol_HeaderHovered] = ImVec4(tpRed.x, tpRed.y, tpRed.z, 0.5f);
-    style.Colors[ImGuiCol_HeaderActive] = tpRed;
-    style.Colors[ImGuiCol_Tab] = ImVec4(0.15f, 0.15f, 0.15f, 1.0f);
-    style.Colors[ImGuiCol_TabHovered] = tpRed;
-    style.Colors[ImGuiCol_TabActive] = tpRed;
-    style.Colors[ImGuiCol_TabUnfocused] = ImVec4(0.1f, 0.1f, 0.1f, 1.0f);
-    style.Colors[ImGuiCol_TabUnfocusedActive] = ImVec4(0.2f, 0.2f, 0.2f, 1.0f);
-    style.Colors[ImGuiCol_PlotHistogram] = tpRed;
-    style.Colors[ImGuiCol_Separator] = ImVec4(0.25f, 0.25f, 0.25f, 1.0f);
+    Theme::ApplyTheme(style, dpiScale);
+
 
     spdlog::info("Initializing Win32 backend...");
     ImGui_ImplWin32_Init(hwnd);
