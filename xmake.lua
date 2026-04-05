@@ -22,10 +22,14 @@ add_rules("mode.debug", "mode.release")
 set_languages("c++20")
 add_requires("spdlog")
 add_defines("WIN32", "_MBCS")
+
+-- Compiler flags: support both MSVC and Clang/Zig
 add_cxflags("/J", "/utf-8", {tools = "msvc"})
+add_cxflags("-funsigned-char", "-finput-charset=UTF-8", {tools = {"clang", "zig"}})
 
 if is_plat("windows") then
-    add_cxflags("/W4", {tools = "msvc"}) -- Enable strict warning level 4
+    add_cxflags("/W4", {tools = "msvc"})
+    add_cxflags("-Wall", "-Wextra", {tools = {"clang", "zig"}})
 end
 
 -- Target: TPFanCtrl2 (Main GUI App)
@@ -38,9 +42,11 @@ target("TPFanCtrl2")
     -- Set subsystem to Windows to hide console (use CONSOLE for debugging if needed)
     set_kind("binary")
     if is_mode("release") then
-        add_ldflags("/SUBSYSTEM:WINDOWS", "/ENTRY:mainCRTStartup", {force = true})
+        add_ldflags("/SUBSYSTEM:WINDOWS", "/ENTRY:mainCRTStartup", {force = true, tools = "msvc"})
+        add_ldflags("-Wl,/SUBSYSTEM:WINDOWS", "-Wl,/ENTRY:mainCRTStartup", {force = true, tools = {"clang", "zig"}})
     else
-        add_ldflags("/SUBSYSTEM:CONSOLE", {force = true})
+        add_ldflags("/SUBSYSTEM:CONSOLE", {force = true, tools = "msvc"})
+        add_ldflags("-Wl,/SUBSYSTEM:CONSOLE", {force = true, tools = {"clang", "zig"}})
     end
     
     -- Precompiled Header (Disable in CodeQL environment to avoid PCH issues)
@@ -49,7 +55,16 @@ target("TPFanCtrl2")
     end
     
     -- Source files
-    add_files("fancontrol/*.cpp")
+    add_files("fancontrol/Application.cpp")
+    add_files("fancontrol/ConfigManager.cpp")
+    add_files("fancontrol/ECManager.cpp")
+    add_files("fancontrol/SensorManager.cpp")
+    add_files("fancontrol/FanController.cpp")
+    add_files("fancontrol/TVicPortProvider.cpp")
+    add_files("fancontrol/I18nManager.cpp")
+    add_files("fancontrol/dynamicicon.cpp")
+    add_files("fancontrol/imgui_main.cpp")
+    add_files("fancontrol/_prec.cpp")
     add_files("fancontrol/Core/*.cpp")  -- Core library
     add_files("fancontrol/res/fancontrol.rc")
     add_files("fancontrol/res/app.manifest")
@@ -71,8 +86,12 @@ target("TPFanCtrl2")
         set_optimize("fastest")
         set_symbols("hidden")
         set_strip("all")
+        -- MSVC: Link Time Code Generation
         add_cxflags("/GL", {tools = "msvc"})
         add_ldflags("/LTCG", {tools = "msvc"})
+        -- Clang/Zig: Link Time Optimization
+        add_cxflags("-flto", {tools = {"clang", "zig"}})
+        add_ldflags("-flto", {tools = {"clang", "zig"}})
         add_vectorexts("sse2")
     end
 
@@ -83,7 +102,8 @@ target("logic_test")
     add_packages("gtest", "spdlog", "nlohmann_json")
     
     -- Console application
-    add_ldflags("/SUBSYSTEM:CONSOLE", {force = true})
+    add_ldflags("/SUBSYSTEM:CONSOLE", {force = true, tools = "msvc"})
+    add_ldflags("-Wl,/SUBSYSTEM:CONSOLE", {force = true, tools = {"clang", "zig"}})
     
     -- Source files (only logic components)
     add_files("tests/logic_test.cpp")
@@ -107,7 +127,8 @@ target("core_test")
     add_packages("gtest", "spdlog", "nlohmann_json")
     
     -- Console application
-    add_ldflags("/SUBSYSTEM:CONSOLE", {force = true})
+    add_ldflags("/SUBSYSTEM:CONSOLE", {force = true, tools = "msvc"})
+    add_ldflags("-Wl,/SUBSYSTEM:CONSOLE", {force = true, tools = {"clang", "zig"}})
     
     -- Source files
     add_files("tests/core_test.cpp")

@@ -145,6 +145,15 @@ private:
     // Configuration (protected by m_configMutex)
     ThermalConfig m_config;
     mutable std::mutex m_configMutex;
+    std::atomic<bool> m_configChanged{false};  // Signal when config needs re-caching
+    
+    // Cached config values for hot path (no lock needed to read)
+    struct CachedConfig {
+        int cycleMs{5000};
+        bool useBiasedTemps{false};
+        bool noExtSensor{false};
+        std::string ignoreList;
+    } m_cachedConfig;
     
     // Current state (protected by m_stateMutex)
     ThermalState m_state;

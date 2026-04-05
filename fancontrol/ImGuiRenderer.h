@@ -1,170 +1,128 @@
 #pragma once
 
-// ImGuiRenderer.h - Refactored UI rendering components
-// Extracted from imgui_main.cpp to reduce the size of main() function
-
 #include "imgui.h"
-#include "ConfigManager.h"
 #include "Theme.h"
 #include "I18nManager.h"
-#include "CommonTypes.h"
-#include <vector>
-#include <deque>
 #include <map>
-#include <mutex>
+#include <deque>
 #include <string>
 #include <format>
 
-// Forward declarations
-struct UIState;
-struct AppLog;
+// Translation helper macro (defined in imgui_main.cpp)
+#define _TR(key) I18nManager::Get().Translate(key)
 
-namespace ImGuiUI {
+namespace ImGuiRenderer {
 
-// ============================================================================
-// Dashboard Tab Components
-// ============================================================================
+/// Draw a simple line plot for temperature history
+/// @param label Plot identifier
+/// @param history Map of sensor name -> temperature history deque
+/// @param height Optional fixed height, 0 = auto
+/// @param dpiScale DPI scaling factor
+inline void DrawSimplePlot(const char* label, const std::map<std::string, std::deque<float>>& history, float height, float dpiScale) {
+    ImVec2 canvas_p0 = ImGui::GetCursorScreenPos();
+    ImVec2 canvas_sz = ImGui::GetContentRegionAvail();
+    if (canvas_sz.x < 50.0f) canvas_sz.x = 50.0f;
+    if (height > 0) canvas_sz.y = height;
+    ImVec2 canvas_p1 = ImVec2(canvas_p0.x + canvas_sz.x, canvas_p0.y + canvas_sz.y);
 
-// Draw a metric card with icon, label, value, and optional sub-value
-inline void DrawMetricCard(const char* icon, const char* label, const char* value,
-                          const char* subValue, ImVec4 color, float dpiScale) {
-    ImGui::BeginChild(label, ImVec2(0, Theme::Layout::CardHeight * dpiScale), true);
-    ImGui::TextColored(Theme::TextMuted(), "%s %s", icon, label);
-    ImGui::Spacing();
-    
-    ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]);
-    ImGui::TextColored(color, "%s", value);
-    ImGui::PopFont();
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    draw_list->AddRectFilled(canvas_p0, canvas_p1, IM_COL32(30, 30, 30, 255));
+    draw_list->AddRect(canvas_p0, canvas_p1, IM_COL32(100, 100, 100, 255));
 
-    if (subValue && subValue[0] != '\0') {
-        ImGui::SameLine();
-        ImGui::TextColored(Theme::TextDark(), "(%s)", subValue);
+    // Grid lines at 30, 50, 70, 90 degrees
+    float temps[] = { 30.0f, 50.0f, 70.0f, 90.0f };
+    for (float t : temps) {
+        float y = canvas_p1.y - (t / 100.0f) * canvas_sz.y;
+        draw_list->AddLine(ImVec2(canvas_p0.x, y), ImVec2(canvas_p1.x, y), IM_COL32(60, 60, 60, 255));
+        char buf[16]; 
+        snprintf(buf, 16, "%d", (int)t);
+        draw_list->AddText(ImVec2(canvas_p0.x + 5 * dpiScale, y - 15 * dpiScale), IM_COL32(150, 150, 150, 255), buf);
     }
-    ImGui::EndChild();
-}
 
-// Draw a segmented control button (mode selector)
-inline bool DrawSegmentedButton(const char* label, int id, int* current, float width, float dpiScale) {
-    bool active = (*current == id);
-    bool clicked = false;
-    
-    if (active) {
-        ImGui::PushStyleColor(ImGuiCol_Button, Theme::PrimaryTransparent(0.8f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Theme::PrimaryTransparent(0.9f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, Theme::Primary());
-    }
-    
-    if (ImGui::Button(label, ImVec2(width, Theme::Layout::ButtonHeight * dpiScale))) {
-        *current = id;
-        clicked = true;
-    }
-    
-    if (active) ImGui::PopStyleColor(3);
-    ImGui::SameLine();
-    
-    return clicked;
-}
+    // Plot lines for each sensor
+    int colorIdx = 0;
+    ImU32 colors[] = {
+        IM_COL32(0, 255, 255, 255),   // Cyan
+        IM_COL32(255, 165, 0, 255),   // Orange
+        IM_COL32(124, 252, 0, 255),   // LawnGreen
+        IM_COL32(255, 105, 180, 255), // HotPink
+        IM_COL32(173, 216, 230, 255)  // LightBlue
+    };
 
-// Draw a sidebar item for settings panel
-inline bool DrawSidebarItem(int id, int currentTab, const char* icon, const char* labelKey, float dpiScale) {
-    bool selected = (currentTab == id);
-    bool clicked = false;
-    
-    if (selected) ImGui::PushStyleColor(ImGuiCol_Header, Theme::PrimaryTransparent(0.2f));
-    if (selected) ImGui::PushStyleColor(ImGuiCol_Text, Theme::Primary());
-    
-    char buf[128];
-    sprintf_s(buf, "%s  %s", icon, _TR(labelKey));
-    if (ImGui::Selectable(buf, selected, 0, ImVec2(0, Theme::Layout::LargeButtonHeight * dpiScale))) {
-        clicked = true;
-    }
-    
-    if (selected) ImGui::PopStyleColor(2);
-    return clicked;
-}
+    float legendX = canvas_p0.x + 40 * dpiScale;
+    for (auto const& [name, data] : history) {
+        // Note: Ignore check should be done by caller before passing history
+        if (data.size() < 2) continue;
 
-// Draw section header with icon
-inline void DrawSectionHeader(const char* icon, const char* labelKey) {
-    ImGui::TextColored(Theme::Primary(), "%s %s", icon, _TR(labelKey));
-    ImGui::Separator();
-    ImGui::Spacing();
-}
-
-// Draw a subsection header
-inline void DrawSubsectionHeader(const char* labelKey) {
-    ImGui::TextColored(Theme::TextMuted(), "%s", _TR(labelKey));
-    ImGui::Spacing();
-}
-
-// ============================================================================
-// Log Panel Component
-// ============================================================================
-
-inline void DrawLogPanel(const std::deque<std::string>& items) {
-    ImGui::BeginChild("LogScroll");
-    for (const auto& line : items) {
-        if (line.find("[ERROR]") != std::string::npos) {
-            ImGui::TextColored(Theme::TempHot(), "%s", line.c_str());
-        } else if (line.find("[WARN]") != std::string::npos) {
-            ImGui::TextColored(Theme::TempWarm(), "%s", line.c_str());
-        } else {
-            ImGui::TextUnformatted(line.c_str());
+        ImU32 color = colors[colorIdx % 5];
+        float stepX = canvas_sz.x / 300.0f;
+        
+        for (size_t i = 0; i < data.size() - 1; i++) {
+            ImVec2 p1 = ImVec2(canvas_p1.x - (data.size() - i) * stepX, 
+                               canvas_p1.y - (data[i] / 100.0f) * canvas_sz.y);
+            ImVec2 p2 = ImVec2(canvas_p1.x - (data.size() - (i + 1)) * stepX, 
+                               canvas_p1.y - (data[i+1] / 100.0f) * canvas_sz.y);
+            
+            if (p1.x < canvas_p0.x) continue;
+            draw_list->AddLine(p1, p2, color, 2.0f * dpiScale);
         }
+        
+        // Legend
+        draw_list->AddText(ImVec2(legendX, canvas_p0.y + 5 * dpiScale), color, name.c_str());
+        legendX += ImGui::CalcTextSize(name.c_str()).x + 15 * dpiScale;
+        colorIdx++;
     }
-    if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY()) {
-        ImGui::SetScrollHereY(1.0f);
+
+    ImGui::Dummy(canvas_sz);
+}
+
+/// Draw a radar chart for PID parameters visualization
+/// @param pid PID settings to visualize
+/// @param dpiScale DPI scaling factor
+inline void DrawPIDRadarChart(const struct PIDSettings& pid, float dpiScale) {
+    ImVec2 size = ImVec2(200 * dpiScale, 200 * dpiScale);
+    ImVec2 pos = ImGui::GetCursorScreenPos();
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+    ImVec2 center = ImVec2(pos.x + size.x / 2, pos.y + size.y / 2);
+    float radius = (size.x / 2) * 0.7f;
+
+    // Background circles
+    for (int i = 1; i <= 4; i++) {
+        draw_list->AddCircle(center, radius * i / 4.0f, IM_COL32(100, 100, 100, 80), 32);
     }
-    ImGui::EndChild();
-}
 
-// ============================================================================
-// Sensor Grid Component
-// ============================================================================
+    // Axes and values
+    const char* labels[] = { "Kp", "Ki", "Kd" };
+    float maxValues[] = { 2.0f, 0.1f, 1.0f };  // Reasonable max for visualization
+    float values[] = { pid.Kp, pid.Ki, pid.Kd };
+    ImVec2 points[3];
 
-inline void DrawSensorCard(const std::string& name, float currentTemp, bool isGpu, 
-                          const char* iconCpu, const char* iconGpu, float dpiScale) {
-    float progress = currentTemp / 100.0f;
-    ImVec4 color = Theme::GetTempColor(currentTemp);
-    
-    ImGui::BeginChild(name.c_str(), ImVec2(0, 65 * dpiScale), true);
-    ImGui::Text("%s %s", (isGpu ? iconGpu : iconCpu), name.c_str());
-    ImGui::SameLine(ImGui::GetContentRegionAvail().x - 45 * dpiScale);
-    ImGui::Text("%.0f\xC2\xB0\x43", currentTemp);
-    
-    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, color);
-    ImGui::ProgressBar(progress, ImVec2(-1, 5 * dpiScale), "");
-    ImGui::PopStyleColor();
-    ImGui::EndChild();
-}
+    for (int i = 0; i < 3; i++) {
+        float angle = i * 2.0f * 3.1415926535f / 3.0f - 3.1415926535f / 2.0f;
+        ImVec2 axisEnd = ImVec2(center.x + cosf(angle) * radius, center.y + sinf(angle) * radius);
+        draw_list->AddLine(center, axisEnd, IM_COL32(150, 150, 150, 150));
+        
+        // Label
+        ImVec2 labelPos = ImVec2(center.x + cosf(angle) * (radius + 25 * dpiScale), 
+                                 center.y + sinf(angle) * (radius + 15 * dpiScale));
+        ImVec2 labelSize = ImGui::CalcTextSize(labels[i]);
+        draw_list->AddText(ImVec2(labelPos.x - labelSize.x / 2, labelPos.y - labelSize.y / 2), 
+                          IM_COL32(200, 200, 200, 255), labels[i]);
 
-// ============================================================================
-// Settings Components
-// ============================================================================
-
-inline void DrawCheckboxSetting(const char* labelKey, int* value) {
-    bool checked = (*value != 0);
-    if (ImGui::Checkbox(_TR(labelKey), &checked)) {
-        *value = checked ? 1 : 0;
+        // Value point
+        float valNorm = values[i] / maxValues[i];
+        if (valNorm > 1.2f) valNorm = 1.2f;  // Allow slight overflow
+        if (valNorm < 0.0f) valNorm = 0.0f;
+        points[i] = ImVec2(center.x + cosf(angle) * radius * valNorm, 
+                           center.y + sinf(angle) * radius * valNorm);
     }
+
+    // Draw filled polygon
+    draw_list->AddConvexPolyFilled(points, 3, IM_COL32(255, 100, 100, 100));
+    draw_list->AddPolyline(points, 3, IM_COL32(255, 100, 100, 255), ImDrawFlags_Closed, 2.0f * dpiScale);
+
+    ImGui::Dummy(size);
 }
 
-inline void DrawIntInputSetting(const char* labelKey, int* value, int minVal, int maxVal, float width, float dpiScale) {
-    ImGui::Text("%s", _TR(labelKey));
-    ImGui::PushItemWidth(width * dpiScale);
-    if (ImGui::InputInt("##IntInput", value)) {
-        if (*value < minVal) *value = minVal;
-        if (*value > maxVal) *value = maxVal;
-    }
-    ImGui::PopItemWidth();
-}
-
-inline void DrawFloatInputSetting(const char* label, float* value, float step, float stepFast, 
-                                  const char* format, float width, float labelWidth, float dpiScale) {
-    ImGui::Text("%s:", label); 
-    ImGui::SameLine(labelWidth * dpiScale);
-    ImGui::PushItemWidth(width * dpiScale);
-    ImGui::InputFloat("##FloatInput", value, step, stepFast, format);
-    ImGui::PopItemWidth();
-}
-
-} // namespace ImGuiUI
+} // namespace ImGuiRenderer

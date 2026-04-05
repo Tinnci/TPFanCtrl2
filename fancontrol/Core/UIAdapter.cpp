@@ -185,9 +185,11 @@ void UIAdapter::HandleTemperatureUpdate(const TemperatureUpdateEvent& e) {
             sensor.weight = reading.weight;
             sensor.isAvailable = reading.isAvailable;
             
-            // Update smooth animation target
-            if (reading.isAvailable && reading.rawTemp > 0 && reading.rawTemp < 128) {
-                m_state.SmoothTemps[reading.name].Target = (float)reading.rawTemp;
+            // Keep a smooth entry for every available sensor so rendering never
+            // dereferences a missing map key.
+            auto& smooth = m_state.SmoothTemps[reading.name];
+            if (reading.rawTemp > 0 && reading.rawTemp < 128) {
+                smooth.Target = (float)reading.rawTemp;
             }
             
             // Update history

@@ -28,6 +28,12 @@ ThermalManager::ThermalManager(
         m_sensorManager->SetSensorWeight(sensor.index, sensor.weight);
     }
     
+    // Initialize cached config for hot path access
+    m_cachedConfig.cycleMs = m_config.cycleSeconds * 1000;
+    m_cachedConfig.useBiasedTemps = m_config.useBiasedTemps;
+    m_cachedConfig.noExtSensor = m_config.noExtSensor;
+    m_cachedConfig.ignoreList = m_config.ignoreList;
+    
     // Initialize state
     m_state.currentMode = ControlMode::BIOS;
     m_state.isOperational = false;
@@ -120,6 +126,8 @@ void ThermalManager::UpdateConfig(const ThermalConfig& config) {
     {
         std::lock_guard<std::mutex> lock(m_configMutex);
         m_config = config;
+        // Mark cached config as stale
+        m_configChanged.store(true, std::memory_order_release);
     }
     
     // Reapply hardware settings
@@ -157,22 +165,27 @@ void ThermalManager::Unsubscribe(EventDispatcher::SubscriptionId id) {
 void ThermalManager::WorkerLoop(std::stop_token stopToken) {
     Log(LogLevel::Debug, "Worker thread started");
     
-    int cycleMs;
-    {
-        std::lock_guard<std::mutex> lock(m_configMutex);
-        cycleMs = m_config.cycleSeconds * 1000;
-    }
-    
     while (!stopToken.stop_requested()) {
+        // Check if config changed and update cached values
+        if (m_configChanged.load(std::memory_order_acquire)) {
+            std::lock_guard<std::mutex> lock(m_configMutex);
+            m_cachedConfig.cycleMs = m_config.cycleSeconds * 1000;
+            m_cachedConfig.useBiasedTemps = m_config.useBiasedTemps;
+            m_cachedConfig.noExtSensor = m_config.noExtSensor;
+            m_cachedConfig.ignoreList = m_config.ignoreList;
+            m_configChanged.store(false, std::memory_order_release);
+            Log(LogLevel::Debug, "Worker thread refreshed cached config");
+        }
+        
         auto cycleStart = std::chrono::steady_clock::now();
         
         // Perform control cycle
         PerformCycle();
         
-        // Wait for next cycle, but wake up early if force update is requested
+        // Wait for next cycle using cached cycleMs
         auto cycleEnd = std::chrono::steady_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(cycleEnd - cycleStart);
-        auto sleepTime = std::chrono::milliseconds(cycleMs) - elapsed;
+        auto sleepTime = std::chrono::milliseconds(m_cachedConfig.cycleMs) - elapsed;
         
         if (sleepTime > std::chrono::milliseconds(0)) {
             // Sleep in small intervals to be responsive to stop requests
@@ -185,12 +198,6 @@ void ThermalManager::WorkerLoop(std::stop_token stopToken) {
         }
         
         m_forceUpdate.store(false);
-        
-        // Update config-based timing
-        {
-            std::lock_guard<std::mutex> lock(m_configMutex);
-            cycleMs = m_config.cycleSeconds * 1000;
-        }
     }
     
     Log(LogLevel::Debug, "Worker thread exiting");
@@ -213,16 +220,13 @@ void ThermalManager::PerformCycle() {
 }
 
 bool ThermalManager::UpdateSensors() {
-    bool useBiasedTemps, noExtSensor;
-    {
-        std::lock_guard<std::mutex> lock(m_configMutex);
-        useBiasedTemps = m_config.useBiasedTemps;
-        noExtSensor = m_config.noExtSensor;
-    }
+    // Use cached config values (no lock needed)
+    bool useBiasedTemps = m_cachedConfig.useBiasedTemps;
+    bool noExtSensor = m_cachedConfig.noExtSensor;
     
-    // Legacy-style double sampling and retry logic to ensure reliable EC communication
-    int numTries = 10;
-    int sleepTicks = 200;
+    // Simplified retry logic: single sample with one retry on failure
+    const int maxRetries = 2;
+    const int retryDelayMs = 50;
     
     bool success = false;
     int fan1 = 0, fan2 = 0;
@@ -230,67 +234,53 @@ bool ThermalManager::UpdateSensors() {
     std::vector<SensorReading> readings;
     int currentLevel = 0;
 
-    for (int i = 0; i < numTries; i++) {
-        // Sample 1
-        if (!m_sensorManager->UpdateSensors(useBiasedTemps, noExtSensor, false) ||
-            !m_fanController->RefreshCurrentLevel()) {
-            Log(LogLevel::Warning, "Cycle sample1 failed: sensor or fan level read error");
-            std::this_thread::sleep_for(std::chrono::milliseconds(sleepTicks));
-            continue;
-        }
-        int level1 = m_fanController->GetCurrentLevel();
-
-        // Sample 2
-        if (!m_sensorManager->UpdateSensors(useBiasedTemps, noExtSensor, false) ||
-            !m_fanController->RefreshCurrentLevel()) {
-            Log(LogLevel::Warning, "Cycle sample2 failed: sensor or fan level read error");
-            std::this_thread::sleep_for(std::chrono::milliseconds(sleepTicks));
-            continue;
-        }
-        int level2 = m_fanController->GetCurrentLevel();
-
-        // Match criteria (legacy only matched FanCtrl)
-        if (level1 == level2) {
-            currentLevel = level2;
-
-            if (!m_fanController->GetFanSpeeds(fan1, fan2)) {
-                Log(LogLevel::Warning, "Fan tach read failed after sensor sync; retrying sample");
-                std::this_thread::sleep_for(std::chrono::milliseconds(sleepTicks));
-                continue;
-            }
-
-            EvaluateFanFeedback(currentLevel, fan1);
-            
-            std::string ignoreList;
-            {
-                std::lock_guard<std::mutex> lock(m_configMutex);
-                ignoreList = m_config.ignoreList;
-            }
-            maxTemp = m_sensorManager->GetMaxTemp(maxIndex, ignoreList);
-            
-            readings.clear();
-            readings.reserve(SensorAddresses::TOTAL_COUNT);
-            for (int j = 0; j < SensorAddresses::TOTAL_COUNT; j++) {
-                const auto& sensor = m_sensorManager->GetSensor(j);
-                readings.push_back({
-                    .index = j,
-                    .address = sensor.addr,
-                    .name = sensor.name,
-                    .rawTemp = sensor.rawTemp,
-                    .biasedTemp = sensor.biasedTemp,
-                    .weight = sensor.weight,
-                    .isAvailable = sensor.isAvailable
-                });
-            }
-            success = true;
-            break;
+    for (int attempt = 0; attempt < maxRetries && !success; attempt++) {
+        if (attempt > 0) {
+            Log(LogLevel::Warning, std::format("EC read retry attempt {}/{}", attempt + 1, maxRetries));
+            std::this_thread::sleep_for(std::chrono::milliseconds(retryDelayMs));
         }
         
-        std::this_thread::sleep_for(std::chrono::milliseconds(sleepTicks));
+        // Single sample - read sensors and fan level
+        if (!m_sensorManager->UpdateSensors(useBiasedTemps, noExtSensor, false)) {
+            Log(LogLevel::Warning, "UpdateSensors failed: sensor read error");
+            continue;
+        }
+        
+        if (!m_fanController->RefreshCurrentLevel()) {
+            Log(LogLevel::Warning, "UpdateSensors failed: fan level read error");
+            continue;
+        }
+        currentLevel = m_fanController->GetCurrentLevel();
+
+        if (!m_fanController->GetFanSpeeds(fan1, fan2)) {
+            Log(LogLevel::Warning, "UpdateSensors failed: fan tach read error");
+            continue;
+        }
+
+        EvaluateFanFeedback(currentLevel, fan1);
+        
+        // Use cached ignoreList
+        maxTemp = m_sensorManager->GetMaxTemp(maxIndex, m_cachedConfig.ignoreList);
+        
+        readings.clear();
+        readings.reserve(SensorAddresses::TOTAL_COUNT);
+        for (int j = 0; j < SensorAddresses::TOTAL_COUNT; j++) {
+            const auto& sensor = m_sensorManager->GetSensor(j);
+            readings.push_back({
+                .index = j,
+                .address = sensor.addr,
+                .name = sensor.name,
+                .rawTemp = sensor.rawTemp,
+                .biasedTemp = sensor.biasedTemp,
+                .weight = sensor.weight,
+                .isAvailable = sensor.isAvailable
+            });
+        }
+        success = true;
     }
 
     if (!success) {
-        Log(LogLevel::Error, "UpdateSensors failed after retries");
+        Log(LogLevel::Error, std::format("UpdateSensors failed after {} retries", maxRetries));
         return false;
     }
     

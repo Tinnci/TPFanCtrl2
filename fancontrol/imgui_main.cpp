@@ -135,111 +135,7 @@ void UpdateTrayIcon(HWND hWnd, int temp, int fan) {
     Shell_NotifyIconW(NIM_MODIFY, &nid);
 }
 
-// --- Custom Lightweight Plot ---
-void DrawSimplePlot(const char* label, const std::map<std::string, std::deque<float>>& history, float height, float dpiScale) {
-    ImVec2 canvas_p0 = ImGui::GetCursorScreenPos();      // Upper-left
-    ImVec2 canvas_sz = ImGui::GetContentRegionAvail();   // Size of available space
-    if (canvas_sz.x < 50.0f) canvas_sz.x = 50.0f;
-    if (height > 0) canvas_sz.y = height;
-    ImVec2 canvas_p1 = ImVec2(canvas_p0.x + canvas_sz.x, canvas_p0.y + canvas_sz.y);
-
-    // Draw background
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    draw_list->AddRectFilled(canvas_p0, canvas_p1, IM_COL32(30, 30, 30, 255));
-    draw_list->AddRect(canvas_p0, canvas_p1, IM_COL32(100, 100, 100, 255));
-
-    // Grid Lines (30, 50, 70, 90 degrees)
-    float temps[] = { 30.0f, 50.0f, 70.0f, 90.0f };
-    for (float t : temps) {
-        float y = canvas_p1.y - (t / 100.0f) * canvas_sz.y;
-        draw_list->AddLine(ImVec2(canvas_p0.x, y), ImVec2(canvas_p1.x, y), IM_COL32(60, 60, 60, 255));
-        char buf[16]; snprintf(buf, 16, "%d", (int)t);
-        draw_list->AddText(ImVec2(canvas_p0.x + 5 * dpiScale, y - 15 * dpiScale), IM_COL32(150, 150, 150, 255), buf);
-    }
-
-    // Plot Lines
-    int colorIdx = 0;
-    ImU32 colors[] = {
-        IM_COL32(0, 255, 255, 255),   // Cyan
-        IM_COL32(255, 165, 0, 255),   // Orange
-        IM_COL32(124, 252, 0, 255),   // LawnGreen
-        IM_COL32(255, 105, 180, 255), // HotPink
-        IM_COL32(173, 216, 230, 255)  // LightBlue
-    };
-
-    float legendX = canvas_p0.x + 40 * dpiScale;
-    for (auto const& [name, data] : history) {
-        // Skip ignored sensors in plot
-        if (g_App && g_App->GetConfig()->IgnoreSensors.find(name) != std::string::npos) continue;
-
-        if (data.size() < 2) continue;
-
-        ImU32 color = colors[colorIdx % 5];
-        float stepX = canvas_sz.x / 300.0f; 
-        
-        for (size_t i = 0; i < data.size() - 1; i++) {
-            ImVec2 p1 = ImVec2(canvas_p1.x - (data.size() - i) * stepX, 
-                               canvas_p1.y - (data[i] / 100.0f) * canvas_sz.y);
-            ImVec2 p2 = ImVec2(canvas_p1.x - (data.size() - (i + 1)) * stepX, 
-                               canvas_p1.y - (data[i+1] / 100.0f) * canvas_sz.y);
-            
-            if (p1.x < canvas_p0.x) continue;
-            draw_list->AddLine(p1, p2, color, 2.0f * dpiScale);
-        }
-        
-        // Draw Legend in the plot area
-        draw_list->AddText(ImVec2(legendX, canvas_p0.y + 5 * dpiScale), color, name.c_str());
-        legendX += ImGui::CalcTextSize(name.c_str()).x + 15 * dpiScale;
-        colorIdx++;
-    }
-
-    ImGui::Dummy(canvas_sz); // Advance cursor
-}
-
-void DrawPIDRadarChart(const PIDSettings& pid, float dpiScale) {
-    ImVec2 size = ImVec2(200 * dpiScale, 200 * dpiScale);
-    
-    ImVec2 pos = ImGui::GetCursorScreenPos();
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
-
-    ImVec2 center = ImVec2(pos.x + size.x / 2, pos.y + size.y / 2);
-    float radius = (size.x / 2) * 0.7f;
-
-    // Background circles
-    for (int i = 1; i <= 4; i++) {
-        draw_list->AddCircle(center, radius * i / 4.0f, IM_COL32(100, 100, 100, 80), 32);
-    }
-
-    // Axes
-    const char* labels[] = { "Kp", "Ki", "Kd" };
-    // Reasonable max values for visualization
-    float maxValues[] = { 2.0f, 0.1f, 1.0f };
-    float values[] = { pid.Kp, pid.Ki, pid.Kd };
-    ImVec2 points[3];
-
-    for (int i = 0; i < 3; i++) {
-        float angle = i * 2.0f * 3.1415926535f / 3.0f - 3.1415926535f / 2.0f;
-        ImVec2 axisEnd = ImVec2(center.x + cosf(angle) * radius, center.y + sinf(angle) * radius);
-        draw_list->AddLine(center, axisEnd, IM_COL32(150, 150, 150, 150));
-        
-        // Label
-        ImVec2 labelPos = ImVec2(center.x + cosf(angle) * (radius + 25 * dpiScale), center.y + sinf(angle) * (radius + 15 * dpiScale));
-        ImVec2 labelSize = ImGui::CalcTextSize(labels[i]);
-        draw_list->AddText(ImVec2(labelPos.x - labelSize.x / 2, labelPos.y - labelSize.y / 2), IM_COL32(200, 200, 200, 255), labels[i]);
-
-        // Value point
-        float valNorm = values[i] / maxValues[i];
-        if (valNorm > 1.2f) valNorm = 1.2f; // Allow some overflow but cap it
-        if (valNorm < 0.0f) valNorm = 0.0f;
-        points[i] = ImVec2(center.x + cosf(angle) * radius * valNorm, center.y + sinf(angle) * radius * valNorm);
-    }
-
-    // Draw polygon
-    draw_list->AddConvexPolyFilled(points, 3, IM_COL32(255, 100, 100, 100));
-    draw_list->AddPolyline(points, 3, IM_COL32(255, 100, 100, 255), ImDrawFlags_Closed, 2.0f * dpiScale);
-
-    ImGui::Dummy(size);
-}
+// Plot and chart rendering functions moved to ImGuiRenderer.h
 
 // --- Logging System ---
 // Unified logging using LogManager.h and spdlog
@@ -360,7 +256,23 @@ void RemoveTrayIcon(HWND hWnd) {
     Shell_NotifyIconW(NIM_DELETE, &nid);
 }
 
+// Forward declaration for SEH wrapper
+int RunMain(int argc, char** argv);
+
 int main(int argc, char** argv) {
+    __try {
+        return RunMain(argc, argv);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        DWORD exceptionCode = GetExceptionCode();
+        char errorMsg[256];
+        sprintf_s(errorMsg, "Fatal SEH Exception: 0x%08X\n\nAccess Violation or similar low-level crash.", exceptionCode);
+        MessageBoxA(NULL, errorMsg, "TPFanCtrl2 Fatal Error", MB_OK | MB_ICONERROR);
+        return 1;
+    }
+}
+
+int RunMain(int argc, char** argv) {
     // === Initialization (using AppInit module) ===
     AppInit::EnableDPIAwareness();
     AppInit::InitLogging();
@@ -476,9 +388,24 @@ int main(int argc, char** argv) {
     }
 
     // Initialize Application
-    g_App = std::make_unique<App::Application>();
-    if (!g_App->Initialize(hwnd)) {
-        spdlog::error("Failed to initialize Application.");
+    spdlog::info("Creating Application object...");
+    try {
+        g_App = std::make_unique<App::Application>();
+        spdlog::info("Application object created successfully.");
+        
+        spdlog::info("Calling Application::Initialize...");
+        if (!g_App->Initialize(hwnd, hInstance)) {
+            spdlog::error("Failed to initialize Application.");
+            exit(1);
+        }
+        spdlog::info("Application::Initialize completed successfully.");
+    } catch (const std::exception& ex) {
+        spdlog::error("EXCEPTION during Application::Initialize: {}", ex.what());
+        MessageBoxA(NULL, std::format("Application crashed during initialization:\n\n{}", ex.what()).c_str(), "TPFanCtrl2 Fatal Error", MB_OK | MB_ICONERROR);
+        exit(1);
+    } catch (...) {
+        spdlog::error("UNKNOWN EXCEPTION during Application::Initialize");
+        MessageBoxA(NULL, "Application crashed during initialization (unknown exception)", "TPFanCtrl2 Fatal Error", MB_OK | MB_ICONERROR);
         exit(1);
     }
 
@@ -491,9 +418,18 @@ int main(int argc, char** argv) {
     }
     
     // Start ThermalManager NOW, after UI is fully ready
-    if (g_App->GetThermalManager()) {
-        spdlog::info("Starting ThermalManager background thread...");
-        g_App->GetThermalManager()->Start();
+    try {
+        if (g_App->GetThermalManager()) {
+            spdlog::info("Starting ThermalManager background thread...");
+            g_App->GetThermalManager()->Start();
+        }
+    } catch (const std::exception& ex) {
+        spdlog::error("EXCEPTION during ThermalManager::Start: {}", ex.what());
+        MessageBoxA(NULL, std::format("ThermalManager failed to start:\n\n{}", ex.what()).c_str(), "TPFanCtrl2 Error", MB_OK | MB_ICONERROR);
+        // Continue without thermal manager (graceful degradation)
+    } catch (...) {
+        spdlog::error("UNKNOWN EXCEPTION during ThermalManager::Start");
+        MessageBoxA(NULL, "ThermalManager failed to start (unknown exception)", "TPFanCtrl2 Error", MB_OK | MB_ICONERROR);
     }
 
     bool done = false;
@@ -641,7 +577,11 @@ int main(int argc, char** argv) {
                                     // Safer to show them.
                                 }
 
-                                float currentTemp = uiSnapshot.SmoothTemps.at(s.name).Current;
+                                float currentTemp = static_cast<float>(s.rawTemp);
+                                auto tempIt = uiSnapshot.SmoothTemps.find(s.name);
+                                if (tempIt != uiSnapshot.SmoothTemps.end()) {
+                                    currentTemp = tempIt->second.Current;
+                                }
                                 float progress = currentTemp / 100.0f;
                                 ImVec4 color = Theme::GetTempColor(currentTemp);
 
@@ -667,7 +607,7 @@ int main(int argc, char** argv) {
                     ImGui::Separator();
                     ImGui::Spacing();
                     {
-                        DrawSimplePlot("TempPlot", uiSnapshot.TempHistory, 0, dpiScale);
+                        ImGuiRenderer::DrawSimplePlot("TempPlot", uiSnapshot.TempHistory, 0, dpiScale);
                     }
                     ImGui::EndChild();
 
@@ -936,7 +876,7 @@ int main(int argc, char** argv) {
                     ImGui::PushStyleColor(ImGuiCol_Text, Theme::TextMuted());
                     ImGui::Text("%s", _TR("LBL_PID_VISUAL"));
                     ImGui::PopStyleColor();
-                    DrawPIDRadarChart(pid, dpiScale);
+                    ImGuiRenderer::DrawPIDRadarChart(pid, dpiScale);
                     ImGui::EndGroup();
                     
                     ImGui::Spacing();
