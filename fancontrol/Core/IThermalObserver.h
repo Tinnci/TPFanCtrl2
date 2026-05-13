@@ -37,6 +37,7 @@ protected:
     virtual void OnModeChange(const ModeChangeEvent& /*event*/) {}
     virtual void OnError(const ErrorEvent& /*event*/) {}
     virtual void OnLog(const LogEvent& /*event*/) {}
+    virtual void OnPipelineHealth(const PipelineHealthEvent& /*event*/) {}
 
 private:
     void DispatchEvent(const TemperatureUpdateEvent& e) { OnTemperatureUpdate(e); }
@@ -44,6 +45,7 @@ private:
     void DispatchEvent(const ModeChangeEvent& e) { OnModeChange(e); }
     void DispatchEvent(const ErrorEvent& e) { OnError(e); }
     void DispatchEvent(const LogEvent& e) { OnLog(e); }
+    void DispatchEvent(const PipelineHealthEvent& e) { OnPipelineHealth(e); }
 };
 
 /// Thread-safe event dispatcher
