@@ -40,6 +40,17 @@ struct AutotuneContext {
     std::string Status;
 };
 
+struct PipelineStatus {
+    bool IsOperational = false;
+    int ConsecutiveReadErrors = 0;
+    int AvailableSensorCount = 0;
+    int MaxTemp = 0;
+    int Fan1Speed = 0;
+    int Fan2Speed = 0;
+    int CurrentLevel = 0;
+    std::string Summary;
+};
+
 /// UI-friendly state snapshot
 /// This replaces the legacy g_UIState and provides a clean interface for ImGui
 struct UISnapshot {
@@ -71,6 +82,7 @@ struct UISnapshot {
     time_t LastUpdate = 0;
     bool IsOperational = false;
     std::string LastError;
+    PipelineStatus Pipeline;
     
     // UI-specific
     int SelectedSettingsTab = 0;
@@ -156,6 +168,7 @@ private:
     void HandleModeChange(const ModeChangeEvent& e);
     void HandleError(const ErrorEvent& e);
     void HandleLog(const LogEvent& e);
+    void HandlePipelineHealth(const PipelineHealthEvent& e);
     void UpdateAutotuneLogic(float currentTemp);
     
     std::shared_ptr<ThermalManager> m_manager;

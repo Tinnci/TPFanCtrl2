@@ -42,6 +42,7 @@ public:
                 m_ecState = 3; // Expecting data
             } else if (m_ecState == 3) {
                 m_ecMemory[m_ecAddress] = value;
+                m_ecWriteCounts[m_ecAddress]++;
                 m_ecState = 0;
             }
             m_ports[port] = value;
@@ -60,10 +61,16 @@ public:
 
     USHORT GetLastWritePort() const { return m_lastWritePort; }
     BYTE GetLastWriteValue() const { return m_lastWriteValue; }
+    int GetECWriteCount(BYTE addr) const {
+        auto it = m_ecWriteCounts.find(addr);
+        return it == m_ecWriteCounts.end() ? 0 : it->second;
+    }
+    void ResetECWriteCounts() { m_ecWriteCounts.clear(); }
 
 private:
     std::map<USHORT, BYTE> m_ports;
     std::map<BYTE, BYTE> m_ecMemory;
+    std::map<BYTE, int> m_ecWriteCounts;
     USHORT m_lastWritePort = 0;
     BYTE m_lastWriteValue = 0;
     int m_ecState = 0;

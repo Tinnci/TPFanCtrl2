@@ -127,6 +127,21 @@ TEST_F(ThermalManagerTest, ForceUpdate) {
     EXPECT_TRUE(state.isOperational);
 }
 
+TEST_F(ThermalManagerTest, ManualModeFanOffDoesNotRewriteZeroRpm) {
+    mockIO->SetECByte(TP_ECOFFSET_FAN, 0);
+    config.manualFanSpeed = 0;
+    CreateManager();
+    thermalManager->SetManualLevel(0);
+    thermalManager->SetMode(ControlMode::Manual);
+    mockIO->ResetECWriteCounts();
+
+    thermalManager->Start();
+    std::this_thread::sleep_for(std::chrono::milliseconds(3200));
+
+    EXPECT_EQ(mockIO->GetECWriteCount(TP_ECOFFSET_FAN), 0);
+    thermalManager->Stop();
+}
+
 // ============================================================================
 // UIAdapter Tests
 // ============================================================================

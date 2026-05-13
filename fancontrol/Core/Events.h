@@ -77,13 +77,27 @@ struct LogEvent {
     std::string message;
 };
 
+/// Event fired after each detection/analysis cycle with pipeline health.
+struct PipelineHealthEvent {
+    std::chrono::steady_clock::time_point timestamp;
+    bool isOperational;
+    int consecutiveReadErrors;
+    int availableSensorCount;
+    int maxTemp;
+    int fan1Speed;
+    int fan2Speed;
+    int currentLevel;
+    std::string summary;
+};
+
 // --- Unified Event Type ---
 using ThermalEvent = std::variant<
     TemperatureUpdateEvent,
     FanStateChangeEvent,
     ModeChangeEvent,
     ErrorEvent,
-    LogEvent
+    LogEvent,
+    PipelineHealthEvent
 >;
 
 // --- Data Structures ---

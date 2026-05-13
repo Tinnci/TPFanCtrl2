@@ -32,6 +32,7 @@ void ConfigManager::to_json(json& j) const {
         {"ProcessPriority", ProcessPriority},
         {"Cycle", Cycle},
         {"StartMinimized", StartMinimized},
+        {"BackgroundServiceMode", BackgroundServiceMode},
         {"MinimizeToSysTray", MinimizeToSysTray},
         {"MinimizeOnClose", MinimizeOnClose},
         {"Language", Language},
@@ -55,6 +56,7 @@ void ConfigManager::from_json(const json& j) {
     if (j.contains("ManFanSpeed")) ManFanSpeed = j.at("ManFanSpeed").get<int>();
     if (j.contains("Cycle")) Cycle = j.at("Cycle").get<int>();
     if (j.contains("StartMinimized")) StartMinimized = j.at("StartMinimized").get<int>();
+    if (j.contains("BackgroundServiceMode")) BackgroundServiceMode = j.at("BackgroundServiceMode").get<int>();
     if (j.contains("MinimizeToSysTray")) MinimizeToSysTray = j.at("MinimizeToSysTray").get<int>();
     if (j.contains("MinimizeOnClose")) MinimizeOnClose = j.at("MinimizeOnClose").get<int>();
     if (j.contains("Language")) Language = j.at("Language").get<std::string>();

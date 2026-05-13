@@ -6,6 +6,11 @@
 #include <spdlog/sinks/msvc_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <dwmapi.h>
+#include <cstdio>
+#include <initializer_list>
+#include <memory>
+#include <string_view>
+#include <vector>
 
 namespace AppInit {
 
@@ -32,21 +37,56 @@ inline void EnableDPIAwareness() {
     }
 }
 
-/// Initialize logging system with console and file sinks
-inline void InitLogging() {
+inline bool HasArgument(int argc, char** argv, std::initializer_list<std::string_view> names) {
+    for (int i = 1; i < argc; ++i) {
+        if (!argv[i]) {
+            continue;
+        }
+
+        std::string_view arg(argv[i]);
+        for (std::string_view name : names) {
+            if (arg == name) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+inline bool HasConsoleArgument(int argc, char** argv) {
+    return HasArgument(argc, argv, {"--console", "--debug-console", "-c"});
+}
+
+inline void EnsureDebugConsole() {
+    if (!AttachConsole(ATTACH_PARENT_PROCESS)) {
+        AllocConsole();
+    }
+
+    FILE* stream = nullptr;
+    freopen_s(&stream, "CONOUT$", "w", stdout);
+    freopen_s(&stream, "CONOUT$", "w", stderr);
+}
+
+/// Initialize logging system. Default GUI launches stay silent; use --console for diagnostics.
+inline void InitLogging(bool enableConsole = false) {
     try {
-        auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
         auto msvc_sink = std::make_shared<spdlog::sinks::msvc_sink_mt>();
         auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>("TPFanCtrl2.log", true);
         
-        spdlog::sinks_init_list sink_list = { console_sink, msvc_sink, file_sink };
+        std::vector<spdlog::sink_ptr> sink_list = { msvc_sink, file_sink };
+        if (enableConsole) {
+            EnsureDebugConsole();
+            sink_list.push_back(std::make_shared<spdlog::sinks::stdout_color_sink_mt>());
+        }
+
         auto logger = std::make_shared<spdlog::logger>("multi_sink", sink_list.begin(), sink_list.end());
         logger->set_level(spdlog::level::debug);
         logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] %v");
         
         spdlog::set_default_logger(logger);
         spdlog::info("TPFanCtrl2 starting...");
-        spdlog::info("Logging initialized (console + file + MSVC)");
+        spdlog::info("Logging initialized ({} + file + MSVC)", enableConsole ? "console" : "silent GUI");
     } catch (const std::exception& ex) {
         ::MessageBoxA(nullptr, ex.what(), "Logging Init Failed", MB_ICONERROR);
     }

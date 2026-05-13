@@ -36,6 +36,11 @@
 #include "vk_mem_alloc.h"
 #include <shellapi.h>
 
+#if defined(_MSC_VER)
+#pragma comment(linker, "/SUBSYSTEM:WINDOWS")
+#pragma comment(linker, "/ENTRY:mainCRTStartup")
+#endif
+
 #ifndef WM_DPICHANGED
 #define WM_DPICHANGED 0x02E0
 #endif
@@ -60,6 +65,7 @@
 #define ID_TRAY_ICON 1001
 #define ID_TRAY_RESTORE 1002
 #define ID_TRAY_EXIT 1003
+#define ID_TRAY_STATUS 1004
 
 // Icons (Segoe MDL2 Assets / Segoe Fluent Icons - Built-in on Windows 10/11)
 // Using u8 prefix to ensure UTF-8 encoding
@@ -89,9 +95,12 @@ static int                      g_SwapChainResizeHeight = 0;
 static std::unique_ptr<App::Application> g_App;
 
 static int g_SelectedSettingsTab = 0;
+static bool g_BackgroundServiceMode = false;
 
-void UpdateTrayIcon(HWND hWnd, int temp, int fan) {
+void UpdateTrayIcon(HWND hWnd, const Core::UISnapshot& snapshot) {
     if (!hWnd) return;
+    const int temp = snapshot.MaxTemp;
+    const int fan = snapshot.Fan1Speed;
 
     // Calculate DPI scale for tray icon
     float dpiScale = 1.0f;
@@ -129,8 +138,18 @@ void UpdateTrayIcon(HWND hWnd, int temp, int fan) {
     std::wstring wTemp(tempLabel.begin(), tempLabel.end());
     std::wstring wFan(fanLabel.begin(), fanLabel.end());
 
-    std::wstring tip = std::format(L"TPFanCtrl2\n{}: {}\u00B0\x43\n{}: {} RPM", wTemp, temp, wFan, fan);
-    wcscpy_s(nid.szTip, tip.c_str());
+    std::wstring serviceLine = g_BackgroundServiceMode ? L"\nBackground service: running" : L"";
+    std::wstring healthLine;
+    if (!snapshot.Pipeline.Summary.empty()) {
+        std::string summary = snapshot.Pipeline.Summary;
+        std::wstring wSummary(summary.begin(), summary.end());
+        healthLine = std::format(L"\n{}", wSummary);
+    }
+
+    std::wstring tip = std::format(
+        L"TPFanCtrl2{}\n{}: {}\u00B0\x43\n{}: {} RPM{}",
+        serviceLine, wTemp, temp, wFan, fan, healthLine);
+    wcsncpy_s(nid.szTip, tip.c_str(), _TRUNCATE);
 
     Shell_NotifyIconW(NIM_MODIFY, &nid);
 }
@@ -274,8 +293,10 @@ int main(int argc, char** argv) {
 
 int RunMain(int argc, char** argv) {
     // === Initialization (using AppInit module) ===
+    const bool enableConsole = AppInit::HasConsoleArgument(argc, argv);
+    const bool forceBackground = AppInit::HasArgument(argc, argv, {"--background", "--service", "--tray"});
+    AppInit::InitLogging(enableConsole);
     AppInit::EnableDPIAwareness();
-    AppInit::InitLogging();
     AppInit::IsRunningAsAdmin();  // Log admin status
 
     HINSTANCE hInstance = GetModuleHandle(NULL);
@@ -409,8 +430,13 @@ int RunMain(int argc, char** argv) {
         exit(1);
     }
 
-    if (g_App->GetConfig()->StartMinimized) {
-        spdlog::info("Starting minimized to tray.");
+    g_BackgroundServiceMode = forceBackground || g_App->GetConfig()->BackgroundServiceMode != 0;
+    if (forceBackground) {
+        g_App->GetConfig()->BackgroundServiceMode = 1;
+    }
+
+    if (g_BackgroundServiceMode || g_App->GetConfig()->StartMinimized) {
+        spdlog::info("Starting in background tray mode.");
         ::ShowWindow(hwnd, SW_HIDE);
     } else {
         spdlog::info("Showing window...");
@@ -496,7 +522,7 @@ int RunMain(int argc, char** argv) {
         static float trayUpdateTimer = 0;
         trayUpdateTimer += dt;
         if (trayUpdateTimer > 1.0f) {
-            UpdateTrayIcon(hwnd, uiSnapshot.MaxTemp, uiSnapshot.Fan1Speed);
+            UpdateTrayIcon(hwnd, uiSnapshot);
             trayUpdateTimer = 0;
         }
 
@@ -556,6 +582,17 @@ int RunMain(int argc, char** argv) {
                     
                     ImGui::TextColored(Theme::Primary(), "%s %s", ICON_CHIP, _TR("SECTION_STATUS"));
                     ImGui::Separator();
+                    ImGui::Spacing();
+                    ImGui::TextColored(uiSnapshot.Pipeline.IsOperational ? Theme::TempCool() : Theme::TempHot(),
+                        "%s: %s",
+                        _TR("LBL_PIPELINE_STATUS"),
+                        uiSnapshot.Pipeline.IsOperational ? _TR("LBL_PIPELINE_OK") : _TR("LBL_PIPELINE_WARN"));
+                    ImGui::TextDisabled("%s: %d  %s: %d",
+                        _TR("LBL_AVAILABLE_SENSORS"), uiSnapshot.Pipeline.AvailableSensorCount,
+                        _TR("LBL_READ_ERRORS"), uiSnapshot.Pipeline.ConsecutiveReadErrors);
+                    if (!uiSnapshot.Pipeline.Summary.empty()) {
+                        ImGui::TextDisabled("%s", uiSnapshot.Pipeline.Summary.c_str());
+                    }
                     ImGui::Spacing();
 
                     // Sensors in a grid
@@ -786,6 +823,12 @@ int RunMain(int argc, char** argv) {
                         auto config = g_App->GetConfig();
                         bool startMin = config->StartMinimized != 0;
                         if (ImGui::Checkbox(_TR("OPT_START_MINIMIZED"), &startMin)) config->StartMinimized = startMin;
+
+                        bool backgroundSvc = config->BackgroundServiceMode != 0;
+                        if (ImGui::Checkbox(_TR("OPT_BACKGROUND_SERVICE"), &backgroundSvc)) {
+                            config->BackgroundServiceMode = backgroundSvc;
+                            g_BackgroundServiceMode = backgroundSvc;
+                        }
                         
                         bool minToTray = config->MinimizeToSysTray != 0;
                         if (ImGui::Checkbox(_TR("OPT_MINIMIZE_TRAY"), &minToTray)) config->MinimizeToSysTray = minToTray;
@@ -1178,8 +1221,11 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             POINT curPoint;
             GetCursorPos(&curPoint);
             HMENU hMenu = CreatePopupMenu();
-            InsertMenuW(hMenu, 0, MF_BYPOSITION | MF_STRING, ID_TRAY_RESTORE, L"Restore");
-            InsertMenuW(hMenu, 1, MF_BYPOSITION | MF_STRING, ID_TRAY_EXIT, L"Exit");
+            InsertMenuW(hMenu, 0, MF_BYPOSITION | MF_STRING | MF_DISABLED, ID_TRAY_STATUS,
+                        g_BackgroundServiceMode ? L"Background service: running" : L"Foreground session");
+            InsertMenuW(hMenu, 1, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
+            InsertMenuW(hMenu, 2, MF_BYPOSITION | MF_STRING, ID_TRAY_RESTORE, L"Restore");
+            InsertMenuW(hMenu, 3, MF_BYPOSITION | MF_STRING, ID_TRAY_EXIT, L"Exit");
             SetForegroundWindow(hWnd);
             TrackPopupMenu(hMenu, TPM_BOTTOMALIGN | TPM_LEFTALIGN, curPoint.x, curPoint.y, 0, hWnd, NULL);
             DestroyMenu(hMenu);

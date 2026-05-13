@@ -29,7 +29,7 @@ ThermalManager::ThermalManager(
     }
     
     // Initialize cached config for hot path access
-    m_cachedConfig.cycleMs = m_config.cycleSeconds * 1000;
+    m_cachedConfig.cycleMs = std::clamp(m_config.cycleSeconds, 1, 60) * 1000;
     m_cachedConfig.useBiasedTemps = m_config.useBiasedTemps;
     m_cachedConfig.noExtSensor = m_config.noExtSensor;
     m_cachedConfig.ignoreList = m_config.ignoreList;
@@ -169,7 +169,7 @@ void ThermalManager::WorkerLoop(std::stop_token stopToken) {
         // Check if config changed and update cached values
         if (m_configChanged.load(std::memory_order_acquire)) {
             std::lock_guard<std::mutex> lock(m_configMutex);
-            m_cachedConfig.cycleMs = m_config.cycleSeconds * 1000;
+            m_cachedConfig.cycleMs = std::clamp(m_config.cycleSeconds, 1, 60) * 1000;
             m_cachedConfig.useBiasedTemps = m_config.useBiasedTemps;
             m_cachedConfig.noExtSensor = m_config.noExtSensor;
             m_cachedConfig.ignoreList = m_config.ignoreList;
@@ -280,13 +280,17 @@ bool ThermalManager::UpdateSensors() {
     }
 
     if (!success) {
+        ++m_consecutiveReadErrors;
         Log(LogLevel::Error, std::format("UpdateSensors failed after {} retries", maxRetries));
+        ReportPipelineHealth(false, 0, 0, 0, 0, currentLevel,
+                             "EC read failed; using last known safe fan state");
         return false;
     }
     
     // Update state
     int availableCount = 0;
     for (const auto& r : readings) if (r.isAvailable) availableCount++;
+    m_consecutiveReadErrors = 0;
 
     FanState previousFanState;
     {
@@ -330,6 +334,9 @@ bool ThermalManager::UpdateSensors() {
         .maxSensorName = readings[maxIndex].name
     };
     m_dispatcher.Dispatch(event);
+    ReportPipelineHealth(true, availableCount, maxTemp, fan1, fan2, currentLevel,
+                         availableCount > 0 ? "Detection and analysis pipeline healthy"
+                                            : "No available temperature sensors detected");
     
     return true;
 }
@@ -406,7 +413,9 @@ void ThermalManager::ApplyManualMode() {
         return;
     }
     
-    m_fanController->SetFanLevel(level);
+    if (m_fanController->GetCurrentLevel() != level) {
+        m_fanController->SetFanLevel(level);
+    }
 }
 
 void ThermalManager::ApplyPIDMode(float dt) {
@@ -435,7 +444,7 @@ void ThermalManager::ApplyPIDMode(float dt) {
 }
 
 void ThermalManager::EvaluateFanFeedback(int currentLevel, int fan1Rpm) {
-    if (currentLevel >= 0x80) {
+    if (currentLevel <= 0 || currentLevel >= 0x80) {
         m_fanNoSpinCounter = 0;
         return;
     }
@@ -477,6 +486,23 @@ void ThermalManager::ReportError(ErrorSeverity severity, const std::string& sour
         .source = source,
         .message = message,
         .errorCode = code
+    };
+    m_dispatcher.Dispatch(event);
+}
+
+void ThermalManager::ReportPipelineHealth(bool isOperational, int availableSensorCount,
+                                          int maxTemp, int fan1Rpm, int fan2Rpm,
+                                          int currentLevel, const std::string& summary) {
+    PipelineHealthEvent event{
+        .timestamp = std::chrono::steady_clock::now(),
+        .isOperational = isOperational,
+        .consecutiveReadErrors = m_consecutiveReadErrors,
+        .availableSensorCount = availableSensorCount,
+        .maxTemp = maxTemp,
+        .fan1Speed = fan1Rpm,
+        .fan2Speed = fan2Rpm,
+        .currentLevel = currentLevel,
+        .summary = summary
     };
     m_dispatcher.Dispatch(event);
 }

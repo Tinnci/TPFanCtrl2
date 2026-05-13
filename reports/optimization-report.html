@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>TPFanCtrl2 Optimization Report</title>
+  <style>
+    body { font-family: Segoe UI, Arial, sans-serif; margin: 40px; line-height: 1.55; color: #202124; }
+    h1, h2 { margin-bottom: 0.35rem; }
+    code { background: #f3f4f6; padding: 0.12rem 0.3rem; border-radius: 4px; }
+    section { max-width: 920px; margin-bottom: 1.7rem; }
+  </style>
+</head>
+<body>
+  <section>
+    <h1>TPFanCtrl2 Optimization Report</h1>
+    <p>Generated: 2026-05-12</p>
+    <p>The main ThermalManager optimization work is implemented. The EC retry simplification still needs validation on real ThinkPad hardware before it should be treated as fully proven.</p>
+  </section>
+  <section>
+    <h2>Implemented</h2>
+    <ul>
+      <li><code>ThermalManager</code> caches hot-path config values in <code>CachedConfig</code>.</li>
+      <li><code>UpdateConfig</code> marks cached values stale through an atomic flag.</li>
+      <li><code>WorkerLoop</code> refreshes cached config when needed.</li>
+      <li><code>UpdateSensors</code> now performs one sensor/fan sample and one retry after 50 ms.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Risks</h2>
+    <ul>
+      <li>The previous retry behavior may have masked flaky EC timing on specific models.</li>
+      <li>Tests cover basic operation, but do not fully model intermittent EC communication failures.</li>
+      <li>Future changes should preserve the invariant that cached config is refreshed from the worker thread.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Validation</h2>
+    <ul>
+      <li>Run <code>xmake run logic_test</code> and <code>xmake run core_test</code>.</li>
+      <li>Exercise cold boot, resume from sleep, BIOS, manual, smart, PID, and rapid setting changes on target hardware.</li>
+      <li>Compare EC read-failure logs before and after the retry simplification.</li>
+    </ul>
+  </section>
+</body>
+</html>

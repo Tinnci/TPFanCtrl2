@@ -39,15 +39,11 @@ target("TPFanCtrl2")
 
     add_packages("imgui", "vulkan-loader", "freetype", "vulkan-memory-allocator", "spdlog", "nlohmann_json")
     
-    -- Set subsystem to Windows to hide console (use CONSOLE for debugging if needed)
+    -- Keep the GUI binary detached from a console window in every build mode.
     set_kind("binary")
-    if is_mode("release") then
-        add_ldflags("/SUBSYSTEM:WINDOWS", "/ENTRY:mainCRTStartup", {force = true, tools = "msvc"})
-        add_ldflags("-Wl,/SUBSYSTEM:WINDOWS", "-Wl,/ENTRY:mainCRTStartup", {force = true, tools = {"clang", "zig"}})
-    else
-        add_ldflags("/SUBSYSTEM:CONSOLE", {force = true, tools = "msvc"})
-        add_ldflags("-Wl,/SUBSYSTEM:CONSOLE", {force = true, tools = {"clang", "zig"}})
-    end
+    add_ldflags("/SUBSYSTEM:WINDOWS", "/ENTRY:mainCRTStartup", {force = true})
+    add_ldflags("/SUBSYSTEM:WINDOWS", "/ENTRY:mainCRTStartup", {force = true, tools = "msvc"})
+    add_ldflags("-Wl,/SUBSYSTEM:WINDOWS", "-Wl,/ENTRY:mainCRTStartup", {force = true, tools = {"clang", "zig"}})
     
     -- Precompiled Header (Disable in CodeQL environment to avoid PCH issues)
     if os.getenv("XMAKE_PCH") ~= "false" and not os.getenv("CODEQL_ACTION_INIT_HAS_RUN") then
@@ -79,7 +75,7 @@ target("TPFanCtrl2")
     add_links("comctl32", "user32", "gdi32", "advapi32", "shell32", "ole32", "oleaut32", "uuid", "dwmapi")
     
     -- Output directory
-    set_targetdir("bin")
+    set_targetdir("artifacts/bin")
 
     -- Optimizations for Release mode
     if is_mode("release") then
@@ -118,7 +114,7 @@ target("logic_test")
     add_includedirs("fancontrol/Core")
     
     -- Output directory
-    set_targetdir("bin")
+    set_targetdir("artifacts/bin")
 
 -- Target: core_test (Unit Tests - Core Library)
 target("core_test")
@@ -143,4 +139,4 @@ target("core_test")
     add_includedirs("fancontrol/Core")
     
     -- Output directory
-    set_targetdir("bin")
+    set_targetdir("artifacts/bin")

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>TPFanCtrl2 Startup Window Report</title>
+  <style>
+    body { font-family: Segoe UI, Arial, sans-serif; margin: 40px; line-height: 1.55; color: #202124; }
+    h1, h2 { margin-bottom: 0.35rem; }
+    code { background: #f3f4f6; padding: 0.12rem 0.3rem; border-radius: 4px; }
+    section { max-width: 920px; margin-bottom: 1.7rem; }
+  </style>
+</head>
+<body>
+  <section>
+    <h1>TPFanCtrl2 Startup Window Report</h1>
+    <p>Generated: 2026-05-12</p>
+    <p>The GUI executable could show a command line window when built in debug mode because the GUI target selected the console subsystem outside release builds.</p>
+  </section>
+  <section>
+    <h2>Resolution</h2>
+    <p>The <code>TPFanCtrl2</code> target now always links as a Windows subsystem binary while preserving the existing <code>main</code> entry point through <code>mainCRTStartup</code>.</p>
+    <ul>
+      <li>MSVC: <code>/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup</code></li>
+      <li>Clang/Zig: <code>-Wl,/SUBSYSTEM:WINDOWS -Wl,/ENTRY:mainCRTStartup</code></li>
+    </ul>
+  </section>
+  <section>
+    <h2>Unchanged</h2>
+    <ul>
+      <li><code>logic_test</code> and <code>core_test</code> keep console output.</li>
+      <li>Application logs still use the existing logging path.</li>
+    </ul>
+  </section>
+</body>
+</html>

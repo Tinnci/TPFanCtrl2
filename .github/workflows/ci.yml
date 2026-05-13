@@ -53,8 +53,11 @@ jobs:
       - name: Configure and Build
         run: |
           xmake f -m release -a x86 -y
-          xmake -y
+          xmake -y TPFanCtrl2
+          xmake -y logic_test
+          xmake -y core_test
  
       - name: Run Tests
         run: |
           xmake run logic_test
+          xmake run core_test

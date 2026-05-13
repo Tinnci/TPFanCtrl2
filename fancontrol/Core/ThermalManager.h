@@ -132,6 +132,11 @@ private:
     void ReportError(ErrorSeverity severity, const std::string& source, 
                      const std::string& message, int code = 0);
 
+    /// Publish a compact health snapshot for UI, tray, and background monitors.
+    void ReportPipelineHealth(bool isOperational, int availableSensorCount,
+                              int maxTemp, int fan1Rpm, int fan2Rpm,
+                              int currentLevel, const std::string& summary);
+
     /// Evaluate whether the measured RPM matches the commanded level
     void EvaluateFanFeedback(int currentLevel, int fan1Rpm);
     
@@ -179,6 +184,7 @@ private:
 
     // Fan response tracking
     int m_fanNoSpinCounter{0};
+    int m_consecutiveReadErrors{0};
     static constexpr int kFanMinOperationalRpm = 300;
     static constexpr int kFanSpinRetryThreshold = 3;
 };

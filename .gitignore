@@ -42,5 +42,6 @@
 .xmake/
 build/
 bin/
+artifacts/
 *.zip
 TPFanCtrl2_example.ini

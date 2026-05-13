@@ -33,6 +33,7 @@ public:
     int FanBeepDura = 50;
     int NoWaitMessage = 1;
     int StartMinimized = 0;
+    int BackgroundServiceMode = 0;
     int NoBallons = 0;
     int IconColorFan = 0;
     int Lev64Norm = 0;

@@ -167,6 +167,8 @@ void UIAdapter::OnThermalEvent(const ThermalEvent& event) {
             HandleError(e);
         } else if constexpr (std::is_same_v<T, LogEvent>) {
             HandleLog(e);
+        } else if constexpr (std::is_same_v<T, PipelineHealthEvent>) {
+            HandlePipelineHealth(e);
         }
     }, event);
 }
@@ -267,6 +269,22 @@ void UIAdapter::HandleLog(const LogEvent& e) {
         default:                level = Log::Level::Info; break;
     }
     Log::UILogBuffer::Get().Add(level, "{}", e.message);
+}
+
+void UIAdapter::HandlePipelineHealth(const PipelineHealthEvent& e) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_state.Pipeline.IsOperational = e.isOperational;
+    m_state.Pipeline.ConsecutiveReadErrors = e.consecutiveReadErrors;
+    m_state.Pipeline.AvailableSensorCount = e.availableSensorCount;
+    m_state.Pipeline.MaxTemp = e.maxTemp;
+    m_state.Pipeline.Fan1Speed = e.fan1Speed;
+    m_state.Pipeline.Fan2Speed = e.fan2Speed;
+    m_state.Pipeline.CurrentLevel = e.currentLevel;
+    m_state.Pipeline.Summary = e.summary;
+    m_state.IsOperational = e.isOperational;
+    if (!e.isOperational) {
+        m_state.LastError = e.summary;
+    }
 }
 
 void UIAdapter::UpdateAutotuneLogic(float currentTemp) {
