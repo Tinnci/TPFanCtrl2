@@ -1,5 +1,6 @@
 #include "Application.h"
 #include "PawnIOProvider.h"
+#include "Version.h"
 #include <spdlog/spdlog.h>
 #include <vulkan/vulkan_win32.h>
 
@@ -85,6 +86,7 @@ Application::~Application() {
 
 bool Application::Initialize(HWND hwnd, HINSTANCE hInstance) {
     m_hwnd = hwnd;
+    spdlog::info("TPFanCtrl2 {} starting...", AppVersion::GetFullVersionString());
     
     // Initialize config manager
     m_config = std::make_shared<ConfigManager>();

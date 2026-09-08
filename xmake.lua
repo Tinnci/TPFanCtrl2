@@ -37,8 +37,19 @@ if not get_config("arch") then
     set_arch("x64")
 end
 
+-- Define version info rule
+rule("version_info")
+    on_load(function (target)
+        local git_commit = try { function() local out = os.iorun("git rev-parse --short HEAD") return out and out:trim() or "dev" end } or "dev"
+        local git_date = try { function() local out = os.iorun("git log -1 --format=%cd --date=short") return out and out:trim() or "2026-09-08" end } or "2026-09-08"
+        target:add("defines", 'TPFC_VERSION="2.8.0"')
+        target:add("defines", 'TPFC_COMMIT="' .. git_commit .. '"')
+        target:add("defines", 'TPFC_BUILD_DATE="' .. git_date .. '"')
+    end)
+rule_end()
+
 -- Define build modes
-add_rules("mode.debug", "mode.release")
+add_rules("mode.debug", "mode.release", "version_info")
 
 -- Global settings
 set_languages("c++20")

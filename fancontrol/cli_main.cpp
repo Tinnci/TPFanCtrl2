@@ -3,6 +3,7 @@
 #include "ECManager.h"
 #include "FanController.h"
 #include "PawnIOProvider.h"
+#include "Version.h"
 
 #include <algorithm>
 #include <charconv>
@@ -30,12 +31,12 @@ BOOL WINAPI ConsoleHandler(DWORD signal) {
 }
 
 void PrintUsage() {
-    std::cout << R"(TPFanCtrl2 CLI
-
-Usage:
+    std::cout << "TPFanCtrl2 CLI " << AppVersion::GetFullVersionString() << "\n\n"
+              << R"(Usage:
   TPFanCtrl2-cli.exe status [--json] [--backend <auto|pawnio>]
   TPFanCtrl2-cli.exe fan --level <0-7> [--duration <seconds>] [--backend <auto|pawnio>]
   TPFanCtrl2-cli.exe mode auto [--backend <auto|pawnio>]
+  TPFanCtrl2-cli.exe --version
 
 Commands:
   status                 Read current EC fan level and fan RPM.
@@ -187,9 +188,18 @@ int RunManual(FanController& fan, int level, int durationSeconds) {
 } // namespace
 
 int main(int argc, char** argv) {
+    if (HasArg(argc, argv, "--version") || HasArg(argc, argv, "-v")) {
+        std::cout << "TPFanCtrl2 CLI " << AppVersion::GetFullVersionString() << "\n";
+        return 0;
+    }
+
     if (argc < 2 || HasArg(argc, argv, "--help") || HasArg(argc, argv, "-h")) {
         PrintUsage();
         return argc < 2 ? 2 : 0;
+    }
+
+    if (!HasArg(argc, argv, "--json")) {
+        std::cerr << "TPFanCtrl2 CLI " << AppVersion::GetFullVersionString() << "\n";
     }
 
     std::string_view backend;
