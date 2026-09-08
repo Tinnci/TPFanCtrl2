@@ -35,7 +35,7 @@ ThermalManager::ThermalManager(
     m_cachedConfig.ignoreList = m_config.ignoreList;
     
     // Initialize state
-    m_state.currentMode = ControlMode::BIOS;
+    m_state.currentMode = ControlMode::ECAuto;
     m_state.isOperational = false;
     m_state.sensors.resize(SensorAddresses::TOTAL_COUNT);
     
@@ -73,9 +73,9 @@ void ThermalManager::Stop() {
         m_workerThread.join();
     }
     
-    // Return fan control to BIOS
+    // Return fan control to the EC firmware's automatic curve
     if (m_fanController) {
-        m_fanController->SetFanLevel(0x80); // BIOS control
+        m_fanController->SetFanLevel(0x80); // EC automatic control
     }
     
     Log(LogLevel::Info, "ThermalManager stopped.");
@@ -345,8 +345,8 @@ void ThermalManager::ApplyControl(float dt) {
     ControlMode mode = m_mode.load();
     
     switch (mode) {
-        case ControlMode::BIOS:
-            ApplyBIOSMode();
+        case ControlMode::ECAuto:
+            ApplyECAutoMode();
             break;
         case ControlMode::Smart:
             ApplySmartMode();
@@ -360,8 +360,8 @@ void ThermalManager::ApplyControl(float dt) {
     }
 }
 
-void ThermalManager::ApplyBIOSMode() {
-    // Set fan to BIOS control (0x80)
+void ThermalManager::ApplyECAutoMode() {
+    // 0x80 asks the embedded controller to resume its firmware curve.
     if (m_fanController->GetCurrentLevel() != 0x80) {
         m_fanController->SetFanLevel(0x80);
     }

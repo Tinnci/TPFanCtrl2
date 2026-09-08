@@ -91,6 +91,31 @@ target("TPFanCtrl2")
         add_vectorexts("sse2")
     end
 
+-- Target: TPFanCtrl2-cli (PowerShell/console hardware control)
+target("TPFanCtrl2-cli")
+    set_kind("binary")
+    set_plat("windows")
+    add_packages("spdlog", "nlohmann_json")
+
+    add_ldflags("/SUBSYSTEM:CONSOLE", {force = true, tools = "msvc"})
+    add_ldflags("-Wl,/SUBSYSTEM:CONSOLE", {force = true, tools = {"clang", "zig"}})
+
+    if os.getenv("XMAKE_PCH") ~= "false" and not os.getenv("CODEQL_ACTION_INIT_HAS_RUN") then
+        set_pcxxheader("fancontrol/_prec.h")
+    end
+
+    -- Reuse the same EC and fan-control implementation as the GUI.
+    add_files("fancontrol/cli_main.cpp")
+    add_files("fancontrol/ECManager.cpp")
+    add_files("fancontrol/FanController.cpp")
+    add_files("fancontrol/TVicPortProvider.cpp")
+
+    add_includedirs("fancontrol")
+    add_linkdirs("fancontrol")
+    add_links("TVicPort")
+    add_links("comctl32", "user32", "advapi32")
+    set_targetdir("artifacts/bin")
+
 -- Target: logic_test (Unit Tests - Legacy)
 target("logic_test")
     set_kind("binary")

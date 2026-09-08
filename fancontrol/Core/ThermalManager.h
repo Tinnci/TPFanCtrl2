@@ -113,8 +113,8 @@ private:
     /// Apply control logic based on current mode
     void ApplyControl(float dt);
     
-    /// Apply BIOS mode (release control)
-    void ApplyBIOSMode();
+    /// Apply EC automatic mode (release control to firmware)
+    void ApplyECAutoMode();
     
     /// Apply Smart mode control
     void ApplySmartMode();
@@ -165,7 +165,7 @@ private:
     mutable std::mutex m_stateMutex;
     
     // Control state
-    std::atomic<ControlMode> m_mode{ControlMode::BIOS};
+    std::atomic<ControlMode> m_mode{ControlMode::ECAuto};
     std::atomic<int> m_smartProfile{0};
     std::atomic<int> m_manualLevel{7};
     

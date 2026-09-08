@@ -63,7 +63,7 @@ TEST_F(ThermalManagerTest, InitializationState) {
     CreateManager();
     
     EXPECT_FALSE(thermalManager->IsRunning());
-    EXPECT_EQ(thermalManager->GetMode(), ControlMode::BIOS);
+    EXPECT_EQ(thermalManager->GetMode(), ControlMode::ECAuto);
     EXPECT_EQ(thermalManager->GetSmartProfileIndex(), 0);
 }
 
@@ -93,8 +93,8 @@ TEST_F(ThermalManagerTest, ModeChange) {
     thermalManager->SetMode(ControlMode::Manual);
     EXPECT_EQ(thermalManager->GetMode(), ControlMode::Manual);
     
-    thermalManager->SetMode(ControlMode::BIOS);
-    EXPECT_EQ(thermalManager->GetMode(), ControlMode::BIOS);
+    thermalManager->SetMode(ControlMode::ECAuto);
+    EXPECT_EQ(thermalManager->GetMode(), ControlMode::ECAuto);
 }
 
 TEST_F(ThermalManagerTest, GetStateSnapshot) {
@@ -199,8 +199,8 @@ TEST_F(UIAdapterTest, StateUpdatesFromManager) {
 }
 
 TEST_F(UIAdapterTest, SetMode) {
-    uiAdapter->SetMode(0);  // BIOS
-    EXPECT_EQ(thermalManager->GetMode(), ControlMode::BIOS);
+    uiAdapter->SetMode(0);  // EC Auto
+    EXPECT_EQ(thermalManager->GetMode(), ControlMode::ECAuto);
     
     uiAdapter->SetMode(1);  // Manual
     EXPECT_EQ(thermalManager->GetMode(), ControlMode::Manual);

@@ -674,7 +674,7 @@ int RunMain(int argc, char** argv) {
                     };
 
                     {
-                        drawSegmented(_TR("MODE_BIOS"), 0, uiSnapshot.Mode);
+                        drawSegmented(_TR("MODE_EC_AUTO"), 0, uiSnapshot.Mode);
                         drawSegmented(_TR("MODE_MANUAL"), 1, uiSnapshot.Mode);
                         drawSegmented(_TR("MODE_SMART"), 2, uiSnapshot.Mode);
                         ImGui::NewLine();

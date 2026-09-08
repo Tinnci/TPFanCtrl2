@@ -29,13 +29,13 @@ struct FanStateChangeEvent {
     std::chrono::steady_clock::time_point timestamp;
     int fan1Speed;      // RPM
     int fan2Speed;      // RPM (0 if single fan)
-    int currentLevel;   // 0-7, or 0x80 for BIOS control
+    int currentLevel;   // 0-7, or 0x80 for EC automatic control
     int previousLevel;
 };
 
 /// Event fired when the control mode changes
 enum class ControlMode {
-    BIOS = 1,       // Let BIOS control the fan
+    ECAuto = 1,     // Let the embedded controller run its firmware curve
     Smart = 2,      // TPFanCtrl2 smart mode (temperature-based levels)
     Manual = 3,     // User-defined fixed speed
     PID = 4         // PID controller mode
@@ -117,7 +117,7 @@ struct SensorReading {
 struct FanState {
     int fan1Speed;          // RPM
     int fan2Speed;          // RPM
-    int currentLevel;       // 0-7 or 0x80
+    int currentLevel;       // 0-7 or 0x80 (EC automatic mode)
     bool isDualFan;         // Whether this is a dual-fan system
 };
 

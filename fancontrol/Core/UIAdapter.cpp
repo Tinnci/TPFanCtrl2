@@ -60,7 +60,7 @@ int UIAdapter::GetFan1Speed() const {
 void UIAdapter::SetMode(int mode) {
     ControlMode coreMode;
     switch (mode) {
-        case 0: coreMode = ControlMode::BIOS; break;
+        case 0: coreMode = ControlMode::ECAuto; break;
         case 1: coreMode = ControlMode::Manual; break;
         case 2: 
         default:
@@ -238,7 +238,7 @@ void UIAdapter::HandleModeChange(const ModeChangeEvent& e) {
     std::lock_guard<std::mutex> lock(m_mutex);
     
     switch (e.newMode) {
-        case ControlMode::BIOS:   m_state.Mode = 0; break;
+        case ControlMode::ECAuto: m_state.Mode = 0; break;
         case ControlMode::Manual: m_state.Mode = 1; break;
         case ControlMode::Smart:  m_state.Mode = 2; break;
         case ControlMode::PID:    m_state.Mode = 2; m_state.Algorithm = 1; break;

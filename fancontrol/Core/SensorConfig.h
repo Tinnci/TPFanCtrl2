@@ -32,7 +32,7 @@ struct SensorDefinition {
 /// Smart mode fan level configuration
 struct SmartLevelDefinition {
     int temperature;            // Threshold temperature
-    int fanLevel;               // Fan level (0-7, or 64 for max, 128 for BIOS)
+    int fanLevel;               // Fan level (0-7; 64 is legacy extreme, 128 is EC Auto)
     int hystUp;                 // Hysteresis when heating up
     int hystDown;               // Hysteresis when cooling down
     

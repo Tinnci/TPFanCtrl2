@@ -75,7 +75,7 @@ public:
         int method;
         int key;
     };
-    Hotkey HK_BIOS = {0, 0};
+    Hotkey HK_ECAuto = {0, 0};
     Hotkey HK_Manual = {0, 0};
     Hotkey HK_Smart = {0, 0};
     Hotkey HK_SM1 = {0, 0};

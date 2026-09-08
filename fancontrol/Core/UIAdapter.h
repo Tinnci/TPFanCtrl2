@@ -65,7 +65,7 @@ struct UISnapshot {
     int CurrentFanLevel = 0;
     
     // Control state
-    int Mode = 2;  // 0: BIOS, 1: Manual, 2: Smart
+    int Mode = 2;  // 0: EC Auto, 1: Manual, 2: Smart
     int ManualLevel = 0;
     int SmartProfile = 0;
     
@@ -127,7 +127,7 @@ public:
     
     // --- Control ---
     
-    /// Set control mode (0=BIOS, 1=Manual, 2=Smart)
+    /// Set control mode (0=EC Auto, 1=Manual, 2=Smart)
     void SetMode(int mode);
     
     /// Set manual fan level (0-7)

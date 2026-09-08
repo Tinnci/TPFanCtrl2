@@ -167,10 +167,10 @@ bool FanController::UpdatePIDControl(float currentTemp, const PIDSettings& setti
     // Map output to fan levels (0-7) with hysteresis
     // We use a threshold to avoid oscillating between two levels
     int targetLevel = m_currentFanCtrl;
-    if (targetLevel < 0 || targetLevel > 127) targetLevel = 0; // Handle BIOS/Initial state
+    if (targetLevel < 0 || targetLevel > 127) targetLevel = 0; // Handle EC Auto/initial state
 
     float currentLevelF = (float)targetLevel;
-    if (targetLevel >= 0x80) currentLevelF = settings.minFan; // If in BIOS mode, treat as min
+    if (targetLevel >= 0x80) currentLevelF = settings.minFan; // EC Auto is not a manual level
 
     float diff = output - currentLevelF;
     const float hysteresis = 0.7f; // Only change if output is 0.7 away from current level

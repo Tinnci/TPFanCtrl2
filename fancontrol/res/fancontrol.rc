@@ -36,7 +36,7 @@ BEGIN
     LTEXT           "Switch",IDC_STATIC,103,40,21,8
     EDITTEXT        8103,126,38,29,13,ES_AUTOHSCROLL | ES_READONLY
     LTEXT           "Mode",IDC_STATIC,103,54,21,8
-    CONTROL         "BIOS (embedded controller)",8300,"Button",BS_AUTORADIOBUTTON,129,55,99,10
+    CONTROL         "EC Auto (firmware curve)",8300,"Button",BS_AUTORADIOBUTTON,129,55,99,10
     CONTROL         "Smart (TPFanCtrl2.ini)",8301,"Button",BS_AUTORADIOBUTTON,129,68,96,10
     CONTROL         "Manual ",8302,"Button",BS_AUTORADIOBUTTON,129,82,38,10
     EDITTEXT        8310,171,79,32,14,ES_AUTOHSCROLL | ES_NUMBER
@@ -67,7 +67,7 @@ BEGIN
     LTEXT           "Switch",IDC_STATIC,3,160,29,8
     EDITTEXT        8103,2,169,47,13,ES_AUTOHSCROLL | ES_READONLY
     LTEXT           "Mode",IDC_STATIC,3,207,19,8
-    CONTROL         "BIOS",8300,"Button",BS_AUTORADIOBUTTON,3,215,37,10
+    CONTROL         "EC Auto",8300,"Button",BS_AUTORADIOBUTTON,3,215,37,10
     CONTROL         "Smart",8301,"Button",BS_AUTORADIOBUTTON,3,224,36,10
     CONTROL         "Manual",8302,"Button",BS_AUTORADIOBUTTON,3,234,36,10
     EDITTEXT        8310,3,244,21,14,ES_AUTOHSCROLL | ES_NUMBER
@@ -91,7 +91,7 @@ BEGIN
     LTEXT           "Switch",IDC_STATIC,103,40,21,8
     EDITTEXT        8103,126,38,29,13,ES_AUTOHSCROLL | ES_READONLY
     LTEXT           "Mode",IDC_STATIC,103,54,21,8
-    CONTROL         "BIOS (embedded controller)",8300,"Button",BS_AUTORADIOBUTTON,129,55,99,10
+    CONTROL         "EC Auto (firmware curve)",8300,"Button",BS_AUTORADIOBUTTON,129,55,99,10
     CONTROL         "Smart (TPFanCtrl2.ini)",8301,"Button",BS_AUTORADIOBUTTON,129,68,96,10
     CONTROL         "Manual ",8302,"Button",BS_AUTORADIOBUTTON,129,82,36,10
     EDITTEXT        8310,171,79,25,14,ES_AUTOHSCROLL | ES_NUMBER
@@ -121,7 +121,7 @@ BEGIN
     LTEXT           "Switch",IDC_STATIC,3,160,29,8
     EDITTEXT        8103,3,168,63,13,ES_AUTOHSCROLL | ES_READONLY
     LTEXT           "Mode",IDC_STATIC,3,207,19,8
-    CONTROL         "BIOS",8300,"Button",BS_AUTORADIOBUTTON,3,215,37,10
+    CONTROL         "EC Auto",8300,"Button",BS_AUTORADIOBUTTON,3,215,37,10
     CONTROL         "Smart",8301,"Button",BS_AUTORADIOBUTTON,3,224,36,10
     CONTROL         "Manual",8302,"Button",BS_AUTORADIOBUTTON,3,234,44,10
     EDITTEXT        8310,3,244,25,14,ES_AUTOHSCROLL | ES_NUMBER
@@ -149,7 +149,7 @@ BEGIN
     MENUITEM "Symbol Icon",                 5070
     MENUITEM "Text Icon",                   5080
     MENUITEM SEPARATOR
-    MENUITEM "BIOS Mode",                   5001
+    MENUITEM "EC Auto Mode",                5001
     MENUITEM "Smart Mode",                  5002
     MENUITEM "Manual Mode",                 5005
     MENUITEM "End Program",                 5020
