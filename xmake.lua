@@ -1,8 +1,5 @@
 -- Project Information
 set_project("TPFanCtrl2")
-set_version("2.8.1", {build = function () 
-    return try { function() return os.ioread("git rev-parse --short HEAD"):trim() end } or "unknown"
-end})
 
 -- Build options
 option("gui")
@@ -40,9 +37,17 @@ end
 -- Define version info rule
 rule("version_info")
     on_load(function (target)
+        local ver = try { function()
+            local out = os.iorun("git describe --tags --abbrev=0 --match v*")
+            if out then
+                out = out:trim()
+                return out:startswith("v") and out:sub(2) or out
+            end
+        end } or "dev"
         local git_commit = try { function() local out = os.iorun("git rev-parse --short HEAD") return out and out:trim() or "dev" end } or "dev"
-        local git_date = try { function() local out = os.iorun("git log -1 --format=%cd --date=short") return out and out:trim() or "2026-09-08" end } or "2026-09-08"
-        target:add("defines", 'TPFC_VERSION="2.8.1"')
+        local git_date = try { function() local out = os.iorun("git log -1 --format=%cd --date=short") return out and out:trim() or os.date("%Y-%m-%d") end } or os.date("%Y-%m-%d")
+        target:set("version", ver)
+        target:add("defines", 'TPFC_VERSION="' .. ver .. '"')
         target:add("defines", 'TPFC_COMMIT="' .. git_commit .. '"')
         target:add("defines", 'TPFC_BUILD_DATE="' .. git_date .. '"')
     end)

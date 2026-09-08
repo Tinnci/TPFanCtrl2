@@ -1,0 +1,26 @@
+changelog:
+  categories:
+    - title: "🚀 Features & Enhancements"
+      labels:
+        - "enhancement"
+        - "feature"
+    - title: "🐛 Bug Fixes & Reliability"
+      labels:
+        - "fix"
+        - "bug"
+    - title: "⚡ Performance & Architecture"
+      labels:
+        - "performance"
+        - "refactor"
+    - title: "🧰 Build & CI/CD"
+      labels:
+        - "build"
+        - "ci"
+        - "chore"
+    - title: "📖 Documentation"
+      labels:
+        - "documentation"
+        - "docs"
+    - title: "💬 Other Changes"
+      labels:
+        - "*"

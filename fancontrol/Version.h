@@ -3,7 +3,7 @@
 #include <string_view>
 
 #ifndef TPFC_VERSION
-#define TPFC_VERSION "2.8.1"
+#define TPFC_VERSION "dev"
 #endif
 
 #ifndef TPFC_COMMIT

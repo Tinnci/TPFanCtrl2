@@ -1,11 +1,21 @@
 param(
-    [string]$Version = "dev",
+    [string]$Version = "",
     [string]$Configuration = "release",
     [string]$Architecture = "x64",
     [string]$OutputRoot = "artifacts/dist"
 )
 
 $ErrorActionPreference = "Stop"
+
+# Auto-detect version from git tag if not specified (SSOT: Single Source of Truth)
+if (-not $Version -or $Version -eq "dev") {
+    $gitTag = (git describe --tags --abbrev=0 --match "v*" 2>$null)
+    if ($gitTag -and $gitTag -match '^v?(.+)$') {
+        $Version = $Matches[1]
+    } else {
+        $Version = "dev"
+    }
+}
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $outputRootPath = Join-Path $repoRoot $OutputRoot
