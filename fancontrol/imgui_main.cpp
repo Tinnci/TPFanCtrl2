@@ -296,6 +296,22 @@ int RunMain(int argc, char** argv) {
     AppInit::EnableDPIAwareness();
     AppInit::IsRunningAsAdmin();  // Log admin status
 
+    // Prevent multiple GUI instances to avoid conflicting thermal controllers and duplicate tray icons
+    HANDLE hSingleInstanceMutex = ::CreateMutexW(nullptr, FALSE, L"Global\\TPFanCtrl2_GUI_SingleInstance");
+    if (!hSingleInstanceMutex) {
+        hSingleInstanceMutex = ::CreateMutexW(nullptr, FALSE, L"TPFanCtrl2_GUI_SingleInstance");
+    }
+    if (hSingleInstanceMutex && ::GetLastError() == ERROR_ALREADY_EXISTS) {
+        spdlog::warn("Another instance of TPFanCtrl2 is already running. Activating existing window.");
+        HWND existingWnd = ::FindWindowW(L"TPFanCtrl2Vulkan", nullptr);
+        if (existingWnd) {
+            ::ShowWindow(existingWnd, SW_RESTORE);
+            ::SetForegroundWindow(existingWnd);
+        }
+        ::CloseHandle(hSingleInstanceMutex);
+        return 0;
+    }
+
     HINSTANCE hInstance = GetModuleHandle(NULL);
 
     // Window Init
@@ -1177,6 +1193,10 @@ int RunMain(int argc, char** argv) {
 
     ::DestroyWindow(hwnd);
     ::UnregisterClassW(wc.lpszClassName, wc.hInstance);
+
+    if (hSingleInstanceMutex) {
+        ::CloseHandle(hSingleInstanceMutex);
+    }
 
     spdlog::info("Application terminated successfully.");
     return 0;

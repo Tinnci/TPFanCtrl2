@@ -151,6 +151,7 @@ target("TPFanCtrl2-cli")
     add_files("fancontrol/ECManager.cpp")
     add_files("fancontrol/FanController.cpp")
     add_files("fancontrol/PawnIOProvider.cpp")
+    add_files("fancontrol/SensorManager.cpp")
 
     add_includedirs("fancontrol")
     add_links("comctl32", "user32", "advapi32")

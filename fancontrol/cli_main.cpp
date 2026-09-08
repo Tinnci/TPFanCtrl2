@@ -2,6 +2,7 @@
 
 #include "ECManager.h"
 #include "FanController.h"
+#include "SensorManager.h"
 #include "PawnIOProvider.h"
 #include "Version.h"
 
@@ -13,6 +14,8 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <vector>
+#include <nlohmann/json.hpp>
 
 namespace {
 
@@ -33,25 +36,29 @@ BOOL WINAPI ConsoleHandler(DWORD signal) {
 void PrintUsage() {
     std::cout << "TPFanCtrl2 CLI " << AppVersion::GetFullVersionString() << "\n\n"
               << R"(Usage:
-  TPFanCtrl2-cli.exe status [--json] [--backend <auto|pawnio>]
-  TPFanCtrl2-cli.exe fan --level <0-7> [--duration <seconds>] [--backend <auto|pawnio>]
-  TPFanCtrl2-cli.exe mode auto [--backend <auto|pawnio>]
+  TPFanCtrl2-cli.exe status [--dualfan] [--json] [--backend <auto|pawnio>]
+  TPFanCtrl2-cli.exe fan --level <0-7> [--dualfan] [--duration <seconds>]
+  TPFanCtrl2-cli.exe fan --level1 <0-7> --level2 <0-7> [--duration <seconds>]
+  TPFanCtrl2-cli.exe mode auto [--dualfan]
   TPFanCtrl2-cli.exe --version
 
 Commands:
-  status                 Read current EC fan level and fan RPM.
-  fan --level <0-7>     Apply a normal manual fan level.
-  mode auto              Return fan control to the EC firmware curve.
+  status                 Read hardware temperatures, fan RPMs, and current EC level.
+  fan --level <0-7>     Apply a manual fan level (use --dualfan for both fans).
+  fan --level1 <0-7> --level2 <0-7>
+                         Independently set Fan 1 and Fan 2 speeds (dual-fan laptops).
+  mode auto              Return fan control to the EC firmware automatic curve.
 
 Options:
-  --duration <seconds>   Restore EC automatic control after the duration.
+  --dualfan              Enable dual-fan control and speed monitoring (e.g. ThinkPad Z13/P1/X1E).
+  --duration <seconds>   Restore EC automatic control after the specified duration.
                          Without it, press Ctrl+C to restore EC automatic control.
   --backend <name>       Choose I/O backend: auto (default) or pawnio.
-  --json                 Print status as JSON.
+  --json                 Print output as structured JSON.
   --help                 Show this help.
 
 The CLI requires an elevated PowerShell/Command Prompt and the signed
-PawnIO driver installed. It never sends the legacy extreme value 0x40.
+PawnIO driver installed ('winget install namazso.PawnIO').
 )";
 }
 
@@ -93,6 +100,7 @@ struct HardwareSession {
     std::shared_ptr<IIOProvider> io;
     std::shared_ptr<ECManager> ec;
     std::unique_ptr<FanController> fan;
+    std::unique_ptr<SensorManager> sensor;
     std::string backendName;
 
     bool Open(std::string_view preferredBackend = "") {
@@ -114,50 +122,110 @@ struct HardwareSession {
             std::cerr << "[EC] " << message << '\n';
         });
         fan = std::make_unique<FanController>(ec);
+        sensor = std::make_unique<SensorManager>(ec);
+
+        // Populate standard ThinkPad sensor names
+        static const char* defaultNames[] = {
+            "CPU", "APS", "PCM", "GPU", "BAT1", "X7D", 
+            "BAT2", "X7F", "BUS", "PCI", "PWR", "XC3"
+        };
+        for (int i = 0; i < 12; ++i) {
+            sensor->SetSensorName(i, defaultNames[i]);
+        }
         return true;
     }
 
     ~HardwareSession() {
+        sensor.reset();
         fan.reset();
         ec.reset();
         io.reset();
     }
 };
 
-int PrintStatus(FanController& fan, bool json) {
+int PrintStatus(FanController& fan, SensorManager* sensor, bool json, bool dualFan) {
+    if (dualFan) {
+        fan.SetDualFanMode(true);
+    }
     fan.RefreshCurrentLevel();
     int fan1 = 0;
     int fan2 = 0;
     const bool speedOk = fan.GetFanSpeeds(fan1, fan2);
     const int level = fan.GetCurrentLevel();
 
+    int maxTemp = 0;
+    int maxIndex = -1;
+    std::vector<SensorData> activeSensors;
+    if (sensor) {
+        sensor->UpdateSensors(false, false, false);
+        maxTemp = sensor->GetMaxTemp(maxIndex, "");
+        for (const auto& s : sensor->GetSensors()) {
+            if (s.isAvailable && s.rawTemp > 0 && s.rawTemp < 128) {
+                activeSensors.push_back(s);
+            }
+        }
+    }
+    std::string maxSensorName = (maxIndex >= 0 && maxIndex < (int)sensor->GetSensors().size())
+        ? sensor->GetSensor(maxIndex).name : "Unknown";
+
     if (json) {
-        std::cout << "{\"level\":" << level
-                  << ",\"fan1_rpm\":" << fan1
-                  << ",\"fan2_rpm\":" << fan2
-                  << ",\"speed_read_ok\":" << (speedOk ? "true" : "false")
-                  << "}\n";
+        nlohmann::json j;
+        j["level"] = level;
+        j["fan1_rpm"] = fan1;
+        j["fan2_rpm"] = fan2;
+        j["dual_fan"] = dualFan || (fan2 > 0);
+        j["speed_read_ok"] = speedOk;
+        j["max_temp"] = maxTemp;
+        j["max_sensor"] = maxSensorName;
+        j["sensors"] = nlohmann::json::array();
+        for (const auto& s : activeSensors) {
+            j["sensors"].push_back({
+                {"name", s.name},
+                {"temp", s.rawTemp}
+            });
+        }
+        std::cout << j.dump(2) << '\n';
     } else {
-        std::cout << "EC fan level: " << level << " (0x" << std::hex << level << std::dec << ")\n"
-                  << "Fan 1: " << fan1 << " RPM\n"
-                  << "Fan 2: " << fan2 << " RPM\n"
-                  << "Speed read: " << (speedOk ? "ok" : "failed") << '\n';
+        std::cout << "EC Fan Status:\n"
+                  << "  Current level: " << level << " (0x" << std::hex << level << std::dec << ")\n"
+                  << "  Fan 1 speed:   " << fan1 << " RPM\n";
+        if (dualFan || fan2 > 0) {
+            std::cout << "  Fan 2 speed:   " << fan2 << " RPM" << (dualFan ? " (Dual-fan)" : "") << "\n";
+        }
+        std::cout << "  Speed read:    " << (speedOk ? "ok" : "failed") << "\n\n";
+
+        std::cout << "Temperatures (Max: " << maxTemp << "\xC2\xB0\x43 [" << maxSensorName << "]):\n";
+        int count = 0;
+        for (const auto& s : activeSensors) {
+            std::cout << "  " << s.name << ": " << s.rawTemp << "\xC2\xB0\x43";
+            if (++count % 4 == 0) {
+                std::cout << '\n';
+            } else {
+                std::cout << "    ";
+            }
+        }
+        if (count % 4 != 0) std::cout << '\n';
     }
     return speedOk ? 0 : 1;
 }
 
-int RestoreECAuto(FanController& fan) {
-    if (!fan.SetFanLevel(0x80, false)) {
+int RestoreECAuto(FanController& fan, bool dualFan) {
+    fan.SetDualFanMode(dualFan);
+    if (!fan.SetFanLevel(0x80, dualFan)) {
         std::cerr << "Failed to restore EC automatic fan control.\n";
         return 1;
     }
-    std::cout << "Fan control returned to EC automatic mode (0x80).\n";
+    std::cout << "Fan control returned to EC automatic mode (0x80)" << (dualFan ? " [Dual-fan]" : "") << ".\n";
     return 0;
 }
 
-int RunManual(FanController& fan, int level, int durationSeconds) {
-    if (level < 0 || level > 7) {
+int RunManual(FanController& fan, int level1, int level2, bool dualFan, int durationSeconds) {
+    if (level1 < 0 || level1 > 7) {
         std::cerr << "Manual level must be between 0 and 7.\n";
+        return 2;
+    }
+    if (level2 >= 0 && (level2 < 0 || level2 > 7)) {
+        std::cerr << "Fan 2 manual level must be between 0 and 7.\n";
         return 2;
     }
     if (durationSeconds < 0) {
@@ -165,12 +233,25 @@ int RunManual(FanController& fan, int level, int durationSeconds) {
         return 2;
     }
 
-    if (!fan.SetFanLevel(level, false)) {
-        std::cerr << "Failed to set fan level " << level << ".\n";
+    fan.SetDualFanMode(dualFan || level2 >= 0);
+    bool setOk = false;
+    if (level2 >= 0) {
+        setOk = fan.SetFanLevels(level1, level2);
+        if (setOk) {
+            std::cout << "Fan 1 level set to " << level1 << ", Fan 2 level set to " << level2 << ".\n";
+        }
+    } else {
+        setOk = fan.SetFanLevel(level1, dualFan);
+        if (setOk) {
+            std::cout << "Fan level set to " << level1 << (dualFan ? " (Both Fan 1 & Fan 2)" : "") << ".\n";
+        }
+    }
+
+    if (!setOk) {
+        std::cerr << "Failed to set fan level.\n";
         return 1;
     }
 
-    std::cout << "Fan level set to " << level << ".\n";
     std::cout << (durationSeconds > 0
         ? "Press Ctrl+C or wait for the duration to restore EC automatic control.\n"
         : "Press Ctrl+C to restore EC automatic control.\n");
@@ -182,7 +263,7 @@ int RunManual(FanController& fan, int level, int durationSeconds) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
     SetConsoleCtrlHandler(ConsoleHandler, FALSE);
-    return RestoreECAuto(fan);
+    return RestoreECAuto(fan, dualFan || level2 >= 0);
 }
 
 } // namespace
@@ -208,26 +289,44 @@ int main(int argc, char** argv) {
     HardwareSession hardware;
     if (!hardware.Open(backend)) return 1;
 
+    const bool dualFan = HasArg(argc, argv, "--dualfan");
+
     const std::string_view command(argv[1]);
     if (command == "status") {
-        return PrintStatus(*hardware.fan, HasArg(argc, argv, "--json"));
+        return PrintStatus(*hardware.fan, hardware.sensor.get(), HasArg(argc, argv, "--json"), dualFan);
     }
     if (command == "mode" && argc >= 3 && std::string_view(argv[2]) == "auto") {
-        return RestoreECAuto(*hardware.fan);
+        return RestoreECAuto(*hardware.fan, dualFan);
     }
     if (command == "fan") {
         int level = -1;
+        int level1 = -1;
+        int level2 = -1;
         int duration = 0;
-        if (!GetIntArg(argc, argv, "--level", level)) {
-            std::cerr << "Missing or invalid --level.\n";
+
+        GetIntArg(argc, argv, "--level", level);
+        GetIntArg(argc, argv, "--level1", level1);
+        GetIntArg(argc, argv, "--level2", level2);
+
+        if (level < 0 && level1 < 0) {
+            std::cerr << "Missing or invalid --level (or --level1/--level2).\n";
             return 2;
         }
+
+        if (level >= 0 && level1 < 0) {
+            level1 = level;
+            if (dualFan && level2 < 0) {
+                // If dualfan is active without explicit level2, apply same level to both
+                level2 = -1; // handled by SetFanLevel(level, true)
+            }
+        }
+
         if (HasArg(argc, argv, "--duration") &&
             !GetIntArg(argc, argv, "--duration", duration)) {
             std::cerr << "Missing or invalid --duration.\n";
             return 2;
         }
-        return RunManual(*hardware.fan, level, duration);
+        return RunManual(*hardware.fan, level1, level2, dualFan, duration);
     }
 
     std::cerr << "Unknown command. Use --help for usage.\n";
