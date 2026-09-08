@@ -63,11 +63,14 @@ bool PawnIOProvider::LoadPawnIOLibrary() {
     if (m_hLib) return true;
 
     std::wstring libPath = FindPawnIOLibPath();
-    Trace(std::format("Loading PawnIOLib from: {}", std::string(libPath.begin(), libPath.end())));
+    Trace(std::format("Loading PawnIOLib from: {}", std::filesystem::path(libPath).string()));
     m_hLib = LoadLibraryW(libPath.c_str());
     if (!m_hLib) {
         DWORD err = GetLastError();
         Trace(std::format("Failed to LoadLibraryW PawnIOLib.dll (Win32 error: {})", err));
+        if (err == ERROR_BAD_EXE_FORMAT) {
+            Trace("Architecture mismatch: 32-bit process cannot load 64-bit PawnIOLib.dll. Build or run as x64 for native PawnIO support.");
+        }
         return false;
     }
 

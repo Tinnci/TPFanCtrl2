@@ -65,6 +65,7 @@ PackageVersion: $Version
 MinimumOSVersion: 10.0.17763.0
 InstallerType: zip
 NestedInstallerType: portable
+ElevationRequirement: elevationRequired
 NestedInstallerFiles:
   - RelativeFilePath: TPFanCtrl2.exe
     PortableCommandAlias: TPFanCtrl2

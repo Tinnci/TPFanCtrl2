@@ -105,18 +105,20 @@ bool Application::Initialize(HWND hwnd, HINSTANCE hInstance) {
 
     // Initialize hardware access
     std::shared_ptr<IIOProvider> ioProvider;
+    std::string backendName;
 
     spdlog::info("Initializing hardware I/O driver (trying PawnIO)...");
     auto pawn = std::make_shared<PawnIOProvider>([](const char* msg) {
-        spdlog::debug("[PawnIO] {}", msg);
+        spdlog::info("[PawnIO] {}", msg);
     });
     if (pawn->Initialize()) {
         spdlog::info("PawnIO driver initialized successfully (version: 0x{:06X}).", pawn->GetVersion());
         ioProvider = pawn;
+        backendName = "PawnIO";
     } else {
         spdlog::warn("PawnIO driver could not be initialized.");
 #ifdef ENABLE_TVICPORT
-        spdlog::info("Attempting TVicPort fallback...");
+        spdlog::warn("[Fallback] Attempting legacy TVicPort fallback...");
         bool driverOk = false;
         for (int i = 0; i < 3; i++) {
             if (OpenTVicPort()) {
@@ -133,6 +135,7 @@ bool Application::Initialize(HWND hwnd, HINSTANCE hInstance) {
             if (TestHardAccess()) {
                 spdlog::info("Hardware access (Ring 0) granted via TVicPort.");
                 ioProvider = std::make_shared<TVicPortProvider>();
+                backendName = "TVicPort";
             } else {
                 spdlog::error("Hardware access denied even with TVicPort opened.");
                 CloseTVicPort();
@@ -145,6 +148,8 @@ bool Application::Initialize(HWND hwnd, HINSTANCE hInstance) {
         spdlog::error("CRITICAL: Could not initialize any hardware I/O driver (PawnIO or TVicPort).");
         return false;
     }
+
+    spdlog::info("[Backend] Active hardware I/O backend: {}", backendName);
 
     auto ecManager = std::make_shared<ECManager>(ioProvider, [](const char* msg) {
         spdlog::debug("[EC] {}", msg);

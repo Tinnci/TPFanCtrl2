@@ -111,17 +111,18 @@ struct HardwareSession {
 
 #ifdef ENABLE_TVICPORT
         if (!io && preferredBackend != "pawnio") {
+            std::cerr << "[Fallback] PawnIO initialization failed or unavailable. Falling back to legacy TVicPort backend...\n";
             if (OpenTVicPort()) {
                 SetHardAccess(TRUE);
                 if (TestHardAccess()) {
                     io = std::make_shared<TVicPortProvider>();
                     backendName = "TVicPort";
                 } else {
-                    std::cerr << "Hardware/EC access was denied for TVicPort.\n";
+                    std::cerr << "[TVicPort] Hardware/EC access was denied for TVicPort.\n";
                     CloseTVicPort();
                 }
             } else if (preferredBackend == "tvicport") {
-                std::cerr << "Failed to open TVicPort driver.\n";
+                std::cerr << "[TVicPort] Failed to open TVicPort driver.\n";
                 return false;
             }
         }
@@ -136,6 +137,7 @@ struct HardwareSession {
             return false;
         }
 
+        std::cerr << "[Backend] Active hardware I/O backend: " << backendName << '\n';
         ec = std::make_shared<ECManager>(io, [](const char* message) {
             std::cerr << "[EC] " << message << '\n';
         });
