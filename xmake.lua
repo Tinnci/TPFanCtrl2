@@ -48,8 +48,19 @@ rule("version_info")
     end)
 rule_end()
 
+-- Sync default architecture output to artifacts/bin for convenient direct CLI execution
+rule("sync_bin_root")
+    after_build(function (target)
+        import("core.project.config")
+        local arch = config.get("arch") or "x64"
+        if arch == "x64" then
+            os.cp(target:targetfile(), "artifacts/bin/")
+        end
+    end)
+rule_end()
+
 -- Define build modes
-add_rules("mode.debug", "mode.release", "version_info")
+add_rules("mode.debug", "mode.release", "version_info", "sync_bin_root")
 
 -- Global settings
 set_languages("c++20")
@@ -169,7 +180,7 @@ target("logic_test")
     add_includedirs("fancontrol/Core")
     
     -- Output directory
-    set_targetdir("artifacts/bin/" .. (get_config("arch") or "x86"))
+    set_targetdir("artifacts/bin/" .. (get_config("arch") or "x64"))
 
 -- Target: core_test (Unit Tests - Core Library)
 target("core_test")
@@ -194,5 +205,5 @@ target("core_test")
     add_includedirs("fancontrol/Core")
     
     -- Output directory
-    set_targetdir("artifacts/bin/" .. (get_config("arch") or "x86"))
+    set_targetdir("artifacts/bin/" .. (get_config("arch") or "x64"))
 end
