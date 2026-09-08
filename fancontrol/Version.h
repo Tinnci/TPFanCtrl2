@@ -1,9 +1,9 @@
-﻿#pragma once
+#pragma once
 #include <string>
 #include <string_view>
 
 #ifndef TPFC_VERSION
-#define TPFC_VERSION "2.8.0"
+#define TPFC_VERSION "2.8.1"
 #endif
 
 #ifndef TPFC_COMMIT

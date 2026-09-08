@@ -46,7 +46,7 @@ winget install Tinnci.TPFanCtrl2
 
 ### Method 2: Manual Download
 
-1. Download `TPFanCtrl2-v2.8.0-windows-x64-app.zip` from the [Releases](https://github.com/Tinnci/TPFanCtrl2/releases) page.
+1. Download `TPFanCtrl2-v2.8.1-windows-x64-app.zip` from the [Releases](https://github.com/Tinnci/TPFanCtrl2/releases) page.
 2. Extract the archive files to a folder of your choice.
 3. Install the `PawnIO` kernel driver (`winget install namazso.PawnIO`).
 
@@ -131,7 +131,7 @@ xmake run core_test
 
 ```powershell
 # Package 64-bit release
-powershell -ExecutionPolicy Bypass -File scripts/package-release.ps1 -Version 2.8.0 -Architecture x64
+powershell -ExecutionPolicy Bypass -File scripts/package-release.ps1 -Version 2.8.1 -Architecture x64
 ```
 
 ## Safety Disclaimer

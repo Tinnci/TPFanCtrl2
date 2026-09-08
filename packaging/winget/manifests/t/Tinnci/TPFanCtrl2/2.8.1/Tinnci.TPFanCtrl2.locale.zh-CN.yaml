@@ -1,0 +1,22 @@
+﻿# yaml-language-server: $schema=https://aka.ms/winget-manifest.locale.1.6.0.schema.json
+PackageIdentifier: Tinnci.TPFanCtrl2
+PackageVersion: 2.8.1
+PackageLocale: zh-CN
+Publisher: Tinnci
+PublisherUrl: https://github.com/Tinnci
+PublisherSupportUrl: https://github.com/Tinnci/TPFanCtrl2/issues
+Author: Tinnci
+PackageName: TPFanCtrl2
+PackageUrl: https://github.com/Tinnci/TPFanCtrl2
+License: The Unlicense
+LicenseUrl: https://github.com/Tinnci/TPFanCtrl2/blob/main/LICENSE
+ShortDescription: 閫傞厤鐜颁唬 Windows 11 鐨?ThinkPad 椋庢墖涓庢俯鎺х▼搴?
+Description: TPFanCtrl2 涓?ThinkPad 绗旇鏈彁渚涘紑绠卞嵆鐢ㄧ殑椋庢墖鑷姩涓庢墜鍔ㄦ帶鍒讹紝鏀寔鐜颁唬 Windows 11 瀹夊叏椹卞姩 PawnIO锛屽苟鎻愪緵鐙珛鐨?CLI 鍛戒护琛屽伐鍏枫€?
+Tags:
+  - thinkpad
+  - fan-control
+  - hardware
+  - thermal
+  - 椋庢墖鎺у埗
+ManifestType: locale
+ManifestVersion: 1.6.0
