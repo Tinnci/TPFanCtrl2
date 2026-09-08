@@ -160,7 +160,7 @@ int PrintStatus(FanController& fan, SensorManager* sensor, bool json, bool dualF
         sensor->UpdateSensors(false, false, false);
         maxTemp = sensor->GetMaxTemp(maxIndex, "");
         for (const auto& s : sensor->GetSensors()) {
-            if (s.isAvailable && s.rawTemp > 0 && s.rawTemp < 128) {
+            if (s.isAvailable && s.rawTemp >= 15 && s.rawTemp < 128) {
                 activeSensors.push_back(s);
             }
         }
