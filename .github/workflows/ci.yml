@@ -18,6 +18,9 @@ on:
       - '.gitignore'
       - 'LICENSE'
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: windows-latest
