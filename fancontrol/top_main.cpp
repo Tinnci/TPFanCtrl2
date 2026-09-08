@@ -321,7 +321,7 @@ int main(int argc, char** argv) {
 
         Element header = vbox({
             hbox({
-                text(" 🌀 TPFanCtrl2 Top ") | bold | color(themeCyan),
+                text(" TPFanCtrl2 Top ") | bold | color(themeCyan),
                 text("│ ") | color(themeDim),
                 text(snap.systemModel) | bold | color(Color::White),
                 text(" │ ") | color(themeDim),
@@ -364,7 +364,7 @@ int main(int argc, char** argv) {
 
         Elements fanRows;
         fanRows.push_back(hbox({
-            text(" 🌀 FANS & TACHOMETERS") | bold | color(themeCyan),
+            text(" FANS & TACHOMETERS") | bold | color(themeCyan),
             filler()
         }));
         fanRows.push_back(separator() | color(themeBorder));
@@ -378,7 +378,7 @@ int main(int argc, char** argv) {
         // 3. Thermal Sensors Panel
         Elements sensorGridRows;
         sensorGridRows.push_back(hbox({
-            text(" 🌡️ THERMAL SENSORS ") | bold | color(themeCyan),
+            text(" THERMAL SENSORS ") | bold | color(themeCyan),
             text("│  Peak Hotspot: ") | color(themeDim),
             text(std::format("{}°C [{}]", snap.maxTemp, snap.maxSensorName)) | bold | color(GetTempColor(snap.maxTemp)),
             filler()
@@ -421,7 +421,7 @@ int main(int argc, char** argv) {
 
         Element controlsPanel = vbox({
             hbox({
-                text(" 🎮 INTERACTIVE CONTROLS (Mouse Click or Hotkey)") | bold | color(themeCyan),
+                text(" INTERACTIVE CONTROLS (Mouse Click or Hotkey)") | bold | color(themeCyan),
                 filler()
             }),
             separator() | color(themeBorder),
