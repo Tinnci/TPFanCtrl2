@@ -10,7 +10,7 @@ TPFanCtrl2 is a fan control software utility for Lenovo ThinkPad laptops on Wind
 ## Features
 
 - **Graphical User Interface (`TPFanCtrl2.exe`)**: Built with Dear ImGui and Vulkan for real-time monitoring and configuration.
-- **Interactive Terminal Dashboard (`TPFanCtrl2-top.exe`)**: A modern, full-screen TUI (like btop/htop) with ANSI TrueColor rendering, real-time tachometer trend sparklines, multi-sensor temperature gauges, and instant keyboard controls.
+- **Interactive Terminal Dashboard (`TPFanCtrl2-top.exe`)**: Built with [FTXUI](https://github.com/ArthurSonzogni/FTXUI) (modern declarative C++ TUI framework) featuring real-time responsive Flexbox layouts, tachometer trend sparklines, multi-sensor temperature gauges, full mouse clicks, and instant keyboard shortcuts.
 - **Command-Line Interface (`TPFanCtrl2-cli.exe`)**: Enables script-friendly terminal control, status queries, and PowerShell/JSON automation.
 - **Hardware Access**: Uses the WHQL-compliant, signed [PawnIO](https://github.com/namazso/PawnIO) kernel driver. Fully compatible with Windows 11 Memory Integrity (HVCI / Core Isolation).
 - **Control Modes**:
@@ -89,18 +89,20 @@ Run `TPFanCtrl2-cli.exe` in an elevated terminal (Administrator):
 
 ### Interactive Terminal Dashboard (TUI)
 
-Launch the full-screen real-time hardware monitor (btop-style):
+Launch the full-screen real-time hardware monitor (btop-style) built with FTXUI:
 
 ```powershell
 .\TPFanCtrl2-top.exe
 ```
 
-- **Interactive Hotkeys**:
-  - `[0-7]`: Instantly set manual fan speed levels.
-  - `[A]`: Return to EC firmware automatic control curve.
-  - `[D]`: Toggle dual-fan / single-fan control mode.
-  - `[R]`: Force an immediate hardware refresh.
-  - `[Q]` or `[Esc]`: Safely restore EC automatic control and cleanly exit.
+- **Interactive Controls**:
+  - **Mouse Support**: Click interactive level buttons `[0]` - `[7]`, `[Auto]`, `[Dual-Fan]`, `[Refresh]`, or `[Quit]`.
+  - **Keyboard Hotkeys**:
+    - `[0-7]`: Instantly set manual fan speed levels.
+    - `[A]`: Return to EC firmware automatic control curve (`0x80`).
+    - `[D]`: Toggle dual-fan / single-fan control mode.
+    - `[R]`: Force an immediate hardware poll & refresh.
+    - `[Q]` or `[Esc]`: Safely restore EC automatic control and cleanly exit.
 
 ## Configuration
 

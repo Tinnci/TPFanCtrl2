@@ -17,6 +17,7 @@ option_end()
 -- Add dependencies
 add_requires("nlohmann_json")
 add_requires("spdlog")
+add_requires("ftxui")
 
 if has_config("gui") then
     add_requires("imgui master", {configs = {win32 = true, vulkan = true, freetype = true}})
@@ -69,7 +70,7 @@ add_rules("mode.debug", "mode.release", "version_info", "sync_bin_root")
 
 -- Global settings
 set_languages("c++20")
-add_defines("WIN32", "_MBCS")
+add_defines("WIN32", "_MBCS", "NOMINMAX")
 
 -- Compiler flags: support both MSVC and Clang/Zig
 add_cxflags("/J", "/utf-8", {tools = "msvc"})
@@ -166,7 +167,7 @@ target("TPFanCtrl2-cli")
 target("TPFanCtrl2-top")
     set_kind("binary")
     set_plat("windows")
-    add_packages("spdlog", "nlohmann_json")
+    add_packages("ftxui", "spdlog", "nlohmann_json")
 
     add_ldflags("/SUBSYSTEM:CONSOLE", {force = true, tools = "msvc"})
     add_ldflags("-Wl,/SUBSYSTEM:CONSOLE", {force = true, tools = {"clang", "zig"}})

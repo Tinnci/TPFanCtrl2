@@ -7,7 +7,6 @@
 #include "Version.h"
 
 #include <windows.h>
-#include <conio.h>
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -15,16 +14,36 @@
 #include <format>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <string>
-#include <string_view>
 #include <thread>
 #include <vector>
+
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifdef min
+#undef min
+#endif
+#ifdef max
+#undef max
+#endif
+
+#include <ftxui/component/captured_mouse.hpp>
+#include <ftxui/component/component.hpp>
+#include <ftxui/component/component_base.hpp>
+#include <ftxui/component/event.hpp>
+#include <ftxui/component/screen_interactive.hpp>
+#include <ftxui/dom/elements.hpp>
+
+using namespace ftxui;
 
 namespace {
 
 std::atomic_bool g_running{true};
 FanController* g_fanController = nullptr;
 bool g_dualFanMode = true;
+ScreenInteractive* g_pScreen = nullptr;
 
 // Safe shutdown: restore EC automatic curve (0x80) on both fan channels
 void SafeRestoreEC() {
@@ -41,7 +60,9 @@ BOOL WINAPI ConsoleHandler(DWORD signal) {
     case CTRL_CLOSE_EVENT:
         g_running.store(false);
         SafeRestoreEC();
-        std::cout << "\033[?1049l\033[?25h\033[0m" << std::flush;
+        if (g_pScreen) {
+            g_pScreen->ExitLoopClosure()();
+        }
         return TRUE;
     default:
         return FALSE;
@@ -74,7 +95,7 @@ std::string GetSystemModel() {
 }
 
 // Sparkline generator (using Unicode block elements:  ▂▃▄▅▆▇█)
-std::string MakeSparkline(const std::vector<int>& history, int maxVal = 8000, size_t width = 16) {
+std::string MakeSparkline(const std::vector<int>& history, int maxVal = 7500, size_t width = 14) {
     static const char* const blocks[] = { " ", " ", "▂", "▃", "▄", "▅", "▆", "▇", "█" };
     std::string spark;
     if (history.empty()) return std::string(width, ' ');
@@ -94,45 +115,41 @@ std::string MakeSparkline(const std::vector<int>& history, int maxVal = 8000, si
     return spark;
 }
 
-// Generate colored progress bar: [██████░░░░░░]
-std::string MakeBar(float percent, int barWidth = 20, bool isTemp = false, int tempVal = 0) {
-    percent = (std::clamp)(percent, 0.0f, 1.0f);
-    int filled = (int)std::round(percent * barWidth);
-    filled = (std::clamp)(filled, 0, barWidth);
-
-    std::string colorCode;
-    if (isTemp) {
-        if (tempVal < 50) colorCode = "\033[38;2;60;220;120m";       // Cool Green
-        else if (tempVal < 70) colorCode = "\033[38;2;240;220;60m";  // Warm Yellow
-        else if (tempVal < 85) colorCode = "\033[38;2;255;140;40m";  // Hot Orange
-        else colorCode = "\033[38;2;255;60;60m\033[1m";             // Alert Red
-    } else {
-        if (percent < 0.35f) colorCode = "\033[38;2;60;200;240m";    // Cyan
-        else if (percent < 0.70f) colorCode = "\033[38;2;60;220;120m"; // Green
-        else if (percent < 0.90f) colorCode = "\033[38;2;255;180;40m"; // Orange
-        else colorCode = "\033[38;2;255;70;70m";                     // Red
-    }
-
-    std::string out = colorCode + "[";
-    for (int i = 0; i < filled; ++i) out += "█";
-    out += "\033[38;2;70;75;90m"; // dim track
-    for (int i = filled; i < barWidth; ++i) out += "░";
-    out += colorCode + "]\033[0m";
-    return out;
+Color GetTempColor(int temp) {
+    if (temp < 50) return Color::RGB(70, 230, 130);       // Cool Green
+    if (temp < 70) return Color::RGB(250, 220, 60);       // Warm Yellow
+    if (temp < 85) return Color::RGB(255, 140, 40);       // Hot Orange
+    return Color::RGB(255, 65, 65);                       // Alert Red
 }
+
+Color GetFanColor(float pct) {
+    if (pct < 0.35f) return Color::RGB(80, 200, 255);    // Soft Cyan
+    if (pct < 0.70f) return Color::RGB(70, 230, 130);    // Green
+    if (pct < 0.90f) return Color::RGB(255, 180, 40);    // Orange
+    return Color::RGB(255, 75, 75);                       // High Red
+}
+
+struct TopDataSnapshot {
+    std::string systemModel;
+    int currentLevel{0x80};
+    int manualLevel{-1};
+    int fan1Rpm{0};
+    int fan2Rpm{0};
+    std::vector<int> fan1History;
+    std::vector<int> fan2History;
+    int maxTemp{0};
+    std::string maxSensorName{"N/A"};
+    std::vector<SensorData> activeSensors;
+    std::string statusNotice{"Ready. Press [0-7] or click buttons to adjust fan level."};
+    std::chrono::steady_clock::time_point statusNoticeUntil{std::chrono::steady_clock::now() + std::chrono::seconds(5)};
+    bool dualFanMode{true};
+};
 
 } // namespace
 
 int main(int argc, char** argv) {
     (void)argc;
     (void)argv;
-
-    // Enable Virtual Terminal Processing for ANSI sequence support on Windows
-    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-    DWORD dwMode = 0;
-    if (GetConsoleMode(hOut, &dwMode)) {
-        SetConsoleMode(hOut, dwMode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
-    }
 
     // Initialize hardware backend (PawnIO)
     auto pawn = std::make_shared<PawnIOProvider>([](const char*) {});
@@ -160,171 +177,320 @@ int main(int argc, char** argv) {
 
     SetConsoleCtrlHandler(ConsoleHandler, TRUE);
 
-    // Switch to Alternate Screen Buffer and hide cursor
-    std::cout << "\033[?1049h\033[?25l\033[2J" << std::flush;
+    TopDataSnapshot data;
+    data.systemModel = GetSystemModel();
+    data.dualFanMode = g_dualFanMode;
+    std::mutex dataMutex;
 
-    std::string systemModel = GetSystemModel();
-    std::string statusNotice = "Ready. Press [0-7] to set manual fan speed.";
-    auto statusNoticeUntil = std::chrono::steady_clock::now() + std::chrono::seconds(4);
+    auto screen = ScreenInteractive::Fullscreen();
+    g_pScreen = &screen;
 
-    std::vector<int> fan1History;
-    std::vector<int> fan2History;
-    fan1History.reserve(32);
-    fan2History.reserve(32);
+    // Action Helpers
+    auto onSetLevel = [&](int lvl) {
+        std::lock_guard<std::mutex> lock(dataMutex);
+        data.manualLevel = lvl;
+        fan->SetDualFanMode(data.dualFanMode);
+        fan->SetFanLevel(lvl, data.dualFanMode);
+        data.statusNotice = std::format("Manual level set to {} (Dual-fan: {})", lvl, data.dualFanMode ? "ON" : "OFF");
+        data.statusNoticeUntil = std::chrono::steady_clock::now() + std::chrono::seconds(4);
+        screen.PostEvent(Event::Custom);
+    };
 
-    int manualLevel = -1; // -1 means auto
+    auto onAuto = [&]() {
+        std::lock_guard<std::mutex> lock(dataMutex);
+        SafeRestoreEC();
+        data.manualLevel = -1;
+        data.statusNotice = "Restored EC firmware automatic thermal curve (0x80).";
+        data.statusNoticeUntil = std::chrono::steady_clock::now() + std::chrono::seconds(4);
+        screen.PostEvent(Event::Custom);
+    };
 
-    while (g_running.load()) {
-        // 1. Fetch hardware status
-        fan->RefreshCurrentLevel();
-        int currentLevel = fan->GetCurrentLevel();
-
-        int f1 = 0, f2 = 0;
-        fan->GetFanSpeeds(f1, f2);
-        fan1History.push_back(f1);
-        fan2History.push_back(f2);
-        if (fan1History.size() > 30) fan1History.erase(fan1History.begin());
-        if (fan2History.size() > 30) fan2History.erase(fan2History.begin());
-
-        sensor->UpdateSensors(false, false, false);
-        int maxIndex = -1;
-        int maxTemp = sensor->GetMaxTemp(maxIndex, "");
-        std::string maxSensorName = (maxIndex >= 0 && maxIndex < (int)sensor->GetSensors().size())
-            ? sensor->GetSensor(maxIndex).name : "Unknown";
-
-        // Safety trip: if temperature exceeds 90°C, force automatic firmware recovery
-        if (maxTemp >= 90 && currentLevel != 0x80) {
-            SafeRestoreEC();
-            manualLevel = -1;
-            statusNotice = "CRITICAL ALERT: Temp >= 90°C! Auto mode forced for safety!";
-            statusNoticeUntil = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    auto onToggleDualFan = [&]() {
+        std::lock_guard<std::mutex> lock(dataMutex);
+        data.dualFanMode = !data.dualFanMode;
+        g_dualFanMode = data.dualFanMode;
+        fan->SetDualFanMode(data.dualFanMode);
+        if (data.manualLevel >= 0) {
+            fan->SetFanLevel(data.manualLevel, data.dualFanMode);
         }
+        data.statusNotice = std::format("Dual-fan mode switched to: {}", data.dualFanMode ? "ENABLED" : "DISABLED");
+        data.statusNoticeUntil = std::chrono::steady_clock::now() + std::chrono::seconds(4);
+        screen.PostEvent(Event::Custom);
+    };
 
-        // 2. Render TUI Frame
-        std::string buf;
-        buf.reserve(4096);
-        buf += "\033[H"; // Cursor to top-left
+    auto onRefresh = [&]() {
+        screen.PostEvent(Event::Custom);
+    };
 
-        // Color Constants
-        const std::string cBorder = "\033[38;2;65;110;190m";
-        const std::string cTitle  = "\033[38;2;80;230;255m\033[1m";
-        const std::string cWhite  = "\033[38;2;240;245;255m";
-        const std::string cDim    = "\033[38;2;120;130;150m";
-        const std::string cGreen  = "\033[38;2;70;230;130m";
-        const std::string cYellow = "\033[38;2;250;220;60m";
-        const std::string cRed    = "\033[38;2;255;70;70m\033[1m";
-        const std::string cReset  = "\033[0m";
+    // Hardware Polling Background Worker Thread
+    std::thread pollThread([&]() {
+        while (g_running.load()) {
+            {
+                std::lock_guard<std::mutex> lock(dataMutex);
 
-        // Title Header Bar
-        std::string modeStr = (currentLevel == 0x80)
-            ? (cGreen + "[EC FIRMWARE AUTO]" + cReset)
-            : (cYellow + "[MANUAL LEVEL " + std::to_string(currentLevel) + "]" + cReset);
+                fan->RefreshCurrentLevel();
+                data.currentLevel = fan->GetCurrentLevel();
 
-        buf += cBorder + "╭─ " + cTitle + "TPFanCtrl2 Top" + cBorder + " ── " + cWhite + systemModel + cBorder + " ── " + cDim + "v" + std::string(AppVersion::Version) + cBorder + " ── " + modeStr + cBorder + " ─────────────╮\n" + cReset;
-        buf += cBorder + "│ " + cDim + "Backend: " + cWhite + "PawnIO (WHQL Signed)" + cDim + " │ Poll: " + cWhite + "1.0s" + cDim + " │ Arch: " + cWhite + (g_dualFanMode ? "Dual-Fan (0x31 Mux)" : "Single-Fan") + cBorder + "                │\n" + cReset;
-        buf += cBorder + "├──────────────────────────────────────────────────────────────────────────────┤\n" + cReset;
+                int f1 = 0, f2 = 0;
+                fan->GetFanSpeeds(f1, f2);
+                data.fan1Rpm = f1;
+                data.fan2Rpm = f2;
+                data.fan1History.push_back(f1);
+                data.fan2History.push_back(f2);
+                if (data.fan1History.size() > 30) data.fan1History.erase(data.fan1History.begin());
+                if (data.fan2History.size() > 30) data.fan2History.erase(data.fan2History.begin());
 
-        // Fan Section
-        buf += cBorder + "│ " + cTitle + "🌀 FANS & TACHOMETERS" + cBorder + "                                                          │\n" + cReset;
+                sensor->UpdateSensors(false, false, false);
+                int maxIndex = -1;
+                data.maxTemp = sensor->GetMaxTemp(maxIndex, "");
+                data.maxSensorName = (maxIndex >= 0 && maxIndex < (int)sensor->GetSensors().size())
+                    ? sensor->GetSensor(maxIndex).name : "Unknown";
 
-        float f1Pct = (float)f1 / 7500.0f;
-        std::string f1Bar = MakeBar(f1Pct, 18, false);
-        std::string f1Spark = MakeSparkline(fan1History, 7500, 14);
-        buf += cBorder + "│ " + cWhite + " Fan 1 (CPU) " + f1Bar + " " + std::format("{:4d} RPM", f1) + "  Trend: " + "\033[38;2;80;200;255m" + f1Spark + cReset + cBorder + "   │\n" + cReset;
-
-        if (g_dualFanMode || f2 > 0) {
-            float f2Pct = (float)f2 / 7500.0f;
-            std::string f2Bar = MakeBar(f2Pct, 18, false);
-            std::string f2Spark = MakeSparkline(fan2History, 7500, 14);
-            buf += cBorder + "│ " + cWhite + " Fan 2 (GPU) " + f2Bar + " " + std::format("{:4d} RPM", f2) + "  Trend: " + "\033[38;2;80;200;255m" + f2Spark + cReset + cBorder + "   │\n" + cReset;
-        }
-
-        buf += cBorder + "├──────────────────────────────────────────────────────────────────────────────┤\n" + cReset;
-
-        // Temperatures Section
-        std::string maxColor = (maxTemp >= 85) ? cRed : ((maxTemp >= 70) ? cYellow : cGreen);
-        buf += cBorder + "│ " + cTitle + "🌡️ TEMPERATURE SENSORS " + cDim + "(Peak Hotspot: " + maxColor + std::format("{}°C [{}]", maxTemp, maxSensorName) + cDim + ")" + cBorder + "                    │\n" + cReset;
-
-        std::vector<SensorData> active;
-        for (const auto& s : sensor->GetSensors()) {
-            if (s.isAvailable && s.rawTemp >= 15 && s.rawTemp < 128) {
-                active.push_back(s);
-            }
-        }
-
-        for (size_t i = 0; i < active.size(); i += 2) {
-            buf += cBorder + "│ ";
-            // Col 1
-            const auto& s1 = active[i];
-            float p1 = (float)s1.rawTemp / 100.0f;
-            std::string bar1 = MakeBar(p1, 12, true, s1.rawTemp);
-            buf += std::format("{:4s} {} {:2d}°C ", s1.name, bar1, s1.rawTemp);
-
-            // Col 2 (if exists)
-            if (i + 1 < active.size()) {
-                const auto& s2 = active[i + 1];
-                float p2 = (float)s2.rawTemp / 100.0f;
-                std::string bar2 = MakeBar(p2, 12, true, s2.rawTemp);
-                buf += std::format("│ {:4s} {} {:2d}°C", s2.name, bar2, s2.rawTemp);
-            } else {
-                buf += "│                           ";
-            }
-            buf += cBorder + "   │\n" + cReset;
-        }
-
-        buf += cBorder + "├──────────────────────────────────────────────────────────────────────────────┤\n" + cReset;
-
-        // Status & Hotkey Bar
-        std::string notice = (std::chrono::steady_clock::now() < statusNoticeUntil) ? statusNotice : "Monitoring active. All sensors responsive.";
-        buf += cBorder + "│ " + cDim + "Msg: " + cWhite + std::format("{:<70s}", notice.substr(0, 70)) + cBorder + " │\n" + cReset;
-        buf += cBorder + "├──────────────────────────────────────────────────────────────────────────────┤\n" + cReset;
-        buf += cBorder + "│ " + cTitle + "[0-7]" + cWhite + " Set Level  " + cTitle + "[A]" + cWhite + " EC Auto  " + cTitle + "[D]" + cWhite + " DualFan  " + cTitle + "[R]" + cWhite + " Refresh  " + cTitle + "[Q/Esc]" + cWhite + " Quit & Restore" + cBorder + "  │\n" + cReset;
-        buf += cBorder + "╰──────────────────────────────────────────────────────────────────────────────╯\n" + cReset;
-
-        std::cout << buf << std::flush;
-
-        // 3. Sleep & Non-blocking Keyboard Handling
-        for (int slice = 0; slice < 20; ++slice) {
-            if (!g_running.load()) break;
-
-            if (_kbhit()) {
-                int ch = _getch();
-                if (ch == 'q' || ch == 'Q' || ch == 27) { // Q or Esc
-                    g_running.store(false);
-                    break;
-                } else if (ch >= '0' && ch <= '7') {
-                    manualLevel = ch - '0';
-                    fan->SetDualFanMode(g_dualFanMode);
-                    fan->SetFanLevel(manualLevel, g_dualFanMode);
-                    statusNotice = std::format("Manual level set to {} (Dual-fan: {})", manualLevel, g_dualFanMode ? "ON" : "OFF");
-                    statusNoticeUntil = std::chrono::steady_clock::now() + std::chrono::seconds(4);
-                    break;
-                } else if (ch == 'a' || ch == 'A') {
+                // Safety Trip: if max temp >= 90°C and manual mode is active, force EC Auto
+                if (data.maxTemp >= 90 && data.currentLevel != 0x80) {
                     SafeRestoreEC();
-                    manualLevel = -1;
-                    statusNotice = "Restored EC firmware automatic fan curve (0x80).";
-                    statusNoticeUntil = std::chrono::steady_clock::now() + std::chrono::seconds(4);
-                    break;
-                } else if (ch == 'd' || ch == 'D') {
-                    g_dualFanMode = !g_dualFanMode;
-                    fan->SetDualFanMode(g_dualFanMode);
-                    if (manualLevel >= 0) {
-                        fan->SetFanLevel(manualLevel, g_dualFanMode);
+                    data.manualLevel = -1;
+                    data.statusNotice = "CRITICAL ALERT: Temp >= 90°C! Auto mode forced for safety!";
+                    data.statusNoticeUntil = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+                }
+
+                data.activeSensors.clear();
+                for (const auto& s : sensor->GetSensors()) {
+                    if (s.isAvailable && s.rawTemp >= 15 && s.rawTemp < 128) {
+                        data.activeSensors.push_back(s);
                     }
-                    statusNotice = std::format("Dual-fan mode switched to: {}", g_dualFanMode ? "ENABLED" : "DISABLED");
-                    statusNoticeUntil = std::chrono::steady_clock::now() + std::chrono::seconds(4);
-                    break;
-                } else if (ch == 'r' || ch == 'R') {
-                    break; // Trigger immediate re-render
                 }
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+            screen.PostEvent(Event::Custom);
+
+            // Sleep 1 second in small slices to respond promptly on shutdown
+            for (int i = 0; i < 20 && g_running.load(); ++i) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            }
         }
+    });
+
+    // Control UI Buttons
+    ButtonOption btnOpt = ButtonOption::Border();
+    
+    auto btnAuto = Button("Auto [A]", onAuto, btnOpt);
+    auto btn0 = Button("0", [&] { onSetLevel(0); }, btnOpt);
+    auto btn1 = Button("1", [&] { onSetLevel(1); }, btnOpt);
+    auto btn2 = Button("2", [&] { onSetLevel(2); }, btnOpt);
+    auto btn3 = Button("3", [&] { onSetLevel(3); }, btnOpt);
+    auto btn4 = Button("4", [&] { onSetLevel(4); }, btnOpt);
+    auto btn5 = Button("5", [&] { onSetLevel(5); }, btnOpt);
+    auto btn6 = Button("6", [&] { onSetLevel(6); }, btnOpt);
+    auto btn7 = Button("7", [&] { onSetLevel(7); }, btnOpt);
+    auto btnDual = Button("Dual-Fan [D]", onToggleDualFan, btnOpt);
+    auto btnRefresh = Button("Refresh [R]", onRefresh, btnOpt);
+    auto btnQuit = Button("Quit [Q]", screen.ExitLoopClosure(), btnOpt);
+
+    auto buttonsContainer = Container::Horizontal({
+        btnAuto,
+        btn0, btn1, btn2, btn3, btn4, btn5, btn6, btn7,
+        btnDual,
+        btnRefresh,
+        btnQuit
+    });
+
+    // FTXUI Declarative Renderer
+    auto renderer = Renderer(buttonsContainer, [&] {
+        TopDataSnapshot snap;
+        {
+            std::lock_guard<std::mutex> lock(dataMutex);
+            snap = data;
+        }
+
+        const auto themeBorder = Color::RGB(65, 115, 205);
+        const auto themeCyan   = Color::RGB(80, 225, 255);
+        const auto themeDim    = Color::RGB(130, 140, 160);
+
+        // 1. Header Panel
+        Element modeBadge;
+        if (snap.currentLevel == 0x80) {
+            modeBadge = hbox({
+                text("[EC FIRMWARE AUTO 0x80]") | bold | color(Color::RGB(70, 230, 130))
+            });
+        } else {
+            modeBadge = hbox({
+                text(std::format("[MANUAL LEVEL {}]", snap.currentLevel)) | bold | color(Color::RGB(250, 210, 60))
+            });
+        }
+
+        Element header = vbox({
+            hbox({
+                text(" 🌀 TPFanCtrl2 Top ") | bold | color(themeCyan),
+                text("│ ") | color(themeDim),
+                text(snap.systemModel) | bold | color(Color::White),
+                text(" │ ") | color(themeDim),
+                text("v" TPFC_VERSION) | color(themeDim),
+                filler(),
+                modeBadge,
+                text(" ")
+            }),
+            separator() | color(themeBorder),
+            hbox({
+                text("  Backend: ") | color(themeDim),
+                text("PawnIO (WHQL Signed)") | bold | color(Color::White),
+                text("  │  Poll: ") | color(themeDim),
+                text("1.0s") | color(Color::White),
+                text("  │  Dual-Fan Mux: ") | color(themeDim),
+                text(snap.dualFanMode ? "ENABLED (0x31)" : "DISABLED") | bold | (snap.dualFanMode ? color(themeCyan) : color(themeDim)),
+                filler()
+            })
+        }) | borderRounded | color(themeBorder);
+
+        // 2. Fans & Tachometers Panel
+        float f1Pct = std::clamp((float)snap.fan1Rpm / 7500.0f, 0.0f, 1.0f);
+        float f2Pct = std::clamp((float)snap.fan2Rpm / 7500.0f, 0.0f, 1.0f);
+
+        Element fan1Row = hbox({
+            text("  Fan 1 (CPU) ") | bold | color(Color::White),
+            gauge(f1Pct) | color(GetFanColor(f1Pct)) | size(WIDTH, EQUAL, 24),
+            text(std::format(" {:4d} RPM  ", snap.fan1Rpm)) | bold | color(Color::White),
+            text("Trend: ") | color(themeDim),
+            text(MakeSparkline(snap.fan1History, 7500, 16)) | color(themeCyan)
+        });
+
+        Element fan2Row = hbox({
+            text("  Fan 2 (GPU) ") | bold | color(Color::White),
+            gauge(f2Pct) | color(GetFanColor(f2Pct)) | size(WIDTH, EQUAL, 24),
+            text(std::format(" {:4d} RPM  ", snap.fan2Rpm)) | bold | color(Color::White),
+            text("Trend: ") | color(themeDim),
+            text(MakeSparkline(snap.fan2History, 7500, 16)) | color(themeCyan)
+        });
+
+        Elements fanRows;
+        fanRows.push_back(hbox({
+            text(" 🌀 FANS & TACHOMETERS") | bold | color(themeCyan),
+            filler()
+        }));
+        fanRows.push_back(separator() | color(themeBorder));
+        fanRows.push_back(fan1Row);
+        if (snap.dualFanMode || snap.fan2Rpm > 0) {
+            fanRows.push_back(fan2Row);
+        }
+
+        Element fansPanel = vbox(std::move(fanRows)) | borderRounded | color(themeBorder);
+
+        // 3. Thermal Sensors Panel
+        Elements sensorGridRows;
+        sensorGridRows.push_back(hbox({
+            text(" 🌡️ THERMAL SENSORS ") | bold | color(themeCyan),
+            text("│  Peak Hotspot: ") | color(themeDim),
+            text(std::format("{}°C [{}]", snap.maxTemp, snap.maxSensorName)) | bold | color(GetTempColor(snap.maxTemp)),
+            filler()
+        }));
+        sensorGridRows.push_back(separator() | color(themeBorder));
+
+        for (size_t i = 0; i < snap.activeSensors.size(); i += 2) {
+            Elements rowItems;
+            rowItems.push_back(text("  "));
+
+            // Col 1
+            const auto& s1 = snap.activeSensors[i];
+            float p1 = std::clamp((float)s1.rawTemp / 100.0f, 0.0f, 1.0f);
+            rowItems.push_back(hbox({
+                text(std::format("{:<4s} ", s1.name)) | bold | color(Color::White),
+                gauge(p1) | color(GetTempColor(s1.rawTemp)) | size(WIDTH, EQUAL, 14),
+                text(std::format(" {:2d}°C", s1.rawTemp)) | bold | color(GetTempColor(s1.rawTemp))
+            }));
+
+            // Col 2 (if exists)
+            if (i + 1 < snap.activeSensors.size()) {
+                const auto& s2 = snap.activeSensors[i + 1];
+                float p2 = std::clamp((float)s2.rawTemp / 100.0f, 0.0f, 1.0f);
+                rowItems.push_back(text("  │  ") | color(themeDim));
+                rowItems.push_back(hbox({
+                    text(std::format("{:<4s} ", s2.name)) | bold | color(Color::White),
+                    gauge(p2) | color(GetTempColor(s2.rawTemp)) | size(WIDTH, EQUAL, 14),
+                    text(std::format(" {:2d}°C", s2.rawTemp)) | bold | color(GetTempColor(s2.rawTemp))
+                }));
+            }
+            rowItems.push_back(filler());
+            sensorGridRows.push_back(hbox(std::move(rowItems)));
+        }
+
+        Element thermalsPanel = vbox(std::move(sensorGridRows)) | borderRounded | color(themeBorder);
+
+        // 4. Interactive Controls & Status Bar Panel
+        std::string notice = (std::chrono::steady_clock::now() < snap.statusNoticeUntil)
+            ? snap.statusNotice : "Monitoring active. System sensors responding normally.";
+
+        Element controlsPanel = vbox({
+            hbox({
+                text(" 🎮 INTERACTIVE CONTROLS (Mouse Click or Hotkey)") | bold | color(themeCyan),
+                filler()
+            }),
+            separator() | color(themeBorder),
+            hbox({
+                filler(),
+                buttonsContainer->Render(),
+                filler()
+            }),
+            separator() | color(themeBorder),
+            hbox({
+                text("  Status: ") | color(themeDim),
+                text(notice) | bold | color(Color::RGB(215, 230, 255)),
+                filler()
+            }),
+            hbox({
+                text("  Shortcuts: [0-7] Set Level  │  [A] EC Auto  │  [D] Dual-Fan  │  [R] Refresh  │  [Q/Esc] Quit & Restore") | color(themeDim),
+                filler()
+            })
+        }) | borderRounded | color(themeBorder);
+
+        // Main responsive container
+        return vbox({
+            header,
+            fansPanel,
+            thermalsPanel | flex,
+            controlsPanel
+        });
+    });
+
+    // Keyboard Hotkey Interceptor via CatchEvent
+    auto eventHandler = CatchEvent(renderer, [&](Event event) {
+        if (event == Event::Character('q') || event == Event::Character('Q') || event == Event::Escape) {
+            g_running.store(false);
+            screen.ExitLoopClosure()();
+            return true;
+        }
+        if (event == Event::Character('a') || event == Event::Character('A')) {
+            onAuto();
+            return true;
+        }
+        if (event == Event::Character('d') || event == Event::Character('D')) {
+            onToggleDualFan();
+            return true;
+        }
+        if (event == Event::Character('r') || event == Event::Character('R')) {
+            onRefresh();
+            return true;
+        }
+        if (event.is_character()) {
+            char ch = event.character()[0];
+            if (ch >= '0' && ch <= '7') {
+                onSetLevel(ch - '0');
+                return true;
+            }
+        }
+        return false;
+    });
+
+    // Enter FTXUI interactive loop
+    screen.Loop(eventHandler);
+
+    // Shutdown and Safety Restoration
+    g_running.store(false);
+    if (pollThread.joinable()) {
+        pollThread.join();
     }
 
-    // Cleanup: restore EC control, restore screen and cursor
     SafeRestoreEC();
-    std::cout << "\033[?1049l\033[?25h\033[0m" << std::flush;
-    std::cout << "TPFanCtrl2 Top exited cleanly. Fan control safely returned to EC firmware.\n";
+    std::cout << "\nTPFanCtrl2 Top exited cleanly. Fan control safely returned to EC firmware (0x80).\n";
+
     return 0;
 }
