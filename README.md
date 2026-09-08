@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/Tinnci/TPFanCtrl2/actions/workflows/ci.yml/badge.svg)](https://github.com/Tinnci/TPFanCtrl2/actions/workflows/ci.yml)
 [![Release](https://github.com/Tinnci/TPFanCtrl2/actions/workflows/release.yml/badge.svg)](https://github.com/Tinnci/TPFanCtrl2/actions/workflows/release.yml)
+[![CodeQL](https://github.com/Tinnci/TPFanCtrl2/actions/workflows/codeql.yml/badge.svg)](https://github.com/Tinnci/TPFanCtrl2/actions/workflows/codeql.yml)
 [![Version](https://img.shields.io/github/v/release/Tinnci/TPFanCtrl2)](https://github.com/Tinnci/TPFanCtrl2/releases)
 [![License](https://img.shields.io/badge/license-Unlicense-blue.svg)](LICENSE)
 
