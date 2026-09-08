@@ -45,14 +45,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-xmake-v1-
 
-      - name: Setup MSVC (x86)
+      - name: Setup MSVC (x64)
         uses: ilammy/msvc-dev-cmd@v1
         with:
-          arch: x86
+          arch: x64
 
-      - name: Configure and Build (x86)
+      - name: Configure and Build (x64)
         run: |
-          xmake f -m release -a x86 -y
+          xmake f -m release -a x64 -y
           xmake -y TPFanCtrl2
           xmake -y TPFanCtrl2-cli
           xmake -y logic_test
@@ -62,8 +62,3 @@ jobs:
         run: |
           xmake run logic_test
           xmake run core_test
-
-      - name: Build Native CLI (x64)
-        run: |
-          xmake f -m release -a x64 --gui=n --tests=n -y
-          xmake -y TPFanCtrl2-cli

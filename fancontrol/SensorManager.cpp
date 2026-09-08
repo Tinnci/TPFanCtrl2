@@ -1,6 +1,5 @@
 #include "_prec.h"
 #include "SensorManager.h"
-#include "TVicPort.h"
 #include <algorithm>
 
 SensorManager::SensorManager(std::shared_ptr<ECManager> ecManager)

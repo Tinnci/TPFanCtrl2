@@ -1,7 +1,7 @@
 param(
     [string]$Version = "dev",
     [string]$Configuration = "release",
-    [string]$Architecture = "x86",
+    [string]$Architecture = "x64",
     [string]$OutputRoot = "artifacts/dist"
 )
 
@@ -39,20 +39,6 @@ if (Test-Path -LiteralPath $appExe) { Copy-Item -LiteralPath $appExe -Destinatio
 if (Test-Path -LiteralPath $cliExe) { Copy-Item -LiteralPath $cliExe -Destination $appStage }
 if (Test-Path -LiteralPath $lpcAcpiEc) { Copy-Item -LiteralPath $lpcAcpiEc -Destination $appStage }
 if (Test-Path -LiteralPath $license) { Copy-Item -LiteralPath $license -Destination $appStage }
-
-$legacyDriversDir = Join-Path $repoRoot "drivers/legacy-tvicport"
-if (Test-Path -LiteralPath $legacyDriversDir) {
-    $stageDriversDir = Join-Path $appStage "drivers"
-    New-Item -ItemType Directory -Force -Path $stageDriversDir | Out-Null
-    Copy-Item -LiteralPath $legacyDriversDir -Destination (Join-Path $stageDriversDir "legacy-tvicport") -Recurse -Force
-
-    if ($Architecture -eq "x86") {
-        $tvicDll = Join-Path $legacyDriversDir "TVicPort.dll"
-        if (Test-Path -LiteralPath $tvicDll) {
-            Copy-Item -LiteralPath $tvicDll -Destination $appStage -Force
-        }
-    }
-}
 
 $hasTests = (Test-Path -LiteralPath $logicTest) -and (Test-Path -LiteralPath $coreTest)
 if ($hasTests) {

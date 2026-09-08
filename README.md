@@ -11,9 +11,7 @@ TPFanCtrl2 is a fan control software utility for Lenovo ThinkPad laptops on Wind
 
 - **Graphical User Interface**: Built with Dear ImGui and Vulkan for real-time monitoring and configuration.
 - **Command-Line Interface (`TPFanCtrl2-cli.exe`)**: Enables terminal control, status queries, and PowerShell automation.
-- **Embedded Controller Driver Support**:
-  - **PawnIO Driver**: Uses the WHQL-signed PawnIO kernel driver. Compatible with Windows 11 Memory Integrity (HVCI).
-  - **TVicPort Driver (Final Legacy Bundle)**: Bundles `TVicPort.dll`, `TVicPort.sys`, and setup scripts in `drivers/legacy-tvicport/` for 32-bit legacy hardware.
+- **Hardware Access**: Uses the WHQL-compliant, signed [PawnIO](https://github.com/namazso/PawnIO) kernel driver. Fully compatible with Windows 11 Memory Integrity (HVCI / Core Isolation).
 - **Control Modes**:
   - **BIOS / Firmware Mode**: Returns fan control to the system Embedded Controller (EC).
   - **Manual Mode**: Sets a fixed fan level from 0 (off) to 7 (maximum speed).
@@ -22,15 +20,15 @@ TPFanCtrl2 is a fan control software utility for Lenovo ThinkPad laptops on Wind
 - **Safety Protection**: Restores automatic hardware control if temperature exceeds 90 °C or if a communication error occurs.
 
 > [!NOTE]
-> **Final Legacy (TVicPort) Release:**  
-> Version 2.7.1 is the final release that bundles the legacy TVicPort driver and supports 32-bit TVicPort fallback. Subsequent releases will completely retire TVicPort to provide a pure 64-bit architecture with the secure PawnIO driver.
+> **Pure 64-bit Modern Architecture:**  
+> Starting from version 2.8.0, TPFanCtrl2 is built as a pure native 64-bit application powered exclusively by the secure PawnIO driver. Legacy 32-bit systems requiring the retired TVicPort driver can continue using the [v2.7.1 Final Legacy Release](https://github.com/Tinnci/TPFanCtrl2/releases/tag/v2.7.1).
 
 ## System Requirements
 
-- **Operating System**: Windows 10 (64-bit/32-bit) or Windows 11 (64-bit).
+- **Operating System**: Windows 10 (64-bit) or Windows 11 (64-bit).
 - **Supported Hardware**: Lenovo ThinkPad laptops with a standard ACPI Embedded Controller.
 - **Privileges**: Administrator permissions are required to access hardware ports.
-- **Driver**: [PawnIO](https://github.com/namazso/PawnIO) driver (recommended for Windows 11) or TVicPort driver (legacy 32-bit only).
+- **Driver**: [PawnIO](https://github.com/namazso/PawnIO) driver (`winget install namazso.PawnIO`).
 
 ## Installation
 
@@ -48,9 +46,9 @@ winget install Tinnci.TPFanCtrl2
 
 ### Method 2: Manual Download
 
-1. Download the release archive (`TPFanCtrl2-v2.7.0-windows-x64-app.zip` for 64-bit systems or `x86` for 32-bit systems) from the [Releases](https://github.com/Tinnci/TPFanCtrl2/releases) page.
-2. Extract the archive files to a directory of your choice.
-3. Install the `PawnIO` driver if you use Windows 11 or Windows 10 64-bit.
+1. Download `TPFanCtrl2-v2.8.0-windows-x64-app.zip` from the [Releases](https://github.com/Tinnci/TPFanCtrl2/releases) page.
+2. Extract the archive files to a folder of your choice.
+3. Install the `PawnIO` kernel driver (`winget install namazso.PawnIO`).
 
 ## Usage
 
@@ -120,27 +118,20 @@ This project uses [xmake](https://xmake.io/) and Microsoft Visual Studio 2022.
 git clone https://github.com/Tinnci/TPFanCtrl2.git
 cd TPFanCtrl2
 
-# Build all 32-bit targets (GUI, CLI, and unit tests)
-xmake f -m release -a x86 -y
+# Configure and build all targets (native 64-bit)
+xmake f -m release -a x64 -y
 xmake
-
-# Build 64-bit native CLI
-xmake f -m release -a x64 --gui=n --tests=n -y
-xmake b TPFanCtrl2-cli
 
 # Run unit tests
 xmake run logic_test
 xmake run core_test
 ```
 
-### Create Release Packages
+### Create Release Package
 
 ```powershell
-# Package 32-bit release
-powershell -ExecutionPolicy Bypass -File scripts/package-release.ps1 -Version 2.7.0 -Architecture x86
-
 # Package 64-bit release
-powershell -ExecutionPolicy Bypass -File scripts/package-release.ps1 -Version 2.7.0 -Architecture x64
+powershell -ExecutionPolicy Bypass -File scripts/package-release.ps1 -Version 2.8.0 -Architecture x64
 ```
 
 ## Safety Disclaimer

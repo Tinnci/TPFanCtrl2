@@ -46,7 +46,3 @@ artifacts/
 *.zip
 TPFanCtrl2_example.ini
 work/
-
-# Allow legacy driver assets
-!drivers/legacy-tvicport/**
-!fancontrol/TVicPort.dll

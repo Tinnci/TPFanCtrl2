@@ -3,7 +3,6 @@
 #include "ECManager.h"
 #include "FanController.h"
 #include "PawnIOProvider.h"
-#include "TVicPortProvider.h"
 
 #include <algorithm>
 #include <charconv>
@@ -34,9 +33,9 @@ void PrintUsage() {
     std::cout << R"(TPFanCtrl2 CLI
 
 Usage:
-  TPFanCtrl2-cli.exe status [--json] [--backend <auto|pawnio|tvicport>]
-  TPFanCtrl2-cli.exe fan --level <0-7> [--duration <seconds>] [--backend <auto|pawnio|tvicport>]
-  TPFanCtrl2-cli.exe mode auto [--backend <auto|pawnio|tvicport>]
+  TPFanCtrl2-cli.exe status [--json] [--backend <auto|pawnio>]
+  TPFanCtrl2-cli.exe fan --level <0-7> [--duration <seconds>] [--backend <auto|pawnio>]
+  TPFanCtrl2-cli.exe mode auto [--backend <auto|pawnio>]
 
 Commands:
   status                 Read current EC fan level and fan RPM.
@@ -46,12 +45,12 @@ Commands:
 Options:
   --duration <seconds>   Restore EC automatic control after the duration.
                          Without it, press Ctrl+C to restore EC automatic control.
-  --backend <name>       Choose I/O backend: auto (default), pawnio, or tvicport.
+  --backend <name>       Choose I/O backend: auto (default) or pawnio.
   --json                 Print status as JSON.
   --help                 Show this help.
 
-The CLI requires an elevated PowerShell/Command Prompt and a supported
-driver (PawnIO recommended, or legacy TVicPort on 32-bit). It never sends the legacy extreme value 0x40.
+The CLI requires an elevated PowerShell/Command Prompt and the signed
+PawnIO driver installed. It never sends the legacy extreme value 0x40.
 )";
 }
 
@@ -96,44 +95,16 @@ struct HardwareSession {
     std::string backendName;
 
     bool Open(std::string_view preferredBackend = "") {
-        if (preferredBackend != "tvicport") {
-            auto pawn = std::make_shared<PawnIOProvider>([](const char* msg) {
-                std::cerr << "[PawnIO] " << msg << '\n';
-            });
-            if (pawn->Initialize()) {
-                io = pawn;
-                backendName = "PawnIO";
-            } else if (preferredBackend == "pawnio") {
-                std::cerr << "Failed to initialize requested PawnIO backend.\n";
-                return false;
-            }
-        }
-
-#ifdef ENABLE_TVICPORT
-        if (!io && preferredBackend != "pawnio") {
-            std::cerr << "[Fallback] PawnIO initialization failed or unavailable. Falling back to legacy TVicPort backend...\n";
-            if (OpenTVicPort()) {
-                SetHardAccess(TRUE);
-                if (TestHardAccess()) {
-                    io = std::make_shared<TVicPortProvider>();
-                    backendName = "TVicPort";
-                } else {
-                    std::cerr << "[TVicPort] Hardware/EC access was denied for TVicPort.\n";
-                    CloseTVicPort();
-                }
-            } else if (preferredBackend == "tvicport") {
-                std::cerr << "[TVicPort] Failed to open TVicPort driver.\n";
-                return false;
-            }
-        }
-#endif
-
-        if (!io) {
-            std::cerr << "Failed to initialize hardware I/O backend (PawnIO"
-#ifdef ENABLE_TVICPORT
-                      << " or TVicPort"
-#endif
-                      << ").\nRun as Administrator and verify driver installation.\n";
+        (void)preferredBackend; // Reserved for future backends
+        auto pawn = std::make_shared<PawnIOProvider>([](const char* msg) {
+            std::cerr << "[PawnIO] " << msg << '\n';
+        });
+        if (pawn->Initialize()) {
+            io = pawn;
+            backendName = "PawnIO";
+        } else {
+            std::cerr << "Failed to initialize PawnIO hardware I/O backend.\n"
+                      << "Please run as Administrator and ensure PawnIO driver is installed ('winget install namazso.PawnIO').\n";
             return false;
         }
 
@@ -149,11 +120,6 @@ struct HardwareSession {
         fan.reset();
         ec.reset();
         io.reset();
-#ifdef ENABLE_TVICPORT
-        if (backendName == "TVicPort") {
-            CloseTVicPort();
-        }
-#endif
     }
 };
 

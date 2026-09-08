@@ -32,10 +32,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-xmake-v1-
 
-      - name: Setup MSVC (x86)
+      - name: Setup MSVC (x64)
         uses: ilammy/msvc-dev-cmd@v1
         with:
-          arch: x86
+          arch: x64
 
       - name: Get Version from Tag
         id: get_version
@@ -48,9 +48,9 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
         shell: bash
 
-      - name: Configure and Build (x86)
+      - name: Configure and Build (x64)
         run: |
-          xmake f -m release -a x86 -y
+          xmake f -m release -a x64 -y
           xmake -y TPFanCtrl2
           xmake -y TPFanCtrl2-cli
           xmake -y logic_test
@@ -60,17 +60,6 @@ jobs:
         run: |
           xmake run logic_test
           xmake run core_test
-
-      - name: Package Release (x86)
-        run: |
-          $ver = "${{ steps.get_version.outputs.version }}"
-          ./scripts/package-release.ps1 -Version $ver -Configuration release -Architecture x86
-        shell: pwsh
-
-      - name: Build Native CLI (x64)
-        run: |
-          xmake f -m release -a x64 --gui=n --tests=n -y
-          xmake -y TPFanCtrl2-cli
 
       - name: Package Release (x64)
         run: |

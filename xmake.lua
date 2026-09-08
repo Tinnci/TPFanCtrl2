@@ -1,6 +1,6 @@
 -- Project Information
 set_project("TPFanCtrl2")
-set_version("2.7.1", {build = function () 
+set_version("2.8.0", {build = function () 
     return try { function() return os.ioread("git rev-parse --short HEAD"):trim() end } or "unknown"
 end})
 
@@ -32,7 +32,7 @@ if has_config("tests") then
     add_requires("gtest")
 end
 
--- Default to x64 for modern Windows 11 (PawnIO), support x86 for legacy TVicPort
+-- Native 64-bit architecture by default
 if not get_config("arch") then
     set_arch("x64")
 end
@@ -91,16 +91,10 @@ target("TPFanCtrl2")
     add_includedirs("fancontrol/Core")
     
     -- Link libraries
-    if is_arch("x86") then
-        add_files("fancontrol/TVicPortProvider.cpp")
-        add_linkdirs("fancontrol")
-        add_links("TVicPort")
-        add_defines("ENABLE_TVICPORT")
-    end
     add_links("comctl32", "user32", "gdi32", "advapi32", "shell32", "ole32", "oleaut32", "uuid", "dwmapi")
     
     -- Output directory
-    set_targetdir("artifacts/bin/" .. (get_config("arch") or "x86"))
+    set_targetdir("artifacts/bin/" .. (get_config("arch") or "x64"))
 
     -- Optimizations for Release mode
     if is_mode("release") then
@@ -136,16 +130,9 @@ target("TPFanCtrl2-cli")
     add_files("fancontrol/FanController.cpp")
     add_files("fancontrol/PawnIOProvider.cpp")
 
-    if is_arch("x86") then
-        add_files("fancontrol/TVicPortProvider.cpp")
-        add_linkdirs("fancontrol")
-        add_links("TVicPort")
-        add_defines("ENABLE_TVICPORT")
-    end
-
     add_includedirs("fancontrol")
     add_links("comctl32", "user32", "advapi32")
-    set_targetdir("artifacts/bin/" .. (get_config("arch") or "x86"))
+    set_targetdir("artifacts/bin/" .. (get_config("arch") or "x64"))
 
 if has_config("tests") then
 -- Target: logic_test (Unit Tests - Legacy)

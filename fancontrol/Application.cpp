@@ -1,6 +1,5 @@
 #include "Application.h"
 #include "PawnIOProvider.h"
-#include "TVicPortProvider.h"
 #include <spdlog/spdlog.h>
 #include <vulkan/vulkan_win32.h>
 
@@ -107,7 +106,7 @@ bool Application::Initialize(HWND hwnd, HINSTANCE hInstance) {
     std::shared_ptr<IIOProvider> ioProvider;
     std::string backendName;
 
-    spdlog::info("Initializing hardware I/O driver (trying PawnIO)...");
+    spdlog::info("Initializing hardware I/O driver (PawnIO)...");
     auto pawn = std::make_shared<PawnIOProvider>([](const char* msg) {
         spdlog::info("[PawnIO] {}", msg);
     });
@@ -116,36 +115,8 @@ bool Application::Initialize(HWND hwnd, HINSTANCE hInstance) {
         ioProvider = pawn;
         backendName = "PawnIO";
     } else {
-        spdlog::warn("PawnIO driver could not be initialized.");
-#ifdef ENABLE_TVICPORT
-        spdlog::warn("[Fallback] Attempting legacy TVicPort fallback...");
-        bool driverOk = false;
-        for (int i = 0; i < 3; i++) {
-            if (OpenTVicPort()) {
-                driverOk = true;
-                break;
-            }
-            spdlog::warn("Failed to open TVicPort, retrying... ({}/3)", i + 1);
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
-        }
-
-        if (driverOk) {
-            spdlog::info("TVicPort driver opened successfully.");
-            SetHardAccess(TRUE);
-            if (TestHardAccess()) {
-                spdlog::info("Hardware access (Ring 0) granted via TVicPort.");
-                ioProvider = std::make_shared<TVicPortProvider>();
-                backendName = "TVicPort";
-            } else {
-                spdlog::error("Hardware access denied even with TVicPort opened.");
-                CloseTVicPort();
-            }
-        }
-#endif
-    }
-
-    if (!ioProvider) {
-        spdlog::error("CRITICAL: Could not initialize any hardware I/O driver (PawnIO or TVicPort).");
+        spdlog::error("CRITICAL: Could not initialize PawnIO driver.");
+        spdlog::error("Please ensure PawnIO is installed (e.g. 'winget install namazso.PawnIO') and the application is running as Administrator.");
         return false;
     }
 
@@ -174,9 +145,6 @@ void Application::Shutdown() {
     m_thermalManager.reset();
     
     CleanupVulkan();
-#ifdef ENABLE_TVICPORT
-    CloseTVicPort();
-#endif
 }
 
 void Application::Update(float deltaTime) {

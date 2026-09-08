@@ -1,0 +1,21 @@
+﻿# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+PackageIdentifier: Tinnci.TPFanCtrl2
+PackageVersion: 2.8.0
+PackageLocale: en-US
+Publisher: Tinnci
+PublisherUrl: https://github.com/Tinnci
+PublisherSupportUrl: https://github.com/Tinnci/TPFanCtrl2/issues
+Author: Tinnci
+PackageName: TPFanCtrl2
+PackageUrl: https://github.com/Tinnci/TPFanCtrl2
+License: The Unlicense
+LicenseUrl: https://github.com/Tinnci/TPFanCtrl2/blob/main/LICENSE
+ShortDescription: ThinkPad fan and thermal control for modern Windows
+Description: TPFanCtrl2 provides automatic and manual fan control for ThinkPad laptops with modern driver support and CLI interface.
+Tags:
+  - thinkpad
+  - fan-control
+  - hardware
+  - thermal
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

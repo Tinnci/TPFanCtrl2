@@ -1,0 +1,22 @@
+﻿# yaml-language-server: $schema=https://aka.ms/winget-manifest.locale.1.6.0.schema.json
+PackageIdentifier: Tinnci.TPFanCtrl2
+PackageVersion: 2.8.0
+PackageLocale: zh-CN
+Publisher: Tinnci
+PublisherUrl: https://github.com/Tinnci
+PublisherSupportUrl: https://github.com/Tinnci/TPFanCtrl2/issues
+Author: Tinnci
+PackageName: TPFanCtrl2
+PackageUrl: https://github.com/Tinnci/TPFanCtrl2
+License: The Unlicense
+LicenseUrl: https://github.com/Tinnci/TPFanCtrl2/blob/main/LICENSE
+ShortDescription: 适配现代 Windows 11 的 ThinkPad 风扇与温控程序
+Description: TPFanCtrl2 为 ThinkPad 笔记本提供开箱即用的风扇自动与手动控制，支持现代 Windows 11 安全驱动 PawnIO，并提供独立的 CLI 命令行工具。
+Tags:
+  - thinkpad
+  - fan-control
+  - hardware
+  - thermal
+  - 风扇控制
+ManifestType: locale
+ManifestVersion: 1.6.0

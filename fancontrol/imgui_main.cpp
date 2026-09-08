@@ -50,14 +50,11 @@
 #include "SensorManager.h"
 #include "FanController.h"
 #include "ECManager.h"
-#include "TVicPortProvider.h"
-#include "TVicPort.h"
 #include "DynamicIcon.h"
 #include "I18nManager.h"
 #include "Theme.h"
 #include "AppInit.h"
 #include "ImGuiRenderer.h"
-
 #include "Application.h"
 
 // --- Tray Constants ---
