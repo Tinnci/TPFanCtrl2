@@ -16,7 +16,10 @@ Commands:
 Installers:
   - Architecture: x86
     InstallerUrl: https://github.com/Tinnci/TPFanCtrl2/releases/download/v2.6.0/TPFanCtrl2-v2.6.0-windows-x86-app.zip
-    InstallerSha256: 168b134975976da5e9296f0ae0a4b97c49221eb22cb7db68a4d3772fa1a946e6
+    InstallerSha256: 803303b27344c656730ba93918fbbe6de5abc15de84515c90f95bbf90802a73a
+  - Architecture: x64
+    InstallerUrl: https://github.com/Tinnci/TPFanCtrl2/releases/download/v2.6.0/TPFanCtrl2-v2.6.0-windows-x64-app.zip
+    InstallerSha256: 3bf4f024e4c265960f2054067b6c4d4e18896d8e3c82fd9ae04279c96df6aeb7
 Dependencies:
   PackageDependencies:
     - PackageIdentifier: namazso.PawnIO

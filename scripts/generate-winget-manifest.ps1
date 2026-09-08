@@ -58,6 +58,29 @@ ManifestType: version
 ManifestVersion: 1.6.0
 "@
 
+$installerPath = Join-Path $OutputDirectory "Tinnci.TPFanCtrl2.installer.yaml"
+$installersMap = [ordered]@{}
+if (Test-Path -LiteralPath $installerPath) {
+    $existingContent = Get-Content -LiteralPath $installerPath -Raw
+    $archRegex = [regex]"(?ms)- Architecture:\s*(\w+)\s*\r?\n\s*InstallerUrl:\s*(\S+)\s*\r?\n\s*InstallerSha256:\s*([a-fA-F0-9]+)"
+    foreach ($m in $archRegex.Matches($existingContent)) {
+        $a = $m.Groups[1].Value
+        $u = $m.Groups[2].Value
+        $s = $m.Groups[3].Value
+        $installersMap[$a] = @{ Url = $u; Sha256 = $s }
+    }
+}
+$installersMap[$Architecture] = @{ Url = $InstallerUrl; Sha256 = $InstallerSha256 }
+
+$installersLines = @()
+foreach ($archKey in $installersMap.Keys) {
+    $entry = $installersMap[$archKey]
+    $u = $entry.Url
+    $s = $entry.Sha256
+    $installersLines += "  - Architecture: $archKey`n    InstallerUrl: $u`n    InstallerSha256: $s"
+}
+$installersBlock = ($installersLines -join "`n")
+
 $installerYaml = @"
 # yaml-language-server: `$schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
 PackageIdentifier: Tinnci.TPFanCtrl2
@@ -75,9 +98,7 @@ Commands:
   - TPFanCtrl2
   - TPFanCtrl2-cli
 Installers:
-  - Architecture: $Architecture
-    InstallerUrl: $InstallerUrl
-    InstallerSha256: $InstallerSha256
+$installersBlock
 Dependencies:
   PackageDependencies:
     - PackageIdentifier: namazso.PawnIO

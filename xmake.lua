@@ -4,13 +4,33 @@ set_version("2.6.0", {build = function ()
     return try { function() return os.ioread("git rev-parse --short HEAD"):trim() end } or "unknown"
 end})
 
+-- Build options
+option("gui")
+    set_default(true)
+    set_showmenu(true)
+    set_description("Build GUI application (TPFanCtrl2)")
+option_end()
+
+option("tests")
+    set_default(true)
+    set_showmenu(true)
+    set_description("Build test targets (logic_test, core_test)")
+option_end()
+
 -- Add dependencies
-add_requires("gtest")
-add_requires("imgui master", {configs = {win32 = true, vulkan = true, freetype = true}})
-add_requires("vulkan-loader")
-add_requires("freetype")
-add_requires("vulkan-memory-allocator")
 add_requires("nlohmann_json")
+add_requires("spdlog")
+
+if has_config("gui") then
+    add_requires("imgui master", {configs = {win32 = true, vulkan = true, freetype = true}})
+    add_requires("vulkan-loader")
+    add_requires("freetype")
+    add_requires("vulkan-memory-allocator")
+end
+
+if has_config("tests") then
+    add_requires("gtest")
+end
 
 -- Default to x64 for modern Windows 11 (PawnIO), support x86 for legacy TVicPort
 if not get_config("arch") then
@@ -22,7 +42,6 @@ add_rules("mode.debug", "mode.release")
 
 -- Global settings
 set_languages("c++20")
-add_requires("spdlog")
 add_defines("WIN32", "_MBCS")
 
 -- Compiler flags: support both MSVC and Clang/Zig
@@ -34,6 +53,7 @@ if is_plat("windows") then
     add_cxflags("-Wall", "-Wextra", {tools = {"clang", "zig"}})
 end
 
+if has_config("gui") then
 -- Target: TPFanCtrl2 (Main GUI App)
 target("TPFanCtrl2")
     set_kind("binary")
@@ -95,6 +115,7 @@ target("TPFanCtrl2")
         add_ldflags("-flto", {tools = {"clang", "zig"}})
         add_vectorexts("sse2")
     end
+end
 
 -- Target: TPFanCtrl2-cli (PowerShell/console hardware control)
 target("TPFanCtrl2-cli")
@@ -126,6 +147,7 @@ target("TPFanCtrl2-cli")
     add_links("comctl32", "user32", "advapi32")
     set_targetdir("artifacts/bin")
 
+if has_config("tests") then
 -- Target: logic_test (Unit Tests - Legacy)
 target("logic_test")
     set_kind("binary")
@@ -175,3 +197,4 @@ target("core_test")
     
     -- Output directory
     set_targetdir("artifacts/bin")
+end
