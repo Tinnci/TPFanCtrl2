@@ -109,8 +109,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release_assets/*.zip
-            release_assets/manifest.json
+            release_assets/**/*.zip
+            release_assets/**/manifest.json
           draft: false
           prerelease: false
         env:
