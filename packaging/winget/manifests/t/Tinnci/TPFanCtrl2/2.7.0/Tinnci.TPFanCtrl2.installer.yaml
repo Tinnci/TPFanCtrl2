@@ -1,6 +1,6 @@
 ﻿# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
 PackageIdentifier: Tinnci.TPFanCtrl2
-PackageVersion: 2.6.0
+PackageVersion: 2.7.0
 MinimumOSVersion: 10.0.17763.0
 InstallerType: zip
 NestedInstallerType: portable
@@ -15,11 +15,11 @@ Commands:
   - TPFanCtrl2-cli
 Installers:
   - Architecture: x86
-    InstallerUrl: https://github.com/Tinnci/TPFanCtrl2/releases/download/v2.6.0/TPFanCtrl2-v2.6.0-windows-x86-app.zip
-    InstallerSha256: 803303b27344c656730ba93918fbbe6de5abc15de84515c90f95bbf90802a73a
+    InstallerUrl: https://github.com/Tinnci/TPFanCtrl2/releases/download/v2.7.0/TPFanCtrl2-v2.7.0-windows-x86-app.zip
+    InstallerSha256: 5ee150cf8d4b130907bb0d6a5668f3a71ac6cde815c87fdcb80d1fb6ea925f42
   - Architecture: x64
-    InstallerUrl: https://github.com/Tinnci/TPFanCtrl2/releases/download/v2.6.0/TPFanCtrl2-v2.6.0-windows-x64-app.zip
-    InstallerSha256: 3bf4f024e4c265960f2054067b6c4d4e18896d8e3c82fd9ae04279c96df6aeb7
+    InstallerUrl: https://github.com/Tinnci/TPFanCtrl2/releases/download/v2.7.0/TPFanCtrl2-v2.7.0-windows-x64-app.zip
+    InstallerSha256: 871b283cf8c4716a6d9f819357cb602f3593449d237aa9760348431b608b020a
 Dependencies:
   PackageDependencies:
     - PackageIdentifier: namazso.PawnIO

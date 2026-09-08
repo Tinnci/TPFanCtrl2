@@ -1,6 +1,6 @@
 -- Project Information
 set_project("TPFanCtrl2")
-set_version("2.6.0", {build = function () 
+set_version("2.7.0", {build = function () 
     return try { function() return os.ioread("git rev-parse --short HEAD"):trim() end } or "unknown"
 end})
 
@@ -100,7 +100,7 @@ target("TPFanCtrl2")
     add_links("comctl32", "user32", "gdi32", "advapi32", "shell32", "ole32", "oleaut32", "uuid", "dwmapi")
     
     -- Output directory
-    set_targetdir("artifacts/bin")
+    set_targetdir("artifacts/bin/" .. (get_config("arch") or "x86"))
 
     -- Optimizations for Release mode
     if is_mode("release") then
@@ -145,7 +145,7 @@ target("TPFanCtrl2-cli")
 
     add_includedirs("fancontrol")
     add_links("comctl32", "user32", "advapi32")
-    set_targetdir("artifacts/bin")
+    set_targetdir("artifacts/bin/" .. (get_config("arch") or "x86"))
 
 if has_config("tests") then
 -- Target: logic_test (Unit Tests - Legacy)
@@ -171,7 +171,7 @@ target("logic_test")
     add_includedirs("fancontrol/Core")
     
     -- Output directory
-    set_targetdir("artifacts/bin")
+    set_targetdir("artifacts/bin/" .. (get_config("arch") or "x86"))
 
 -- Target: core_test (Unit Tests - Core Library)
 target("core_test")
@@ -196,5 +196,5 @@ target("core_test")
     add_includedirs("fancontrol/Core")
     
     -- Output directory
-    set_targetdir("artifacts/bin")
+    set_targetdir("artifacts/bin/" .. (get_config("arch") or "x86"))
 end

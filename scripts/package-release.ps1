@@ -17,7 +17,10 @@ $testStage = Join-Path $stageRoot "TPFanCtrl2-tests"
 Remove-Item -LiteralPath $stageRoot -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $appStage, $testStage, $packageRoot | Out-Null
 
-$binRoot = Join-Path $repoRoot "artifacts/bin"
+$binRoot = Join-Path $repoRoot "artifacts/bin/$Architecture"
+if (-not (Test-Path -LiteralPath $binRoot)) {
+    $binRoot = Join-Path $repoRoot "artifacts/bin"
+}
 $appExe = Join-Path $binRoot "TPFanCtrl2.exe"
 $cliExe = Join-Path $binRoot "TPFanCtrl2-cli.exe"
 $logicTest = Join-Path $binRoot "logic_test.exe"

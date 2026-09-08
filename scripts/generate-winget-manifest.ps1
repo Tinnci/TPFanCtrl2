@@ -16,7 +16,7 @@
     Whether to run `winget validate` on the generated manifest directory.
 #>
 param(
-    [string]$Version = "2.6.0",
+    [string]$Version = "2.7.0",
     [string]$Architecture = "x86",
     [string]$InstallerUrl = "",
     [string]$InstallerSha256 = "",

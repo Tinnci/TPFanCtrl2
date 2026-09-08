@@ -1,6 +1,6 @@
 ﻿# yaml-language-server: $schema=https://aka.ms/winget-manifest.locale.1.6.0.schema.json
 PackageIdentifier: Tinnci.TPFanCtrl2
-PackageVersion: 2.6.0
+PackageVersion: 2.7.0
 PackageLocale: zh-CN
 Publisher: Tinnci
 PublisherUrl: https://github.com/Tinnci
