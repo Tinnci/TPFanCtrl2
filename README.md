@@ -13,13 +13,17 @@ TPFanCtrl2 is a fan control software utility for Lenovo ThinkPad laptops on Wind
 - **Command-Line Interface (`TPFanCtrl2-cli.exe`)**: Enables terminal control, status queries, and PowerShell automation.
 - **Embedded Controller Driver Support**:
   - **PawnIO Driver**: Uses the WHQL-signed PawnIO kernel driver. Compatible with Windows 11 Memory Integrity (HVCI).
-  - **TVicPort Driver Fallback**: Supports 32-bit legacy hardware environments.
+  - **TVicPort Driver (Final Legacy Bundle)**: Bundles `TVicPort.dll`, `TVicPort.sys`, and setup scripts in `drivers/legacy-tvicport/` for 32-bit legacy hardware.
 - **Control Modes**:
   - **BIOS / Firmware Mode**: Returns fan control to the system Embedded Controller (EC).
   - **Manual Mode**: Sets a fixed fan level from 0 (off) to 7 (maximum speed).
   - **Smart Curve Mode**: Automatically adjusts fan speed according to a temperature threshold table.
   - **Dual-Fan Support**: Monitors and controls primary and secondary fans independently.
 - **Safety Protection**: Restores automatic hardware control if temperature exceeds 90 °C or if a communication error occurs.
+
+> [!NOTE]
+> **Final Legacy (TVicPort) Release:**  
+> Version 2.7.1 is the final release that bundles the legacy TVicPort driver and supports 32-bit TVicPort fallback. Subsequent releases will completely retire TVicPort to provide a pure 64-bit architecture with the secure PawnIO driver.
 
 ## System Requirements
 

@@ -1,0 +1,28 @@
+﻿# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
+PackageIdentifier: Tinnci.TPFanCtrl2
+PackageVersion: 2.7.1
+MinimumOSVersion: 10.0.17763.0
+InstallerType: zip
+NestedInstallerType: portable
+ElevationRequirement: elevationRequired
+NestedInstallerFiles:
+  - RelativeFilePath: TPFanCtrl2.exe
+    PortableCommandAlias: TPFanCtrl2
+  - RelativeFilePath: TPFanCtrl2-cli.exe
+    PortableCommandAlias: TPFanCtrl2-cli
+Commands:
+  - TPFanCtrl2
+  - TPFanCtrl2-cli
+Installers:
+  - Architecture: x86
+    InstallerUrl: https://github.com/Tinnci/TPFanCtrl2/releases/download/v2.7.1/TPFanCtrl2-v2.7.1-windows-x86-app.zip
+    InstallerSha256: d9a9bcb211bfbbbf878cd71822218552a97b920b4ff9922f75f226557f51860e
+  - Architecture: x64
+    InstallerUrl: https://github.com/Tinnci/TPFanCtrl2/releases/download/v2.7.1/TPFanCtrl2-v2.7.1-windows-x64-app.zip
+    InstallerSha256: ef13bfeb1c6f4ae72c6a1efbd06395fa6f5ac0c6f5c1c93aff483472412494e5
+Dependencies:
+  PackageDependencies:
+    - PackageIdentifier: namazso.PawnIO
+      MinimumVersion: 2.2.0
+ManifestType: installer
+ManifestVersion: 1.6.0
