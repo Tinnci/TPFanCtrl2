@@ -19,11 +19,17 @@ New-Item -ItemType Directory -Force -Path $appStage, $testStage, $packageRoot | 
 
 $binRoot = Join-Path $repoRoot "artifacts/bin"
 $appExe = Join-Path $binRoot "TPFanCtrl2.exe"
+$cliExe = Join-Path $binRoot "TPFanCtrl2-cli.exe"
 $logicTest = Join-Path $binRoot "logic_test.exe"
 $coreTest = Join-Path $binRoot "core_test.exe"
 $sampleConfig = Join-Path $repoRoot "fancontrol/TPFanCtrl2.ini"
+$lpcAcpiEc = Join-Path $repoRoot "assets/LpcACPIEC.bin"
+$license = Join-Path $repoRoot "LICENSE"
 
-foreach ($required in @($appExe, $logicTest, $coreTest, $sampleConfig)) {
+$requiredFiles = @($appExe, $sampleConfig, $logicTest, $coreTest)
+if (Test-Path -LiteralPath $cliExe) { $requiredFiles += $cliExe }
+
+foreach ($required in $requiredFiles) {
     if (-not (Test-Path -LiteralPath $required)) {
         throw "Required package input is missing: $required"
     }
@@ -31,6 +37,9 @@ foreach ($required in @($appExe, $logicTest, $coreTest, $sampleConfig)) {
 
 Copy-Item -LiteralPath $appExe -Destination $appStage
 Copy-Item -LiteralPath $sampleConfig -Destination $appStage
+if (Test-Path -LiteralPath $cliExe) { Copy-Item -LiteralPath $cliExe -Destination $appStage }
+if (Test-Path -LiteralPath $lpcAcpiEc) { Copy-Item -LiteralPath $lpcAcpiEc -Destination $appStage }
+if (Test-Path -LiteralPath $license) { Copy-Item -LiteralPath $license -Destination $appStage }
 Copy-Item -LiteralPath $logicTest -Destination $testStage
 Copy-Item -LiteralPath $coreTest -Destination $testStage
 
@@ -62,3 +71,12 @@ Remove-Item -LiteralPath $stageRoot -Recurse -Force
 Write-Host "Created packages:"
 Write-Host "  $appZip"
 Write-Host "  $testZip"
+
+$appSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $appZip).Hash.ToLower()
+Write-Host "App package SHA256: $appSha256"
+
+# Generate matching WinGet manifests with verified package dependency
+$genWingetScript = Join-Path $PSScriptRoot "generate-winget-manifest.ps1"
+if (Test-Path -LiteralPath $genWingetScript) {
+    & $genWingetScript -Version $Version -Architecture $Architecture -InstallerSha256 $appSha256
+}
