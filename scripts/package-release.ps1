@@ -33,6 +33,7 @@ if (-not (Test-Path -LiteralPath $binRoot)) {
 }
 $appExe = Join-Path $binRoot "TPFanCtrl2.exe"
 $cliExe = Join-Path $binRoot "TPFanCtrl2-cli.exe"
+$topExe = Join-Path $binRoot "TPFanCtrl2-top.exe"
 $logicTest = Join-Path $binRoot "logic_test.exe"
 $coreTest = Join-Path $binRoot "core_test.exe"
 $sampleConfig = Join-Path $repoRoot "fancontrol/TPFanCtrl2.ini"
@@ -47,6 +48,7 @@ if (-not (Test-Path -LiteralPath $appExe) -and -not (Test-Path -LiteralPath $cli
 Copy-Item -LiteralPath $sampleConfig -Destination $appStage
 if (Test-Path -LiteralPath $appExe) { Copy-Item -LiteralPath $appExe -Destination $appStage }
 if (Test-Path -LiteralPath $cliExe) { Copy-Item -LiteralPath $cliExe -Destination $appStage }
+if (Test-Path -LiteralPath $topExe) { Copy-Item -LiteralPath $topExe -Destination $appStage }
 if (Test-Path -LiteralPath $lpcAcpiEc) { Copy-Item -LiteralPath $lpcAcpiEc -Destination $appStage }
 if (Test-Path -LiteralPath $license) { Copy-Item -LiteralPath $license -Destination $appStage }
 

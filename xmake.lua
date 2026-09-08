@@ -162,6 +162,29 @@ target("TPFanCtrl2-cli")
     add_links("comctl32", "user32", "advapi32")
     set_targetdir("artifacts/bin/" .. (get_config("arch") or "x64"))
 
+-- Target: TPFanCtrl2-top (btop/htop-like Terminal Interactive Dashboard)
+target("TPFanCtrl2-top")
+    set_kind("binary")
+    set_plat("windows")
+    add_packages("spdlog", "nlohmann_json")
+
+    add_ldflags("/SUBSYSTEM:CONSOLE", {force = true, tools = "msvc"})
+    add_ldflags("-Wl,/SUBSYSTEM:CONSOLE", {force = true, tools = {"clang", "zig"}})
+
+    if os.getenv("XMAKE_PCH") ~= "false" and not os.getenv("CODEQL_ACTION_INIT_HAS_RUN") then
+        set_pcxxheader("fancontrol/_prec.h")
+    end
+
+    add_files("fancontrol/top_main.cpp")
+    add_files("fancontrol/ECManager.cpp")
+    add_files("fancontrol/FanController.cpp")
+    add_files("fancontrol/PawnIOProvider.cpp")
+    add_files("fancontrol/SensorManager.cpp")
+
+    add_includedirs("fancontrol")
+    add_links("comctl32", "user32", "advapi32")
+    set_targetdir("artifacts/bin/" .. (get_config("arch") or "x64"))
+
 if has_config("tests") then
 -- Target: logic_test (Unit Tests - Legacy)
 target("logic_test")

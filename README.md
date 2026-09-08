@@ -9,8 +9,9 @@ TPFanCtrl2 is a fan control software utility for Lenovo ThinkPad laptops on Wind
 
 ## Features
 
-- **Graphical User Interface**: Built with Dear ImGui and Vulkan for real-time monitoring and configuration.
-- **Command-Line Interface (`TPFanCtrl2-cli.exe`)**: Enables terminal control, status queries, and PowerShell automation.
+- **Graphical User Interface (`TPFanCtrl2.exe`)**: Built with Dear ImGui and Vulkan for real-time monitoring and configuration.
+- **Interactive Terminal Dashboard (`TPFanCtrl2-top.exe`)**: A modern, full-screen TUI (like btop/htop) with ANSI TrueColor rendering, real-time tachometer trend sparklines, multi-sensor temperature gauges, and instant keyboard controls.
+- **Command-Line Interface (`TPFanCtrl2-cli.exe`)**: Enables script-friendly terminal control, status queries, and PowerShell/JSON automation.
 - **Hardware Access**: Uses the WHQL-compliant, signed [PawnIO](https://github.com/namazso/PawnIO) kernel driver. Fully compatible with Windows 11 Memory Integrity (HVCI / Core Isolation).
 - **Control Modes**:
   - **BIOS / Firmware Mode**: Returns fan control to the system Embedded Controller (EC).
@@ -85,6 +86,21 @@ Run `TPFanCtrl2-cli.exe` in an elevated terminal (Administrator):
 # View all available CLI options
 .\TPFanCtrl2-cli.exe --help
 ```
+
+### Interactive Terminal Dashboard (TUI)
+
+Launch the full-screen real-time hardware monitor (btop-style):
+
+```powershell
+.\TPFanCtrl2-top.exe
+```
+
+- **Interactive Hotkeys**:
+  - `[0-7]`: Instantly set manual fan speed levels.
+  - `[A]`: Return to EC firmware automatic control curve.
+  - `[D]`: Toggle dual-fan / single-fan control mode.
+  - `[R]`: Force an immediate hardware refresh.
+  - `[Q]` or `[Esc]`: Safely restore EC automatic control and cleanly exit.
 
 ## Configuration
 

@@ -58,6 +58,7 @@ jobs:
           xmake f -m release -a x64 -y
           xmake -y TPFanCtrl2
           xmake -y TPFanCtrl2-cli
+          xmake -y TPFanCtrl2-top
           xmake -y logic_test
           xmake -y core_test
 
