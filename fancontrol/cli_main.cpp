@@ -2,7 +2,7 @@
 
 #include "ECManager.h"
 #include "FanController.h"
-#include "TVicPort.h"
+#include "PawnIOProvider.h"
 #include "TVicPortProvider.h"
 
 #include <algorithm>
@@ -34,9 +34,9 @@ void PrintUsage() {
     std::cout << R"(TPFanCtrl2 CLI
 
 Usage:
-  TPFanCtrl2-cli.exe status [--json]
-  TPFanCtrl2-cli.exe fan --level <0-7> [--duration <seconds>]
-  TPFanCtrl2-cli.exe mode auto
+  TPFanCtrl2-cli.exe status [--json] [--backend <auto|pawnio|tvicport>]
+  TPFanCtrl2-cli.exe fan --level <0-7> [--duration <seconds>] [--backend <auto|pawnio|tvicport>]
+  TPFanCtrl2-cli.exe mode auto [--backend <auto|pawnio|tvicport>]
 
 Commands:
   status                 Read current EC fan level and fan RPM.
@@ -46,11 +46,12 @@ Commands:
 Options:
   --duration <seconds>   Restore EC automatic control after the duration.
                          Without it, press Ctrl+C to restore EC automatic control.
+  --backend <name>       Choose I/O backend: auto (default), pawnio, or tvicport.
   --json                 Print status as JSON.
   --help                 Show this help.
 
-The CLI requires an elevated PowerShell/Command Prompt and a working
-TVicPort driver. It never sends the legacy extreme value 0x40.
+The CLI requires an elevated PowerShell/Command Prompt and a supported
+driver (PawnIO recommended, or legacy TVicPort on 32-bit). It never sends the legacy extreme value 0x40.
 )";
 }
 
@@ -78,25 +79,63 @@ bool GetIntArg(int argc, char** argv, std::string_view name, int& value) {
     return false;
 }
 
+bool GetStringArg(int argc, char** argv, std::string_view name, std::string_view& value) {
+    for (int i = 1; i + 1 < argc; ++i) {
+        if (argv[i] && std::string_view(argv[i]) == name) {
+            value = argv[i + 1];
+            return true;
+        }
+    }
+    return false;
+}
+
 struct HardwareSession {
-    std::shared_ptr<TVicPortProvider> io;
+    std::shared_ptr<IIOProvider> io;
     std::shared_ptr<ECManager> ec;
     std::unique_ptr<FanController> fan;
+    std::string backendName;
 
-    bool Open() {
-        if (!OpenTVicPort()) {
-            std::cerr << "Failed to open TVicPort driver.\n";
+    bool Open(std::string_view preferredBackend = "") {
+        if (preferredBackend != "tvicport") {
+            auto pawn = std::make_shared<PawnIOProvider>([](const char* msg) {
+                std::cerr << "[PawnIO] " << msg << '\n';
+            });
+            if (pawn->Initialize()) {
+                io = pawn;
+                backendName = "PawnIO";
+            } else if (preferredBackend == "pawnio") {
+                std::cerr << "Failed to initialize requested PawnIO backend.\n";
+                return false;
+            }
+        }
+
+#ifdef ENABLE_TVICPORT
+        if (!io && preferredBackend != "pawnio") {
+            if (OpenTVicPort()) {
+                SetHardAccess(TRUE);
+                if (TestHardAccess()) {
+                    io = std::make_shared<TVicPortProvider>();
+                    backendName = "TVicPort";
+                } else {
+                    std::cerr << "Hardware/EC access was denied for TVicPort.\n";
+                    CloseTVicPort();
+                }
+            } else if (preferredBackend == "tvicport") {
+                std::cerr << "Failed to open TVicPort driver.\n";
+                return false;
+            }
+        }
+#endif
+
+        if (!io) {
+            std::cerr << "Failed to initialize hardware I/O backend (PawnIO"
+#ifdef ENABLE_TVICPORT
+                      << " or TVicPort"
+#endif
+                      << ").\nRun as Administrator and verify driver installation.\n";
             return false;
         }
 
-        SetHardAccess(TRUE);
-        if (!TestHardAccess()) {
-            std::cerr << "Hardware/EC access was denied. Run as Administrator.\n";
-            CloseTVicPort();
-            return false;
-        }
-
-        io = std::make_shared<TVicPortProvider>();
         ec = std::make_shared<ECManager>(io, [](const char* message) {
             std::cerr << "[EC] " << message << '\n';
         });
@@ -108,7 +147,11 @@ struct HardwareSession {
         fan.reset();
         ec.reset();
         io.reset();
-        CloseTVicPort();
+#ifdef ENABLE_TVICPORT
+        if (backendName == "TVicPort") {
+            CloseTVicPort();
+        }
+#endif
     }
 };
 
@@ -181,8 +224,11 @@ int main(int argc, char** argv) {
         return argc < 2 ? 2 : 0;
     }
 
+    std::string_view backend;
+    GetStringArg(argc, argv, "--backend", backend);
+
     HardwareSession hardware;
-    if (!hardware.Open()) return 1;
+    if (!hardware.Open(backend)) return 1;
 
     const std::string_view command(argv[1]);
     if (command == "status") {

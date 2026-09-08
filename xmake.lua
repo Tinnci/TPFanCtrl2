@@ -12,8 +12,10 @@ add_requires("freetype")
 add_requires("vulkan-memory-allocator")
 add_requires("nlohmann_json")
 
--- Set x86 architecture as default (due to TVicPort driver limitations)
-set_arch("x86")
+-- Default to x64 for modern Windows 11 (PawnIO), support x86 for legacy TVicPort
+if not get_config("arch") then
+    set_arch("x64")
+end
 
 -- Define build modes
 add_rules("mode.debug", "mode.release")
@@ -40,7 +42,6 @@ target("TPFanCtrl2")
     add_packages("imgui", "vulkan-loader", "freetype", "vulkan-memory-allocator", "spdlog", "nlohmann_json")
     
     -- Keep the GUI binary detached from a console window in every build mode.
-    set_kind("binary")
     add_ldflags("/SUBSYSTEM:WINDOWS", "/ENTRY:mainCRTStartup", {force = true})
     add_ldflags("/SUBSYSTEM:WINDOWS", "/ENTRY:mainCRTStartup", {force = true, tools = "msvc"})
     add_ldflags("-Wl,/SUBSYSTEM:WINDOWS", "-Wl,/ENTRY:mainCRTStartup", {force = true, tools = {"clang", "zig"}})
@@ -56,7 +57,7 @@ target("TPFanCtrl2")
     add_files("fancontrol/ECManager.cpp")
     add_files("fancontrol/SensorManager.cpp")
     add_files("fancontrol/FanController.cpp")
-    add_files("fancontrol/TVicPortProvider.cpp")
+    add_files("fancontrol/PawnIOProvider.cpp")
     add_files("fancontrol/I18nManager.cpp")
     add_files("fancontrol/dynamicicon.cpp")
     add_files("fancontrol/imgui_main.cpp")
@@ -70,8 +71,12 @@ target("TPFanCtrl2")
     add_includedirs("fancontrol/Core")
     
     -- Link libraries
-    add_linkdirs("fancontrol")
-    add_links("TVicPort")
+    if is_arch("x86") then
+        add_files("fancontrol/TVicPortProvider.cpp")
+        add_linkdirs("fancontrol")
+        add_links("TVicPort")
+        add_defines("ENABLE_TVICPORT")
+    end
     add_links("comctl32", "user32", "gdi32", "advapi32", "shell32", "ole32", "oleaut32", "uuid", "dwmapi")
     
     -- Output directory
@@ -108,11 +113,16 @@ target("TPFanCtrl2-cli")
     add_files("fancontrol/cli_main.cpp")
     add_files("fancontrol/ECManager.cpp")
     add_files("fancontrol/FanController.cpp")
-    add_files("fancontrol/TVicPortProvider.cpp")
+    add_files("fancontrol/PawnIOProvider.cpp")
+
+    if is_arch("x86") then
+        add_files("fancontrol/TVicPortProvider.cpp")
+        add_linkdirs("fancontrol")
+        add_links("TVicPort")
+        add_defines("ENABLE_TVICPORT")
+    end
 
     add_includedirs("fancontrol")
-    add_linkdirs("fancontrol")
-    add_links("TVicPort")
     add_links("comctl32", "user32", "advapi32")
     set_targetdir("artifacts/bin")
 

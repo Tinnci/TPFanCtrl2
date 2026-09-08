@@ -8,4 +8,7 @@ public:
     virtual ~IIOProvider() {}
     virtual BYTE ReadPort(USHORT port) = 0;
     virtual void WritePort(USHORT port, BYTE data) = 0;
+
+    virtual bool AcquireLock(DWORD /*timeoutMs*/ = 1000) { return true; }
+    virtual void ReleaseLock() {}
 };

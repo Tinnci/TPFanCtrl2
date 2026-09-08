@@ -1,6 +1,6 @@
 #include "Application.h"
+#include "PawnIOProvider.h"
 #include "TVicPortProvider.h"
-#include "TVicPort.h"
 #include <spdlog/spdlog.h>
 #include <vulkan/vulkan_win32.h>
 
@@ -104,31 +104,48 @@ bool Application::Initialize(HWND hwnd, HINSTANCE hInstance) {
     spdlog::info("Vulkan initialized successfully.");
 
     // Initialize hardware access
-    spdlog::info("Initializing TVicPort driver...");
-    bool driverOk = false;
-    for (int i = 0; i < 5; i++) {
-        if (OpenTVicPort()) {
-            driverOk = true;
-            break;
+    std::shared_ptr<IIOProvider> ioProvider;
+
+    spdlog::info("Initializing hardware I/O driver (trying PawnIO)...");
+    auto pawn = std::make_shared<PawnIOProvider>([](const char* msg) {
+        spdlog::debug("[PawnIO] {}", msg);
+    });
+    if (pawn->Initialize()) {
+        spdlog::info("PawnIO driver initialized successfully (version: 0x{:06X}).", pawn->GetVersion());
+        ioProvider = pawn;
+    } else {
+        spdlog::warn("PawnIO driver could not be initialized.");
+#ifdef ENABLE_TVICPORT
+        spdlog::info("Attempting TVicPort fallback...");
+        bool driverOk = false;
+        for (int i = 0; i < 3; i++) {
+            if (OpenTVicPort()) {
+                driverOk = true;
+                break;
+            }
+            spdlog::warn("Failed to open TVicPort, retrying... ({}/3)", i + 1);
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
         }
-        spdlog::warn("Failed to open TVicPort, retrying... ({}/5)", i + 1);
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+        if (driverOk) {
+            spdlog::info("TVicPort driver opened successfully.");
+            SetHardAccess(TRUE);
+            if (TestHardAccess()) {
+                spdlog::info("Hardware access (Ring 0) granted via TVicPort.");
+                ioProvider = std::make_shared<TVicPortProvider>();
+            } else {
+                spdlog::error("Hardware access denied even with TVicPort opened.");
+                CloseTVicPort();
+            }
+        }
+#endif
     }
 
-    if (driverOk) {
-        spdlog::info("TVicPort driver opened successfully.");
-        SetHardAccess(TRUE);
-        if (TestHardAccess()) {
-            spdlog::info("Hardware access (Ring 0) granted.");
-        } else {
-            spdlog::error("Hardware access denied even with driver opened.");
-        }
-    } else {
-        spdlog::error("CRITICAL: Could not initialize TVicPort driver.");
+    if (!ioProvider) {
+        spdlog::error("CRITICAL: Could not initialize any hardware I/O driver (PawnIO or TVicPort).");
         return false;
     }
 
-    auto ioProvider = std::make_shared<TVicPortProvider>();
     auto ecManager = std::make_shared<ECManager>(ioProvider, [](const char* msg) {
         spdlog::debug("[EC] {}", msg);
     });
@@ -152,7 +169,9 @@ void Application::Shutdown() {
     m_thermalManager.reset();
     
     CleanupVulkan();
+#ifdef ENABLE_TVICPORT
     CloseTVicPort();
+#endif
 }
 
 void Application::Update(float deltaTime) {

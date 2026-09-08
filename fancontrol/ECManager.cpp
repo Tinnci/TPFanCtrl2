@@ -68,8 +68,21 @@ bool ECManager::ProbeECType(ECType type, int timeoutMs) {
     return WaitForFlags(m_ctrlPort, ACPI_EC_FLAG_IBF | ACPI_EC_FLAG_OBF, false, timeoutMs);
 }
 
+namespace {
+struct ScopedIoLock {
+    IIOProvider* io;
+    explicit ScopedIoLock(IIOProvider* p) : io(p) {
+        if (io) io->AcquireLock();
+    }
+    ~ScopedIoLock() {
+        if (io) io->ReleaseLock();
+    }
+};
+}
+
 bool ECManager::ReadByte(int offset, char* pdata) {
     std::lock_guard<std::recursive_timed_mutex> lock(m_mutex);
+    ScopedIoLock ioLock(m_io.get());
     
     auto drainObf = [&]() {
         for (int i = 0; i < 10; i++) {
@@ -121,6 +134,7 @@ bool ECManager::ReadByte(int offset, char* pdata) {
 
 bool ECManager::WriteByte(int offset, char data) {
     std::lock_guard<std::recursive_timed_mutex> lock(m_mutex);
+    ScopedIoLock ioLock(m_io.get());
 
     auto drainObf = [&]() {
         for (int i = 0; i < 10; i++) {
